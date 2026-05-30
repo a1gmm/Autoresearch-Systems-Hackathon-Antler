@@ -39,10 +39,13 @@ export function ApplicabilityMatrix({ run, selected, onSelect }: Props) {
         </thead>
         <tbody>
           {run.determinations.map((determination) => {
-            const isSelected = selected?.requirement === determination.requirement;
+            const rowKey = determination.hypothesis_id ?? determination.requirement;
+            const isSelected = selected
+              ? (selected.hypothesis_id ?? selected.requirement) === rowKey
+              : false;
             return (
               <tr
-                key={determination.requirement}
+                key={rowKey}
                 onClick={() => onSelect(determination)}
                 className={`cursor-pointer border-t border-slate-800 ${
                   isSelected ? "bg-slate-800" : "hover:bg-slate-800/40"

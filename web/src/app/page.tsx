@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { Determination, ResearchRun } from "@/lib/researchTypes";
-import { demoResearchRun } from "@/lib/demoResearchRun";
 import { runResearch } from "@/lib/runResearch";
 import { ProjectInput } from "@/components/ProjectInput";
 import { ResearchGraph } from "@/components/ResearchGraph";
