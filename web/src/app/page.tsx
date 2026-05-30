@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Determination, ResearchRun } from "@/lib/researchTypes";
 import { demoResearchRun } from "@/lib/demoResearchRun";
+import { runResearch } from "@/lib/runResearch";
 import { ProjectInput } from "@/components/ProjectInput";
 import { ResearchGraph } from "@/components/ResearchGraph";
 import { TracePanel } from "@/components/TracePanel";
@@ -19,17 +20,25 @@ export default function Home() {
   const [run, setRun] = useState<ResearchRun | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [selected, setSelected] = useState<Determination | null>(null);
+  const [usedFallback, setUsedFallback] = useState(false);
 
   async function handleRun() {
     setIsRunning(true);
     setSelected(null);
-    setRun(demoResearchRun);
+    const result = await runResearch(projectDescription);
+    setRun(result.run);
+    setUsedFallback(result.usedFallback);
     setIsRunning(false);
   }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <section className="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
+        {usedFallback && (
+          <p className="rounded bg-amber-900/50 px-3 py-2 text-xs text-amber-200 lg:col-span-3">
+            Live API unavailable — showing cached demo run.
+          </p>
+        )}
         <ProjectInput
           value={projectDescription}
           onChange={setProjectDescription}
