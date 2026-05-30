@@ -21,9 +21,10 @@ Read these in order:
 3. [Hackathon Demo Design](./HACKATHON_DEMO_DESIGN.md)
 4. [Hacker Resources](./HACKER_RESOURCES.md)
 5. [Tool Integration Plan](./TOOL_INTEGRATION_PLAN.md)
-6. [Product and Build Plan](./ehs-permit-agent-autoplan-review.md)
-7. [Agent Control Loop Contract](./ehs-agent-control-loop-ceo-review.md)
-8. [Test and Eval Plan](./ehs-agent-test-plan.md)
+6. [Modal Harness Working Goal](./MODAL_HARNESS_WORKING_GOAL.md)
+7. [Product and Build Plan](./ehs-permit-agent-autoplan-review.md)
+8. [Agent Control Loop Contract](./ehs-agent-control-loop-ceo-review.md)
+9. [Test and Eval Plan](./ehs-agent-test-plan.md)
 
 ## Tooling Story
 

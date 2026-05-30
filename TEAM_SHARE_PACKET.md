@@ -37,11 +37,13 @@ Read these in order:
    - Credits and sponsor docs/blogs we should use.
 4. [Tool Integration Plan](./TOOL_INTEGRATION_PLAN.md)
    - How Raindrop, Modal, and OpenAI Agents SDK fit together.
-5. [Product and Build Plan](./ehs-permit-agent-autoplan-review.md)
+5. [Modal Harness Working Goal](./MODAL_HARNESS_WORKING_GOAL.md)
+   - What we borrow from Modal's OpenAI Agents SDK example and the first runnable milestone.
+6. [Product and Build Plan](./ehs-permit-agent-autoplan-review.md)
    - Product framing, demo scope, build order, team split.
-6. [Agent Control Loop Contract](./ehs-agent-control-loop-ceo-review.md)
+7. [Agent Control Loop Contract](./ehs-agent-control-loop-ceo-review.md)
    - Agent roles, typed artifacts, harness permissions, repair loop, memory rules.
-7. [Test and Eval Plan](./ehs-agent-test-plan.md)
+8. [Test and Eval Plan](./ehs-agent-test-plan.md)
    - Golden cases, edge cases, UI flows, acceptance checklist.
 
 ## Hacker Resources

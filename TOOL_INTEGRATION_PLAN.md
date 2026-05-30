@@ -248,14 +248,28 @@ The judge should see this sequence:
 ## Build Order
 
 1. Define Pydantic/Zod schemas for artifacts, including coverage family statuses and regulatory angles.
-2. Implement local OpenAI Agents SDK loop with fake/cached sources.
-3. Add Modal `run_research_task(task)` for dynamic fan-out.
-4. Add source fetch/extract/hash inside the worker.
-5. Add verifier and repair-ticket loop.
-6. Add in-app trace panel from run events.
-7. Instrument with Raindrop for local debugging/replay.
-8. Add eval cases from failed traces.
-9. Polish the demo script around one verifier failure and repair.
+2. Use [Modal Harness Working Goal](./MODAL_HARNESS_WORKING_GOAL.md) as the vertical-slice contract.
+3. Implement local OpenAI Agents SDK loop with fake/cached sources.
+4. Add Modal `run_research_task(task)` for dynamic fan-out.
+5. Add source fetch/extract/hash inside the worker.
+6. Add verifier and repair-ticket loop.
+7. Add in-app trace panel from run events.
+8. Instrument with Raindrop for local debugging/replay.
+9. Add eval cases from failed traces.
+10. Polish the demo script around one verifier failure and repair.
+
+## Modal Example Takeaway
+
+Modal's `openai-agents-python-example` is most useful to us as a harness reference, not as a product template. The reusable pieces are:
+
+- orchestrator plus async subagent pool,
+- Modal sandbox-backed execution,
+- worker quotas and timeouts,
+- filesystem snapshots for prepared environments,
+- markdown skills for domain-specific guidance,
+- status hooks that make parallel work visible.
+
+Our EHS adaptation changes the output contract: workers return `EvidenceBundle`s, the verifier owns truth, repair is bounded, and incomplete evidence becomes `Needs-review`.
 
 ## Sponsor Narrative For Judges
 
