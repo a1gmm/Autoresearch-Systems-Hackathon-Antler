@@ -1,12 +1,56 @@
+"use client";
+
+import { useState } from "react";
+import type { Determination, ResearchRun } from "@/lib/researchTypes";
+import { demoResearchRun } from "@/lib/demoResearchRun";
+import { ProjectInput } from "@/components/ProjectInput";
+import { ResearchGraph } from "@/components/ResearchGraph";
+import { TracePanel } from "@/components/TracePanel";
+import { VerificationSummary } from "@/components/VerificationSummary";
+import { ApplicabilityMatrix } from "@/components/ApplicabilityMatrix";
+import { EvidenceDrawer } from "@/components/EvidenceDrawer";
+import { ReportPanel } from "@/components/ReportPanel";
+
+const SOCAL_DEMO_DESCRIPTION =
+  "A Los Angeles County manufacturer is adding a coating booth and storing 60 gallons of a new flammable solvent. NAICS 332813, SIC 3471.";
+
 export default function Home() {
+  const [projectDescription, setProjectDescription] = useState("");
+  const [run, setRun] = useState<ResearchRun | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [selected, setSelected] = useState<Determination | null>(null);
+
+  async function handleRun() {
+    setIsRunning(true);
+    setSelected(null);
+    setRun(demoResearchRun);
+    setIsRunning(false);
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <section className="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
-        <div className="rounded border border-slate-800 bg-slate-900 p-4">Project input</div>
-        <div className="rounded border border-slate-800 bg-slate-900 p-4">Research graph and trace</div>
-        <div className="rounded border border-slate-800 bg-slate-900 p-4">Verification summary</div>
-        <div className="rounded border border-slate-800 bg-slate-900 p-4 lg:col-span-3">Applicability matrix</div>
+        <ProjectInput
+          value={projectDescription}
+          onChange={setProjectDescription}
+          onLoadDemo={() => setProjectDescription(SOCAL_DEMO_DESCRIPTION)}
+          onRun={handleRun}
+          isRunning={isRunning}
+          runStatus={run?.status ?? "idle"}
+        />
+        <div className="flex flex-col gap-4">
+          <ResearchGraph run={run} />
+          <TracePanel run={run} />
+        </div>
+        <VerificationSummary run={run} />
+        <div className="lg:col-span-3">
+          <ApplicabilityMatrix run={run} selected={selected} onSelect={setSelected} />
+        </div>
+        <div className="lg:col-span-3">
+          <ReportPanel run={run} />
+        </div>
       </section>
+      <EvidenceDrawer run={run} determination={selected} onClose={() => setSelected(null)} />
     </main>
   );
 }
