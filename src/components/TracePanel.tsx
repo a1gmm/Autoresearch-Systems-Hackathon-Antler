@@ -1,6 +1,6 @@
 "use client";
 
-import type { ResearchRun, TraceEvent } from "@/lib/researchTypes";
+import type { ResearchRun, TraceEvent } from "@/lib/research/types";
 import { getWorkerCount } from "@/lib/researchSelectors";
 
 const STATUS_STYLES: Record<TraceEvent["status"], string> = {

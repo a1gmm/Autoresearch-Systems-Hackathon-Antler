@@ -1,6 +1,7 @@
 "use client";
 
-import type { Determination, ResearchRun } from "@/lib/researchTypes";
+import type { Determination, ResearchRun } from "@/lib/research/types";
+import { hypothesisIdForDeterminationIndex } from "@/lib/researchSelectors";
 
 const APPLIES_STYLES: Record<Determination["applies"], string> = {
   yes: "text-emerald-300",
@@ -8,10 +9,12 @@ const APPLIES_STYLES: Record<Determination["applies"], string> = {
   needs_review: "text-amber-300",
 };
 
+export type MatrixSelection = { determination: Determination; hypothesisId?: string };
+
 type Props = {
   run: ResearchRun | null;
-  selected: Determination | null;
-  onSelect: (determination: Determination) => void;
+  selected: MatrixSelection | null;
+  onSelect: (selection: MatrixSelection) => void;
 };
 
 export function ApplicabilityMatrix({ run, selected, onSelect }: Props) {
@@ -38,15 +41,17 @@ export function ApplicabilityMatrix({ run, selected, onSelect }: Props) {
           </tr>
         </thead>
         <tbody>
-          {run.determinations.map((determination) => {
-            const rowKey = determination.hypothesis_id ?? determination.requirement;
-            const isSelected = selected
-              ? (selected.hypothesis_id ?? selected.requirement) === rowKey
-              : false;
+          {run.determinations.map((determination, index) => {
+            const hypothesisId = hypothesisIdForDeterminationIndex(run, index);
+            const rowKey = hypothesisId ?? determination.requirement;
+            const selectedKey = selected
+              ? selected.hypothesisId ?? selected.determination.requirement
+              : null;
+            const isSelected = selectedKey === rowKey;
             return (
               <tr
                 key={rowKey}
-                onClick={() => onSelect(determination)}
+                onClick={() => onSelect({ determination, hypothesisId })}
                 className={`cursor-pointer border-t border-slate-800 ${
                   isSelected ? "bg-slate-800" : "hover:bg-slate-800/40"
                 } ${determination.review_flag ? "border-l-2 border-l-amber-600" : ""}`}

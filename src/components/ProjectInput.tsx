@@ -1,6 +1,6 @@
 "use client";
 
-import type { RunStatus } from "@/lib/researchTypes";
+import type { RunStatus } from "@/lib/research/types";
 
 type Props = {
   value: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ResearchRun } from "@/lib/researchTypes";
+import type { ResearchRun } from "@/lib/research/types";
 import { buildCoverageTree } from "@/lib/researchSelectors";
 
 const STATUS_STYLES: Record<string, string> = {

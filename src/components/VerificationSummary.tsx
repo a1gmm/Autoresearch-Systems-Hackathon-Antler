@@ -1,6 +1,6 @@
 "use client";
 
-import type { ResearchRun } from "@/lib/researchTypes";
+import type { ResearchRun } from "@/lib/research/types";
 
 export function VerificationSummary({ run }: { run: ResearchRun | null }) {
   if (!run) {

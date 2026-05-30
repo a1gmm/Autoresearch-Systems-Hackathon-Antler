@@ -1,18 +1,20 @@
 "use client";
 
-import type { Determination, ResearchRun } from "@/lib/researchTypes";
+import type { ResearchRun } from "@/lib/research/types";
 import { buildEvidenceView } from "@/lib/researchSelectors";
+import type { MatrixSelection } from "@/components/ApplicabilityMatrix";
 
 type Props = {
   run: ResearchRun | null;
-  determination: Determination | null;
+  selected: MatrixSelection | null;
   onClose: () => void;
 };
 
-export function EvidenceDrawer({ run, determination, onClose }: Props) {
-  if (!run || !determination) return null;
+export function EvidenceDrawer({ run, selected, onClose }: Props) {
+  if (!run || !selected) return null;
 
-  const view = buildEvidenceView(run, determination);
+  const { determination, hypothesisId } = selected;
+  const view = buildEvidenceView(run, hypothesisId);
 
   return (
     <aside className="fixed inset-y-0 right-0 z-10 w-full max-w-md overflow-y-auto border-l border-slate-800 bg-slate-900 p-4 shadow-xl">

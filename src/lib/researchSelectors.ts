@@ -1,7 +1,6 @@
 import type {
   CoverageFamily,
   CoverageFamilyStatus,
-  Determination,
   EvidenceBundle,
   RegulatoryAngle,
   RepairTicket,
@@ -9,7 +8,7 @@ import type {
   ResearchRun,
   ResearchTask,
   VerificationVerdict,
-} from "./researchTypes";
+} from "@/lib/research/types";
 
 export type GraphHypothesisNode = ResearchHypothesis & { tasks: ResearchTask[] };
 export type GraphAngleNode = RegulatoryAngle & { hypotheses: GraphHypothesisNode[] };
@@ -55,6 +54,16 @@ export function getWorkerCount(run: ResearchRun): number {
   return run.research_tasks.length;
 }
 
+// Person A's Determination has no hypothesis_id, but run.ts builds
+// determinations = research_graph.map(...), so determinations[i] aligns with
+// research_graph[i]. This resolves the hypothesis_id for a matrix row by index.
+export function hypothesisIdForDeterminationIndex(
+  run: ResearchRun,
+  index: number,
+): string | undefined {
+  return run.research_graph[index]?.id;
+}
+
 export function getEvidenceForHypothesis(
   run: ResearchRun,
   hypothesisId: string,
@@ -74,18 +83,17 @@ export function getRepairsForHypothesis(run: ResearchRun, hypothesisId: string):
 }
 
 export type EvidenceView = {
-  determination: Determination;
+  hypothesisId?: string;
   evidence?: EvidenceBundle;
   verdict?: VerificationVerdict;
   repairs: RepairTicket[];
 };
 
-export function buildEvidenceView(run: ResearchRun, determination: Determination): EvidenceView {
-  const id = determination.hypothesis_id;
+export function buildEvidenceView(run: ResearchRun, hypothesisId?: string): EvidenceView {
   return {
-    determination,
-    evidence: id ? getEvidenceForHypothesis(run, id) : undefined,
-    verdict: id ? getVerdictForHypothesis(run, id) : undefined,
-    repairs: id ? getRepairsForHypothesis(run, id) : [],
+    hypothesisId,
+    evidence: hypothesisId ? getEvidenceForHypothesis(run, hypothesisId) : undefined,
+    verdict: hypothesisId ? getVerdictForHypothesis(run, hypothesisId) : undefined,
+    repairs: hypothesisId ? getRepairsForHypothesis(run, hypothesisId) : [],
   };
 }
