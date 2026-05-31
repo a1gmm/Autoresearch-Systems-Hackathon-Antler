@@ -406,7 +406,7 @@ function sectionText(sectionMap: SdsSectionMap, sectionNumber: number): string {
 
 function evidenceSectionText(sectionMap: SdsSectionMap, sectionNumber: number): string {
   const section = sectionMap.sections.find((candidate) => candidate.section_number === sectionNumber);
-  if (!section || section.status === "merged") {
+  if (!section || section.status === "ambiguous" || section.status === "merged") {
     return "";
   }
 

@@ -366,6 +366,22 @@ describe("reviewSdsDocument", () => {
     );
   });
 
+  it("does not emit evidence from bodyless duplicate ambiguous sections", () => {
+    const duplicateTitleOnlyText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      13,
+      "Section 13: Disposal considerations\nSection 13: Disposal considerations\n",
+    );
+    const review = reviewText(duplicateTitleOnlyText, "run_duplicate_title_only");
+    const section13 = review.section_map.sections.find((section) => section.section_number === 13);
+
+    expect(review.overall_status).toBe("needs_expert_review");
+    expect(section13).toEqual(expect.objectContaining({ status: "ambiguous" }));
+    expect(section13?.text).toContain("Section 13: Disposal considerations");
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toContain(13);
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("hazardous_waste_review");
+  });
+
   it("keeps expert review status when stale documents also have ambiguous sections", () => {
     const staleText = COMPLETE_SDS_TEXT.replaceAll("January 3, 2025", "January 3, 2020");
     const staleDuplicateText = staleText.replace(
