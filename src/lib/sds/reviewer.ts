@@ -157,15 +157,16 @@ const PERMIT_HANDOFF_RULES: PermitHandoffRule[] = [
 
 export function createSdsDocument(input: SdsDocumentInput, runId: string, index: number): SdsDocument {
   const extractedText = normalizeText(input.text);
+  const sourceType = input.source_type ?? "pasted_text";
 
   return {
     id: `${runId}_sds_${index + 1}`,
     run_id: runId,
     name: input.name,
-    source_type: input.source_type ?? "pasted_text",
+    source_type: sourceType,
     retention: input.retention ?? "ephemeral",
     extracted_text: extractedText,
-    text_extraction_status: input.text_extraction_status ?? (extractedText.length === 0 ? "empty" : "ok"),
+    text_extraction_status: input.text_extraction_status ?? inferTextExtractionStatus(sourceType, extractedText),
   };
 }
 
@@ -308,7 +309,7 @@ function buildSafetyFindings(document: SdsDocument, sectionMap: SdsSectionMap): 
   const findings: SdsFinding[] = [];
 
   for (const rule of SAFETY_RULES) {
-    const quote = findQuote(sectionText(sectionMap, rule.sourceSection), rule.terms);
+    const quote = findQuote(evidenceSectionText(sectionMap, rule.sourceSection), rule.terms);
     if (!quote) {
       continue;
     }
@@ -331,7 +332,7 @@ function buildPermitHandoffFacts(sectionMap: SdsSectionMap): PermitHandoffFact[]
   const facts: PermitHandoffFact[] = [];
 
   for (const rule of PERMIT_HANDOFF_RULES) {
-    const quote = findQuote(sectionText(sectionMap, rule.sourceSection), rule.terms);
+    const quote = findQuote(evidenceSectionText(sectionMap, rule.sourceSection), rule.terms);
     if (!quote) {
       continue;
     }
@@ -380,6 +381,14 @@ function requireAsOfDate(options: SdsReviewOptions | undefined): Date {
   return options.asOfDate;
 }
 
+function inferTextExtractionStatus(sourceType: SdsSourceType, extractedText: string): SdsTextExtractionStatus {
+  if (extractedText.length > 0) {
+    return "ok";
+  }
+
+  return sourceType === "pdf" ? "needs_pasted_text" : "empty";
+}
+
 function qualityFindingId(documentId: string, ruleId: (typeof QUALITY_RULE_IDS)[keyof typeof QUALITY_RULE_IDS]): string {
   return `${documentId}_${ruleId}`;
 }
@@ -393,6 +402,15 @@ function hasFindingRule(
 
 function sectionText(sectionMap: SdsSectionMap, sectionNumber: number): string {
   return sectionMap.sections.find((section) => section.section_number === sectionNumber)?.text ?? "";
+}
+
+function evidenceSectionText(sectionMap: SdsSectionMap, sectionNumber: number): string {
+  const section = sectionMap.sections.find((candidate) => candidate.section_number === sectionNumber);
+  if (!section || section.status === "merged") {
+    return "";
+  }
+
+  return section.text;
 }
 
 function findQuote(text: string, terms: Term[]): string | undefined {

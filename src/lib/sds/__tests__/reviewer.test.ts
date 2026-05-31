@@ -280,6 +280,31 @@ describe("reviewSdsDocument", () => {
     expect(review.permit_handoff_facts).toEqual([]);
   });
 
+  it("defaults empty PDF extraction to needs pasted text and marks review unreadable", () => {
+    const document = createSdsDocument(
+      {
+        name: "scan.pdf",
+        type: "sds",
+        text: "",
+        source_type: "pdf",
+      },
+      "run_scan",
+      0,
+    );
+    const review = reviewSdsDocument(document, { asOfDate: REVIEW_AS_OF_DATE });
+
+    expect(document.text_extraction_status).toBe("needs_pasted_text");
+    expect(review.overall_status).toBe("unreadable");
+    expect(review.quality_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "critical",
+          title: "SDS text could not be extracted",
+        }),
+      ]),
+    );
+  });
+
   it("requires an explicit as-of date for document review", () => {
     const document = createSdsDocument(
       { name: "Solvent Blend 42 SDS", type: "sds", text: COMPLETE_SDS_TEXT },
@@ -419,7 +444,11 @@ describe("mapSdsSections", () => {
   it("does not emit evidence from shortened split title-only sections", () => {
     const titleOnlyText = replaceWithSplitTitleOnly(
       replaceWithSplitTitleOnly(
-        replaceWithSplitTitleOnly(COMPLETE_SDS_TEXT, 10, "Reactivity"),
+        replaceWithSplitTitleOnly(
+          replaceWithSplitTitleOnly(COMPLETE_SDS_TEXT, 6, "Spill"),
+          10,
+          "Reactivity",
+        ),
         13,
         "Disposal",
       ),
@@ -429,6 +458,9 @@ describe("mapSdsSections", () => {
     const sectionMap = mapSdsSections("short_title_doc", titleOnlyText);
     const review = reviewText(titleOnlyText, "run_short_titles");
 
+    expect(sectionMap.sections.find((section) => section.section_number === 6)).toEqual(
+      expect.objectContaining({ status: "merged", text: "Spill" }),
+    );
     expect(sectionMap.sections.find((section) => section.section_number === 10)).toEqual(
       expect.objectContaining({ text: "" }),
     );
@@ -441,13 +473,12 @@ describe("mapSdsSections", () => {
     expect(review.safety_findings.map((finding) => finding.source_section)).not.toEqual(
       expect.arrayContaining([13, 15]),
     );
-    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toEqual(
-      expect.arrayContaining([
-        "incompatible_storage_review",
-        "hazardous_waste_review",
-        "california_ehs_review",
-      ]),
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain(
+      "spill_stormwater_containment_review",
     );
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("incompatible_storage_review");
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("hazardous_waste_review");
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("california_ehs_review");
   });
 });
 
