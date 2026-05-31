@@ -1,4 +1,5 @@
 import type { HarnessToolId } from "./toolCatalog";
+import type { PermitHandoffFact, SdsDocumentInput, SdsReview } from "@/lib/sds/types";
 
 export type RunStatus =
   | "idle"
@@ -29,7 +30,7 @@ export type CoverageStatus =
 export type ProjectFact = {
   field: string;
   value: unknown;
-  source: "intake" | "seeded_demo" | "derived" | "missing";
+  source: "intake" | "seeded_demo" | "derived" | "missing" | "sds_handoff";
 };
 
 export type ScopePack = {
@@ -173,6 +174,7 @@ export type Determination = {
   confidence: number;
   verified: boolean;
   review_flag: boolean;
+  sds_handoff_refs?: PermitHandoffFact[];
   permit_filing?: {
     form_name: string;
     form_url: string;
@@ -210,6 +212,7 @@ export type ResearchRun = {
   project_facts: Record<string, unknown>;
   jurisdiction_stack: string[];
   scope_pack: ScopePack;
+  sds_reviews: SdsReview[];
   coverage_family_statuses: CoverageFamilyStatus[];
   regulatory_angles: RegulatoryAngle[];
   research_graph: ResearchHypothesis[];
@@ -225,9 +228,12 @@ export type ResearchRun = {
 
 export type ResearchRunInput = {
   project_description: string;
-  demo_documents?: Array<{
-    name: string;
-    type: "sds" | "tds" | "permit" | "equipment_spec" | "other" | string;
-    text: string;
-  }>;
+  demo_documents?: Array<
+    | SdsDocumentInput
+    | {
+        name: string;
+        type: "tds" | "permit" | "equipment_spec" | "other" | string;
+        text: string;
+      }
+  >;
 };
