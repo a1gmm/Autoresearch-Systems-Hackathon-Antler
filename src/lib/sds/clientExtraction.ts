@@ -6,6 +6,7 @@ export async function extractSdsTextFromClientFile(
   if (isPdf(file)) {
     try {
       const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      configurePdfWorker(pdfjs);
       const data = new Uint8Array(await file.arrayBuffer());
       const loadingTask = pdfjs.getDocument({ data });
       const pdf = await loadingTask.promise;
@@ -51,4 +52,17 @@ function isPdf(file: File): boolean {
   return (
     file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
   );
+}
+
+function configurePdfWorker(
+  pdfjs: typeof import("pdfjs-dist/legacy/build/pdf.mjs")
+): void {
+  if (pdfjs.GlobalWorkerOptions.workerSrc) {
+    return;
+  }
+
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/legacy/build/pdf.worker.mjs",
+    import.meta.url
+  ).toString();
 }
