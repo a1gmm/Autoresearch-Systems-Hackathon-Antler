@@ -1,6 +1,7 @@
 "use client";
 import { VerificationSummary } from "./VerificationSummary";
 import { CoverageFamilyList } from "./CoverageFamilyList";
+import { SdsReviewPanel } from "./SdsReviewPanel";
 import { RepairTicketsCard } from "./RepairTicketsCard";
 import { TraceStream } from "./TraceStream";
 
@@ -12,6 +13,7 @@ export function SidePanel() {
     >
       <VerificationSummary />
       <CoverageFamilyList />
+      <SdsReviewPanel />
       <RepairTicketsCard />
       <TraceStream />
     </aside>
