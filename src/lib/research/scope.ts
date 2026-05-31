@@ -41,7 +41,9 @@ export function projectFacts(scope: ScopePack): Record<string, unknown> {
 }
 
 export function applySdsHandoffToScope(scope: ScopePack, sdsReviews: SdsReview[]): ScopePack {
-  const permitHandoffFacts = sdsReviews.flatMap((review) => review.permit_handoff_facts);
+  const permitHandoffFacts = sdsReviews.flatMap((review) =>
+    review.permit_handoff_facts.filter((fact) => fact.review_flag)
+  );
 
   if (permitHandoffFacts.length === 0) {
     return scope;

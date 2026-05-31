@@ -13,7 +13,7 @@ const events: ResearchRun["trace_events"] = [
 function makeRun(): ResearchRun {
   return {
     run_id: "r", status: "done", project_facts: {}, jurisdiction_stack: [],
-    scope_pack: {} as never, coverage_family_statuses: [], regulatory_angles: [],
+    scope_pack: {} as never, sds_reviews: [], coverage_family_statuses: [], regulatory_angles: [],
     research_graph: [], research_tasks: [], evidence_bundles: [], verification_verdicts: [],
     repair_tickets: [], memory_updates: [], determinations: [], trace_events: events,
     report_markdown: "",

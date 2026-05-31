@@ -17,6 +17,7 @@ function makeRun(overrides: Partial<ResearchRun> = {}): ResearchRun {
     project_facts: {},
     jurisdiction_stack: [],
     scope_pack: {} as never,
+    sds_reviews: [],
     coverage_family_statuses: [],
     regulatory_angles: [],
     research_graph: [],

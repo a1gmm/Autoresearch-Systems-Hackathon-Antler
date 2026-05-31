@@ -8,6 +8,7 @@ const minimalRun: ResearchRun = {
   project_facts: {},
   jurisdiction_stack: [],
   scope_pack: {} as never,
+  sds_reviews: [],
   coverage_family_statuses: [
     { id: "cov_hmbp", family: "hazmat", status: "active", reason: "", project_facts_considered: [], missing_facts: [] },
   ],

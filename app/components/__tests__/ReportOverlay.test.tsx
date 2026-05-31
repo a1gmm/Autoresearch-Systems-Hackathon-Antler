@@ -8,7 +8,7 @@ function seedStore() {
   useStore.setState({
     run: {
       run_id: "test", status: "done", project_facts: {}, jurisdiction_stack: [],
-      scope_pack: {} as never, coverage_family_statuses: [
+      scope_pack: {} as never, sds_reviews: [], coverage_family_statuses: [
         { id: "cf-air", family: "air", status: "active", reason: "", project_facts_considered: [], missing_facts: [] },
       ],
       regulatory_angles: [],

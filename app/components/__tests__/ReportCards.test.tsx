@@ -23,7 +23,7 @@ function seedStore() {
   useStore.setState({
     run: {
       run_id: "test", status: "done", project_facts: {}, jurisdiction_stack: [],
-      scope_pack: {} as never, coverage_family_statuses: familyStatuses,
+      scope_pack: {} as never, sds_reviews: [], coverage_family_statuses: familyStatuses,
       regulatory_angles: [], research_graph: hypotheses, research_tasks: [],
       evidence_bundles: [
         { hypothesis_id: "H-AIR-201", sources: [], extracted_claims: [], researcher_conclusion: "applies", uncertainties: [] },

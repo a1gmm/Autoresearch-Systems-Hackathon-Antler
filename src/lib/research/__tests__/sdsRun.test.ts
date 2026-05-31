@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { SdsReview } from "@/lib/sds/types";
+import type { ScopePack } from "@/lib/research/types";
 import { runResearch } from "@/lib/research/run";
+import { applySdsHandoffToScope } from "@/lib/research/scope";
 
 const SDS_TEXT = `
 Section 1: Identification
@@ -57,6 +60,74 @@ Prepared by EHS. Revision date: January 3, 2025.
 `;
 
 describe("research run SDS integration", () => {
+  it("ignores SDS handoff facts that are not review-flagged", () => {
+    const scope: ScopePack = {
+      run_id: "run_sds_regression",
+      facility: {
+        address: "Southern California light industrial site",
+        jurisdiction_stack: ["California Water Boards"],
+        naics: null,
+        sic: null,
+      },
+      project_change: {
+        description: "Construction project with no confirmed chemical inventory.",
+        equipment: [],
+        chemicals: [],
+        waste_streams: [],
+        disturbance_acres: 1.2,
+        process_discharge: false,
+      },
+      missing_facts: [],
+      assumptions: [],
+    };
+    const review = {
+      document: {
+        id: "run_sds_regression_sds_1",
+        run_id: "run_sds_regression",
+        name: "Unreviewed SDS",
+        source_type: "pasted_text",
+        retention: "ephemeral",
+        extracted_text: SDS_TEXT,
+        text_extraction_status: "ok",
+      },
+      section_map: {
+        document_id: "run_sds_regression_sds_1",
+        sections: [],
+      },
+      overall_status: "complete",
+      quality_findings: [],
+      safety_findings: [],
+      permit_handoff_facts: [
+        {
+          field: "hazardous_material_inventory_review",
+          value: true,
+          source_section: 2,
+          quote: "Danger. Highly flammable liquid and vapor.",
+          confidence: 0.85,
+          review_flag: false,
+          reason: "Synthetic non-review-flagged fact must not alter scope.",
+        },
+        {
+          field: "hazardous_waste_review",
+          value: true,
+          source_section: 13,
+          quote: "Dispose as hazardous waste.",
+          confidence: 0.85,
+          review_flag: false,
+          reason: "Synthetic non-review-flagged fact must not alter scope.",
+        },
+      ],
+    } satisfies SdsReview;
+
+    const augmentedScope = applySdsHandoffToScope(scope, [review]);
+
+    expect(augmentedScope).toBe(scope);
+    expect(augmentedScope.project_change.chemicals).toEqual([]);
+    expect(augmentedScope.project_change.waste_streams).toEqual([]);
+    expect(augmentedScope.missing_facts).toEqual([]);
+    expect(augmentedScope.assumptions).toEqual([]);
+  });
+
   it("reviews SDS documents and carries handoff refs without bypassing verification", async () => {
     const run = await runResearch({
       project_description:

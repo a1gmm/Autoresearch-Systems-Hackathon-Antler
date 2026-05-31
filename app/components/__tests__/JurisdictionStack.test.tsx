@@ -29,6 +29,7 @@ describe("JurisdictionStack", () => {
         project_facts: {},
         jurisdiction_stack: ["SCAQMD", "LA County", "CA EPA"],
         scope_pack: {} as never,
+        sds_reviews: [],
         coverage_family_statuses: [],
         regulatory_angles: [],
         research_graph: [],

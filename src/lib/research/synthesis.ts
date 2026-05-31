@@ -20,7 +20,9 @@ export function synthesize(
   const evidenceByHypothesis = new Map(evidenceBundles.map((bundle) => [bundle.hypothesis_id, bundle]));
   const verdictByHypothesis = new Map(verdicts.map((verdict) => [verdict.hypothesis_id, verdict]));
   const angleById = new Map(angles.map((angle) => [angle.id, angle]));
-  const sdsHandoffFacts = sdsReviews.flatMap((review) => review.permit_handoff_facts);
+  const sdsHandoffFacts = sdsReviews.flatMap((review) =>
+    review.permit_handoff_facts.filter((fact) => fact.review_flag)
+  );
 
   const determinations = hypotheses.map((hypothesis) => {
     const evidence = evidenceByHypothesis.get(hypothesis.id);
@@ -82,7 +84,17 @@ function fieldsForRequirement(hypothesis: ResearchHypothesis, requirement: strin
   }
 
   if (hypothesis.family === "air" || requirement.includes("voc") || requirement.includes("scaqmd")) {
-    return new Set(["voc_air_emissions_review", "flammable_liquid_storage_review", "california_ehs_review"]);
+    const fields = new Set(["voc_air_emissions_review"]);
+
+    if (hasAny(requirement, ["storage", "flammable"])) {
+      fields.add("flammable_liquid_storage_review");
+    }
+
+    if (hasAny(requirement, ["california", "ehs", "cupa", "dtsc", "title 22"])) {
+      fields.add("california_ehs_review");
+    }
+
+    return fields;
   }
 
   if (hypothesis.family === "stormwater" || requirement.includes("stormwater") || requirement.includes("spill")) {
@@ -90,6 +102,10 @@ function fieldsForRequirement(hypothesis: ResearchHypothesis, requirement: strin
   }
 
   return new Set<string>();
+}
+
+function hasAny(text: string, terms: string[]) {
+  return terms.some((term) => text.includes(term));
 }
 
 function determinationFor(
