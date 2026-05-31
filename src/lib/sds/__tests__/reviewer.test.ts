@@ -557,6 +557,61 @@ describe("reviewSdsDocument", () => {
     );
   });
 
+  it("strips punctuated title metadata while preserving punctuated body evidence", () => {
+    const titleOnlyDisposalText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      13,
+      "Section 13:\nHazardous waste disposal considerations.\n",
+    );
+    const titleOnlyCaliforniaText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      15,
+      "Section 15:\nCalifornia regulatory compliance and state environmental disclosure requirements.\n",
+    );
+    const disposalBodyText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      13,
+      "Section 13:\nDispose of contents as hazardous waste.\n",
+    );
+    const hazardBodyText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      2,
+      "Section 2:\nDanger. Highly flammable liquid and vapor.\n",
+    );
+    const titleOnlyDisposalReview = reviewText(titleOnlyDisposalText, "run_punctuated_disposal_title");
+    const titleOnlyCaliforniaReview = reviewText(titleOnlyCaliforniaText, "run_punctuated_california_title");
+    const disposalBodyReview = reviewText(disposalBodyText, "run_punctuated_disposal_body");
+    const hazardBodyReview = reviewText(hazardBodyText, "run_punctuated_hazard_body");
+
+    expect(titleOnlyDisposalReview.section_map.sections.find((section) => section.section_number === 13)).toEqual(
+      expect.objectContaining({ status: "merged", text: "" }),
+    );
+    expect(titleOnlyDisposalReview.safety_findings.map((finding) => finding.source_section)).not.toContain(13);
+    expect(titleOnlyDisposalReview.permit_handoff_facts.map((fact) => fact.field)).not.toContain(
+      "hazardous_waste_review",
+    );
+
+    expect(titleOnlyCaliforniaReview.section_map.sections.find((section) => section.section_number === 15)).toEqual(
+      expect.objectContaining({ status: "merged", text: "" }),
+    );
+    expect(titleOnlyCaliforniaReview.safety_findings.map((finding) => finding.source_section)).not.toContain(15);
+    expect(titleOnlyCaliforniaReview.permit_handoff_facts.map((fact) => fact.field)).not.toContain(
+      "california_ehs_review",
+    );
+
+    expect(disposalBodyReview.section_map.sections.find((section) => section.section_number === 13)).toEqual(
+      expect.objectContaining({ status: "present", text: "Dispose of contents as hazardous waste." }),
+    );
+    expect(disposalBodyReview.permit_handoff_facts.map((fact) => fact.field)).toContain("hazardous_waste_review");
+
+    expect(hazardBodyReview.section_map.sections.find((section) => section.section_number === 2)).toEqual(
+      expect.objectContaining({ status: "present", text: "Danger. Highly flammable liquid and vapor." }),
+    );
+    expect(hazardBodyReview.permit_handoff_facts.map((fact) => fact.field)).toContain(
+      "hazardous_material_inventory_review",
+    );
+  });
+
   it("preserves short rule-term split body evidence for safety and handoff review", () => {
     const nitrileGlovesText = replaceSectionBlock(COMPLETE_SDS_TEXT, 8, "Section 8:\nNitrile gloves\n");
     const wearGlovesText = replaceSectionBlock(COMPLETE_SDS_TEXT, 8, "Section 8:\nWear nitrile gloves\n");

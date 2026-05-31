@@ -194,12 +194,12 @@ function isSplitTitleLine(line: string): boolean {
     return true;
   }
 
-  if (/[:;]/.test(normalizedLine) || /[.!?]$/.test(normalizedLine)) {
-    return false;
-  }
-
   if (TITLE_METADATA_LINE_RE.test(normalizedLine) && !BODY_ACTION_LINE_RE.test(normalizedLine)) {
     return true;
+  }
+
+  if (/[:;]/.test(normalizedLine) || /[.!?]$/.test(normalizedLine)) {
+    return false;
   }
 
   if (BODY_EVIDENCE_LINE_RE.test(normalizedLine)) {
@@ -210,7 +210,7 @@ function isSplitTitleLine(line: string): boolean {
 }
 
 function normalizeComparableLine(line: string): string {
-  return line.trim().replace(/\s+/g, " ").toLowerCase();
+  return line.trim().replace(/[.!?]+$/g, "").replace(/\s+/g, " ").toLowerCase();
 }
 
 function getSectionStatus(matchCount: number, text: string): SdsSectionStatus {
