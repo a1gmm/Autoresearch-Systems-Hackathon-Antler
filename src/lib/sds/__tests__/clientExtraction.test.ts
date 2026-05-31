@@ -79,6 +79,58 @@ describe("extractSdsTextFromClientFile", () => {
     });
   });
 
+  it("preserves PDF text item line endings and destroys loaded PDFs", async () => {
+    const destroy = vi.fn().mockResolvedValue(undefined);
+    const getTextContent = vi.fn().mockResolvedValue({
+      items: [
+        { str: "Section 1: Identification", hasEOL: true },
+        { str: "Section 2: Hazard(s) identification", hasEOL: false }
+      ]
+    });
+    const getPage = vi.fn().mockResolvedValue({ getTextContent });
+    pdfjsMock.getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage,
+        destroy
+      })
+    });
+    const file = new File(["%PDF-1.7"], "sds.pdf", {
+      type: "application/pdf"
+    });
+
+    const extraction = await extractSdsTextFromClientFile(file);
+
+    expect(extraction).toEqual({
+      name: "sds.pdf",
+      source_type: "pdf",
+      text: "Section 1: Identification\nSection 2: Hazard(s) identification",
+      text_extraction_status: "ok"
+    });
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it("returns a pasted text fallback and destroys the loading task when PDF loading rejects", async () => {
+    const destroy = vi.fn().mockResolvedValue(undefined);
+    pdfjsMock.getDocument.mockReturnValue({
+      promise: Promise.reject(new Error("Invalid PDF")),
+      destroy
+    });
+    const file = new File(["not a valid pdf"], "scan.pdf", {
+      type: "application/pdf"
+    });
+
+    const extraction = await extractSdsTextFromClientFile(file);
+
+    expect(extraction).toEqual({
+      name: "scan.pdf",
+      source_type: "pdf",
+      text: "",
+      text_extraction_status: "needs_pasted_text"
+    });
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
   it("returns a pasted text fallback signal when PDF parsing fails", async () => {
     pdfjsMock.getDocument.mockImplementation(() => {
       throw new Error("Invalid PDF");
