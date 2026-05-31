@@ -508,6 +508,54 @@ describe("reviewSdsDocument", () => {
       "spill_stormwater_containment_review",
     );
   });
+
+  it("classifies punctuationless split heading lines as body evidence or title metadata", () => {
+    const bareExposureText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      8,
+      "Section 8:\nLocal exhaust ventilation required\n",
+    );
+    const bareStorageText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      7,
+      "Section 7:\nStore in a flammable liquid cabinet\n",
+    );
+    const titleOnlyDisposalText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      13,
+      "Section 13:\nHazardous waste disposal considerations\n",
+    );
+    const exposureReview = reviewText(bareExposureText, "run_bare_exposure_required");
+    const storageReview = reviewText(bareStorageText, "run_bare_storage_action");
+    const titleOnlyReview = reviewText(titleOnlyDisposalText, "run_title_hazardous_waste");
+
+    expect(exposureReview.section_map.sections.find((section) => section.section_number === 8)).toEqual(
+      expect.objectContaining({ status: "present", text: "Local exhaust ventilation required" }),
+    );
+    expect(exposureReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "ppe_exposure",
+          quote: "Local exhaust ventilation required",
+        }),
+      ]),
+    );
+
+    expect(storageReview.section_map.sections.find((section) => section.section_number === 7)).toEqual(
+      expect.objectContaining({ status: "present", text: "Store in a flammable liquid cabinet" }),
+    );
+    expect(storageReview.permit_handoff_facts.map((fact) => fact.field)).toContain(
+      "flammable_liquid_storage_review",
+    );
+
+    expect(titleOnlyReview.section_map.sections.find((section) => section.section_number === 13)).toEqual(
+      expect.objectContaining({ status: "merged", text: "" }),
+    );
+    expect(titleOnlyReview.safety_findings.map((finding) => finding.source_section)).not.toContain(13);
+    expect(titleOnlyReview.permit_handoff_facts.map((fact) => fact.field)).not.toContain(
+      "hazardous_waste_review",
+    );
+  });
 });
 
 describe("mapSdsSections", () => {

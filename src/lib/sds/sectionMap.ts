@@ -42,8 +42,12 @@ const SPLIT_TITLE_LINES = new Set([
   "California regulatory requirements",
   "California regulatory compliance and state environmental disclosure requirements",
 ].map(normalizeComparableLine));
+const TITLE_METADATA_LINE_RE =
+  /\b(?:considerations?|information|requirements?|measures?|controls?|protection|properties|classification)\b|\bregulatory compliance\b|\bplanning requirements\b/i;
+const BODY_ACTION_LINE_RE =
+  /\b(?:required|use|wear|store|dispose(?:\s+of)?|prevent|avoid|eliminate|absorb|keep away|causes?|may cause|highly|danger|warning|harmful)\b/i;
 const BODY_EVIDENCE_LINE_RE =
-  /\b(?:danger|warning|highly|causes?|may cause|harmful|flammable liquid|prevent|contain spill|avoid|eliminate|absorb|dispose(?:\s+of)?|wear|use|keep away|hazardous waste|storm drains?|waterways?)\b/i;
+  /\b(?:danger|warning|highly|causes?|may cause|harmful|flammable liquid|local exhaust ventilation|required|prevent|contain spill|avoid|eliminate|absorb|dispose(?:\s+of)?|wear|use|store|keep away|hazardous waste|storm drains?|waterways?)\b/i;
 const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   1: /\bidentification\b/i,
   2: /\bhazards?\b|\bhazard\(s\)\b/i,
@@ -191,6 +195,10 @@ function isSplitTitleLine(line: string): boolean {
 
   if (/[:;]/.test(normalizedLine) || /[.!?]$/.test(normalizedLine)) {
     return false;
+  }
+
+  if (TITLE_METADATA_LINE_RE.test(normalizedLine) && !BODY_ACTION_LINE_RE.test(normalizedLine)) {
+    return true;
   }
 
   if (BODY_EVIDENCE_LINE_RE.test(normalizedLine)) {
