@@ -79,7 +79,7 @@ describe("extractSdsTextFromClientFile", () => {
     });
   });
 
-  it("preserves PDF text item line endings and destroys loaded PDFs", async () => {
+  it("preserves PDF text item line endings and destroys the loading task after success", async () => {
     const destroy = vi.fn().mockResolvedValue(undefined);
     const getTextContent = vi.fn().mockResolvedValue({
       items: [
@@ -91,9 +91,9 @@ describe("extractSdsTextFromClientFile", () => {
     pdfjsMock.getDocument.mockReturnValue({
       promise: Promise.resolve({
         numPages: 1,
-        getPage,
-        destroy
-      })
+        getPage
+      }),
+      destroy
     });
     const file = new File(["%PDF-1.7"], "sds.pdf", {
       type: "application/pdf"

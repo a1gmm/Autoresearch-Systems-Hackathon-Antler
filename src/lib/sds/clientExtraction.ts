@@ -40,7 +40,8 @@ export async function extractSdsTextFromClientFile(
         text_extraction_status: "needs_pasted_text"
       };
     } finally {
-      await destroyPdfResource(pdf ?? loadingTask);
+      await destroyPdfResource(pdf);
+      await destroyPdfResource(loadingTask);
     }
   }
 
