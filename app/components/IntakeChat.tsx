@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/ui/store";
+import { SdsDocumentPicker } from "./SdsDocumentPicker";
 import { Send, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ChatMessage, IntakeChatResponse } from "@/lib/intake/types";
+import type { SdsDocumentInput } from "@/lib/sds/types";
 
 type Props = {
   onStarted: () => void;
@@ -15,6 +17,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   const startRun = useStore((s) => s.startRun);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [sdsDocuments, setSdsDocuments] = useState<SdsDocumentInput[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
@@ -35,7 +38,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
       }
       if (data.complete) {
         onStarted();
-        void startRun({ project_description: data.project_description, demo_documents: [] });
+        void startRun({ project_description: data.project_description, demo_documents: sdsDocuments });
         return;
       }
       setMessages([...history, { role: "assistant", content: data.message }]);
@@ -147,6 +150,10 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
               </button>
             </motion.div>
           )}
+        </div>
+
+        <div className="border-t border-slate-700/40 p-3.5">
+          <SdsDocumentPicker documents={sdsDocuments} onChange={setSdsDocuments} />
         </div>
 
         {/* Input */}
