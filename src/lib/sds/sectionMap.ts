@@ -25,7 +25,7 @@ type HeadingMatch = {
   lineEnd: number;
 };
 
-const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?:\s*[:.)-]+\s*|\s+)(.+)$/i;
+const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
 const MIN_USEFUL_SECTION_TEXT_LENGTH = 24;
 const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   1: /\bidentification\b/i,

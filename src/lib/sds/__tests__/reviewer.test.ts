@@ -91,6 +91,12 @@ function numericOnlyHeadings(text: string) {
   });
 }
 
+function splitSectionHeadings(text: string) {
+  return text.replace(/^Section (\d+): (.+)$/gm, (_line, number, heading) => {
+    return Number(number) % 2 === 0 ? `Sec. ${number}:\n${heading}` : `Section ${number}:\n${heading}`;
+  });
+}
+
 describe("reviewSdsDocument", () => {
   it("maps all 16 sections and emits quality, safety, and permit handoff artifacts", () => {
     const review = reviewText(COMPLETE_SDS_TEXT);
@@ -328,6 +334,26 @@ describe("mapSdsSections", () => {
     );
     expect(sectionMap.sections.find((section) => section.section_number === 2)?.text).toContain("Danger");
   });
+
+  it("maps bare section-prefixed headings split across OCR/PDF lines", () => {
+    const splitHeadingText = splitSectionHeadings(COMPLETE_SDS_TEXT);
+
+    expect(splitHeadingText).toMatch(/^Section 1:\nIdentification/m);
+    expect(splitHeadingText).toMatch(/^Sec\. 2:\nHazard\(s\) identification/m);
+
+    const sectionMap = mapSdsSections("split_doc", splitHeadingText);
+    const section1 = sectionMap.sections.find((section) => section.section_number === 1);
+
+    expect(sectionMap.sections).toHaveLength(16);
+    expect(sectionMap.sections.every((section) => section.status === "present")).toBe(true);
+    expect(section1).toEqual(
+      expect.objectContaining({
+        heading: "Identification",
+        text: expect.stringContaining("Product identifier: Solvent Blend 42."),
+      }),
+    );
+    expect(section1?.text).not.toContain("Danger. Highly flammable liquid and vapor.");
+  });
 });
 
 describe("reviewSdsInputs", () => {
@@ -346,5 +372,20 @@ describe("reviewSdsInputs", () => {
     expect(reviews[0].document.id).toBe("run_inputs_sds_1");
     expect(reviews[0].document.retention).toBe("ephemeral");
     expect(reviews[0].document.source_type).toBe("pasted_text");
+  });
+
+  it("passes as-of date options through to each SDS document review", () => {
+    const staleUnderLiveClockText = COMPLETE_SDS_TEXT.replaceAll("January 3, 2025", "January 3, 2020");
+    const reviews = reviewSdsInputs(
+      [{ name: "Older but current as of 2022", type: "sds", text: staleUnderLiveClockText }],
+      "run_bulk_options",
+      { asOfDate: new Date("2022-01-04T00:00:00Z") },
+    );
+
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].overall_status).toBe("complete");
+    expect(reviews[0].quality_findings.map((finding) => finding.id)).not.toContain(
+      "run_bulk_options_sds_1_quality_revision_date_stale",
+    );
   });
 });

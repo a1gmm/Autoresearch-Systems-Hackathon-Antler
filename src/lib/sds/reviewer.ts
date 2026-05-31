@@ -169,10 +169,10 @@ export function createSdsDocument(input: SdsDocumentInput, runId: string, index:
   };
 }
 
-export function reviewSdsInputs(documents: unknown[], runId: string): SdsReview[] {
+export function reviewSdsInputs(documents: unknown[], runId: string, options: SdsReviewOptions = {}): SdsReview[] {
   return documents
     .filter(isSdsDocumentInput)
-    .map((input, index) => reviewSdsDocument(createSdsDocument(input, runId, index)));
+    .map((input, index) => reviewSdsDocument(createSdsDocument(input, runId, index), options));
 }
 
 export function reviewSdsDocument(document: SdsDocument, options: SdsReviewOptions = {}): SdsReview {
