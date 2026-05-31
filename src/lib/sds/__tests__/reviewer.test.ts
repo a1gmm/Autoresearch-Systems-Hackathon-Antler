@@ -459,7 +459,7 @@ describe("mapSdsSections", () => {
     const review = reviewText(titleOnlyText, "run_short_titles");
 
     expect(sectionMap.sections.find((section) => section.section_number === 6)).toEqual(
-      expect.objectContaining({ status: "merged", text: "Spill" }),
+      expect.objectContaining({ status: "merged", text: "" }),
     );
     expect(sectionMap.sections.find((section) => section.section_number === 10)).toEqual(
       expect.objectContaining({ text: "" }),
@@ -479,6 +479,50 @@ describe("mapSdsSections", () => {
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("incompatible_storage_review");
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("hazardous_waste_review");
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("california_ehs_review");
+  });
+
+  it("does not emit evidence from long split title-only sections", () => {
+    const titleOnlyText = replaceWithSplitTitleOnly(
+      replaceWithSplitTitleOnly(
+        replaceWithSplitTitleOnly(COMPLETE_SDS_TEXT, 6, "Spill response and containment"),
+        13,
+        "Waste disposal considerations",
+      ),
+      15,
+      "California regulatory requirements",
+    );
+    const sectionMap = mapSdsSections("long_title_doc", titleOnlyText);
+    const review = reviewText(titleOnlyText, "run_long_titles");
+
+    expect(sectionMap.sections.find((section) => section.section_number === 6)).toEqual(
+      expect.objectContaining({ status: "merged", text: "" }),
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 13)).toEqual(
+      expect.objectContaining({ status: "merged", text: "" }),
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 15)).toEqual(
+      expect.objectContaining({ status: "merged", text: "" }),
+    );
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toEqual(
+      expect.arrayContaining([13, 15]),
+    );
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain(
+      "spill_stormwater_containment_review",
+    );
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("hazardous_waste_review");
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("california_ehs_review");
+  });
+
+  it("keeps real Section 6, 13, and 15 body text as handoff evidence", () => {
+    const review = reviewText(COMPLETE_SDS_TEXT, "run_real_body_evidence");
+
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).toEqual(
+      expect.arrayContaining([
+        "spill_stormwater_containment_review",
+        "hazardous_waste_review",
+        "california_ehs_review",
+      ]),
+    );
   });
 });
 

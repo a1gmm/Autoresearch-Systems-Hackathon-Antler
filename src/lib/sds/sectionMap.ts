@@ -161,7 +161,17 @@ function isSplitHeadingTitle(heading: string, sectionNumber: number): boolean {
     ...(SPLIT_HEADING_TITLE_ALIASES[sectionNumber] ?? []),
   ].map(headingFingerprint);
 
-  return titleFingerprints.includes(fingerprint);
+  return titleFingerprints.includes(fingerprint) || isLikelySplitHeadingTitle(heading);
+}
+
+function isLikelySplitHeadingTitle(heading: string): boolean {
+  const normalizedHeading = heading.trim();
+  if (normalizedHeading.length === 0 || /[:;]/.test(normalizedHeading) || /[.!?]$/.test(normalizedHeading)) {
+    return false;
+  }
+
+  const wordCount = normalizedHeading.split(/\s+/).filter(Boolean).length;
+  return wordCount > 0 && wordCount <= 6;
 }
 
 function headingFingerprint(heading: string): string {
