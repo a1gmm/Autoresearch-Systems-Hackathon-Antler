@@ -48,7 +48,7 @@ const TITLE_METADATA_LINE_RE =
 const BODY_ACTION_LINE_RE =
   /\b(?:required|use|wear|store|dispose(?:\s+of)?|prevent|avoid|eliminate|absorb|keep away|causes?|may cause|highly|danger|warning|harmful)\b/i;
 const BODY_EVIDENCE_LINE_RE =
-  /\b(?:danger|warning|highly|causes?|may cause|harmful|flammable liquid storage cabinet|flammable liquid|local exhaust ventilation|nitrile gloves|voc content|required|prevent|contain spill|avoid|eliminate|absorb|dispose(?:\s+of)?|wear|use|store|keep away|hazardous waste|storm drains?|waterways?)\b/i;
+  /\b(?:danger|warning|highly|causes?|may cause|harmful|flammable liquid storage cabinet|flammable liquids?|local exhaust ventilation|nitrile gloves|voc content|required|prevent|contain spill|avoid|eliminate|absorb|dispose(?:\s+of)?|wear|use|store|keep away|hazardous waste|storm drains?|waterways?|california proposition 65|prop 65|cupa|title 22|dtsc|cal osha|un1993|class 3|packing group|cas|acetone|toluene)\b/i;
 const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   1: /\bidentification\b/i,
   2: /\bhazards?\b|\bhazard\(s\)\b/i,

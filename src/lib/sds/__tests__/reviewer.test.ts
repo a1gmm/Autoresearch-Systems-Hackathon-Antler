@@ -621,10 +621,20 @@ describe("reviewSdsDocument", () => {
       7,
       "Section 7:\nFlammable liquid storage cabinet\n",
     );
+    const californiaText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      15,
+      "Section 15:\nCalifornia Proposition 65\n",
+    );
+    const transportText = replaceSectionBlock(COMPLETE_SDS_TEXT, 14, "Section 14:\nUN1993\n");
+    const compositionText = replaceSectionBlock(COMPLETE_SDS_TEXT, 3, "Section 3:\nAcetone CAS 67-64-1\n");
     const nitrileReview = reviewText(nitrileGlovesText, "run_short_nitrile");
     const wearReview = reviewText(wearGlovesText, "run_short_wear_nitrile");
     const vocReview = reviewText(vocText, "run_short_voc");
     const storageReview = reviewText(storageText, "run_short_storage");
+    const californiaReview = reviewText(californiaText, "run_short_california");
+    const transportReview = reviewText(transportText, "run_short_transport");
+    const compositionReview = reviewText(compositionText, "run_short_composition");
 
     expect(nitrileReview.section_map.sections.find((section) => section.section_number === 8)).toEqual(
       expect.objectContaining({ status: "present", text: "Nitrile gloves" }),
@@ -660,6 +670,43 @@ describe("reviewSdsDocument", () => {
     );
     expect(storageReview.permit_handoff_facts.map((fact) => fact.field)).toContain(
       "flammable_liquid_storage_review",
+    );
+
+    expect(californiaReview.section_map.sections.find((section) => section.section_number === 15)).toEqual(
+      expect.objectContaining({ status: "present", text: "California Proposition 65" }),
+    );
+    expect(californiaReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "california_ehs_implication",
+          quote: "California Proposition 65",
+        }),
+      ]),
+    );
+    expect(californiaReview.permit_handoff_facts.map((fact) => fact.field)).toContain("california_ehs_review");
+
+    expect(transportReview.section_map.sections.find((section) => section.section_number === 14)).toEqual(
+      expect.objectContaining({ status: "present", text: "UN1993" }),
+    );
+    expect(transportReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "transport",
+          quote: "UN1993",
+        }),
+      ]),
+    );
+
+    expect(compositionReview.section_map.sections.find((section) => section.section_number === 3)).toEqual(
+      expect.objectContaining({ status: "present", text: "Acetone CAS 67-64-1" }),
+    );
+    expect(compositionReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "composition",
+          quote: "Acetone CAS 67-64-1",
+        }),
+      ]),
     );
   });
 });
