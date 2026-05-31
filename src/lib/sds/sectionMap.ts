@@ -29,6 +29,21 @@ type HeadingMatch = {
 
 const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?!(?:\.\d))(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
 const MIN_USEFUL_SECTION_TEXT_LENGTH = 24;
+const SPLIT_TITLE_LINES = new Set([
+  ...Object.values(SDS_SECTION_HEADINGS),
+  "Spill",
+  "Spill response and containment",
+  "Spill response and containment planning requirements",
+  "Reactivity",
+  "Disposal",
+  "Waste disposal considerations",
+  "Waste disposal considerations and regulatory disposal requirements",
+  "California regulatory information",
+  "California regulatory requirements",
+  "California regulatory compliance and state environmental disclosure requirements",
+].map(normalizeComparableLine));
+const BODY_EVIDENCE_LINE_RE =
+  /\b(?:danger|warning|highly|causes?|may cause|harmful|flammable liquid|prevent|contain spill|avoid|eliminate|absorb|dispose(?:\s+of)?|wear|use|keep away|hazardous waste|storm drains?|waterways?)\b/i;
 const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   1: /\bidentification\b/i,
   2: /\bhazards?\b|\bhazard\(s\)\b/i,
@@ -170,15 +185,23 @@ function isSplitTitleLine(line: string): boolean {
     return false;
   }
 
+  if (SPLIT_TITLE_LINES.has(normalizeComparableLine(normalizedLine))) {
+    return true;
+  }
+
   if (/[:;]/.test(normalizedLine) || /[.!?]$/.test(normalizedLine)) {
     return false;
   }
 
-  if (/^(danger|warning)\b/i.test(normalizedLine)) {
+  if (BODY_EVIDENCE_LINE_RE.test(normalizedLine)) {
     return false;
   }
 
   return true;
+}
+
+function normalizeComparableLine(line: string): string {
+  return line.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function getSectionStatus(matchCount: number, text: string): SdsSectionStatus {

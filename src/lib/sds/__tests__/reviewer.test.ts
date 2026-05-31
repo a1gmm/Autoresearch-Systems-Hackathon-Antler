@@ -452,6 +452,62 @@ describe("reviewSdsDocument", () => {
       "hazardous_material_inventory_review",
     );
   });
+
+  it("preserves punctuationless SDS body evidence after bare split headings", () => {
+    const bareHazardText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      2,
+      "Section 2:\nHighly flammable liquid and vapor\n",
+    );
+    const bareDisposalText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      13,
+      "Section 13:\nDispose of contents as hazardous waste\n",
+    );
+    const bareSpillText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      6,
+      "Section 6:\nPrevent entry into storm drains\n",
+    );
+    const hazardReview = reviewText(bareHazardText, "run_bare_hazard_no_punctuation");
+    const disposalReview = reviewText(bareDisposalText, "run_bare_disposal_no_punctuation");
+    const spillReview = reviewText(bareSpillText, "run_bare_spill_no_punctuation");
+
+    expect(hazardReview.section_map.sections.find((section) => section.section_number === 2)).toEqual(
+      expect.objectContaining({ status: "present", text: "Highly flammable liquid and vapor" }),
+    );
+    expect(hazardReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "hazard_identification",
+          quote: "Highly flammable liquid and vapor",
+        }),
+      ]),
+    );
+    expect(hazardReview.permit_handoff_facts.map((fact) => fact.field)).toContain(
+      "hazardous_material_inventory_review",
+    );
+
+    expect(disposalReview.section_map.sections.find((section) => section.section_number === 13)).toEqual(
+      expect.objectContaining({ status: "present", text: "Dispose of contents as hazardous waste" }),
+    );
+    expect(disposalReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "fire_spill_disposal",
+          quote: "Dispose of contents as hazardous waste",
+        }),
+      ]),
+    );
+    expect(disposalReview.permit_handoff_facts.map((fact) => fact.field)).toContain("hazardous_waste_review");
+
+    expect(spillReview.section_map.sections.find((section) => section.section_number === 6)).toEqual(
+      expect.objectContaining({ status: "present", text: "Prevent entry into storm drains" }),
+    );
+    expect(spillReview.permit_handoff_facts.map((fact) => fact.field)).toContain(
+      "spill_stormwater_containment_review",
+    );
+  });
 });
 
 describe("mapSdsSections", () => {
@@ -556,9 +612,8 @@ describe("mapSdsSections", () => {
     expect(section10).toEqual(expect.objectContaining({ text: "" }));
     expect(section13).toEqual(expect.objectContaining({ text: "" }));
     expect(review.safety_findings.find((finding) => finding.source_section === 13)).toBeUndefined();
-    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toEqual(
-      expect.arrayContaining(["incompatible_storage_review", "hazardous_waste_review"]),
-    );
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("incompatible_storage_review");
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("hazardous_waste_review");
   });
 
   it("does not emit evidence from shortened split title-only sections", () => {
@@ -590,9 +645,8 @@ describe("mapSdsSections", () => {
     expect(sectionMap.sections.find((section) => section.section_number === 15)).toEqual(
       expect.objectContaining({ text: "" }),
     );
-    expect(review.safety_findings.map((finding) => finding.source_section)).not.toEqual(
-      expect.arrayContaining([13, 15]),
-    );
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toContain(13);
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toContain(15);
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain(
       "spill_stormwater_containment_review",
     );
@@ -623,9 +677,8 @@ describe("mapSdsSections", () => {
     expect(sectionMap.sections.find((section) => section.section_number === 15)).toEqual(
       expect.objectContaining({ status: "merged", text: "" }),
     );
-    expect(review.safety_findings.map((finding) => finding.source_section)).not.toEqual(
-      expect.arrayContaining([13, 15]),
-    );
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toContain(13);
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toContain(15);
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain(
       "spill_stormwater_containment_review",
     );
