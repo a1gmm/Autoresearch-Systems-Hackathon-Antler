@@ -237,4 +237,48 @@ describe("SdsDocumentPicker", () => {
       ]);
     });
   });
+
+  it("preserves successful uploads and adds a placeholder for failed uploads", async () => {
+    const onChange = vi.fn();
+    mockExtractSdsTextFromClientFile
+      .mockResolvedValueOnce({
+        name: "good-sds.txt",
+        source_type: "pasted_text",
+        text: "Section 1: Identification",
+        text_extraction_status: "ok"
+      })
+      .mockRejectedValueOnce(new Error("PDF extraction failed"));
+    render(<SdsDocumentPicker documents={[]} onChange={onChange} />);
+
+    const goodFile = new File(["Section 1: Identification"], "good-sds.txt", {
+      type: "text/plain"
+    });
+    const failedFile = new File([""], "failed-sds.pdf", {
+      type: "application/pdf"
+    });
+    fireEvent.change(screen.getByLabelText("Upload SDS"), {
+      target: { files: [goodFile, failedFile] }
+    });
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith([
+        expect.objectContaining({
+          name: "good-sds.txt",
+          type: "sds",
+          source_type: "pasted_text",
+          retention: "ephemeral",
+          text: "Section 1: Identification",
+          text_extraction_status: "ok"
+        }),
+        expect.objectContaining({
+          name: "failed-sds.pdf",
+          type: "sds",
+          source_type: "pdf",
+          retention: "ephemeral",
+          text: "",
+          text_extraction_status: "needs_pasted_text"
+        })
+      ]);
+    });
+  });
 });

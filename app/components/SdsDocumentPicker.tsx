@@ -3,7 +3,12 @@
 import { useRef, useState } from "react";
 import { FileText, Loader2, Upload, X } from "lucide-react";
 import { extractSdsTextFromClientFile } from "@/lib/sds/clientExtraction";
-import type { SdsDocumentInput, SdsRetention } from "@/lib/sds/types";
+import type {
+  ClientSdsExtraction,
+  SdsDocumentInput,
+  SdsRetention,
+  SdsSourceType
+} from "@/lib/sds/types";
 
 type Props = {
   documents: SdsDocumentInput[];
@@ -47,22 +52,21 @@ export function SdsDocumentPicker({ documents, onChange, onBusyChange }: Props) 
   async function addFiles(files: FileList | null) {
     if (busy || !files?.length) return;
 
+    const uploadFiles = Array.from(files);
     setUploadBusy(true);
     try {
-      const extracted = await Promise.all(
-        Array.from(files).map((file) => extractSdsTextFromClientFile(file))
+      const results = await Promise.allSettled(
+        uploadFiles.map((file) => extractSdsTextFromClientFile(file))
+      );
+      const uploadedDocuments = results.map((result, index) =>
+        result.status === "fulfilled"
+          ? createExtractedDocument(result.value, retention)
+          : createFailedUploadDocument(uploadFiles[index], retention)
       );
 
       onChange([
         ...documentsRef.current,
-        ...extracted.map((item) => ({
-          name: item.name,
-          type: "sds" as const,
-          text: item.text,
-          source_type: item.source_type,
-          retention,
-          text_extraction_status: item.text_extraction_status
-        }))
+        ...uploadedDocuments
       ]);
     } finally {
       setUploadBusy(false);
@@ -164,4 +168,40 @@ export function SdsDocumentPicker({ documents, onChange, onBusyChange }: Props) 
       )}
     </section>
   );
+}
+
+function createExtractedDocument(
+  item: ClientSdsExtraction,
+  retention: SdsRetention
+): SdsDocumentInput {
+  return {
+    name: item.name,
+    type: "sds",
+    text: item.text,
+    source_type: item.source_type,
+    retention,
+    text_extraction_status: item.text_extraction_status
+  };
+}
+
+function createFailedUploadDocument(
+  file: File | undefined,
+  retention: SdsRetention
+): SdsDocumentInput {
+  return {
+    name: file?.name ?? "Unreadable SDS",
+    type: "sds",
+    text: "",
+    source_type: inferSdsSourceType(file),
+    retention,
+    text_extraction_status: "needs_pasted_text"
+  };
+}
+
+function inferSdsSourceType(file: File | undefined): SdsSourceType {
+  if (file?.type === "application/pdf" || file?.name.toLowerCase().endsWith(".pdf")) {
+    return "pdf";
+  }
+
+  return "pasted_text";
 }
