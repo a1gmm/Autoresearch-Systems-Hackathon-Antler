@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FileText, Loader2, Upload, X } from "lucide-react";
 import { extractSdsTextFromClientFile } from "@/lib/sds/clientExtraction";
 import type { SdsDocumentInput, SdsRetention } from "@/lib/sds/types";
@@ -8,12 +8,20 @@ import type { SdsDocumentInput, SdsRetention } from "@/lib/sds/types";
 type Props = {
   documents: SdsDocumentInput[];
   onChange: (documents: SdsDocumentInput[]) => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
-export function SdsDocumentPicker({ documents, onChange }: Props) {
+export function SdsDocumentPicker({ documents, onChange, onBusyChange }: Props) {
   const [text, setText] = useState("");
   const [retention, setRetention] = useState<SdsRetention>("ephemeral");
   const [busy, setBusy] = useState(false);
+  const documentsRef = useRef(documents);
+  documentsRef.current = documents;
+
+  function setUploadBusy(nextBusy: boolean) {
+    setBusy(nextBusy);
+    onBusyChange?.(nextBusy);
+  }
 
   function addPastedText() {
     if (busy) return;
@@ -39,14 +47,14 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
   async function addFiles(files: FileList | null) {
     if (busy || !files?.length) return;
 
-    setBusy(true);
+    setUploadBusy(true);
     try {
       const extracted = await Promise.all(
         Array.from(files).map((file) => extractSdsTextFromClientFile(file))
       );
 
       onChange([
-        ...documents,
+        ...documentsRef.current,
         ...extracted.map((item) => ({
           name: item.name,
           type: "sds" as const,
@@ -57,7 +65,7 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
         }))
       ]);
     } finally {
-      setBusy(false);
+      setUploadBusy(false);
     }
   }
 

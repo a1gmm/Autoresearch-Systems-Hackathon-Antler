@@ -11,6 +11,7 @@ import type { SdsDocumentInput } from "@/lib/sds/types";
 export function InputPanel() {
   const [text, setText] = useState("");
   const [sdsDocuments, setSdsDocuments] = useState<SdsDocumentInput[]>([]);
+  const [sdsUploadBusy, setSdsUploadBusy] = useState(false);
   const startRun = useStore((s) => s.startRun);
   const isRunning = useStore((s) => s.isRunning);
   const error = useStore((s) => s.runError);
@@ -28,16 +29,20 @@ export function InputPanel() {
           placeholder="Describe your project change…"
           className="w-full p-2.5 bg-slate-950/60 text-slate-100 border border-slate-700/40 rounded-xl resize-y text-xs placeholder:text-slate-500 focus:outline-none focus:border-cyan-600/50 transition-colors"
         />
-        <SdsDocumentPicker documents={sdsDocuments} onChange={setSdsDocuments} />
+        <SdsDocumentPicker
+          documents={sdsDocuments}
+          onChange={setSdsDocuments}
+          onBusyChange={setSdsUploadBusy}
+        />
         <button
-          disabled={isRunning || !text.trim()}
+          disabled={isRunning || sdsUploadBusy || !text.trim()}
           onClick={() => startRun({ project_description: text, demo_documents: sdsDocuments })}
           className="flex items-center justify-center gap-2 px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white border-0 rounded-xl font-semibold transition-all duration-200 disabled:opacity-40 disabled:cursor-wait hover:shadow-glow cursor-pointer"
         >
-          {isRunning ? (
+          {isRunning || sdsUploadBusy ? (
             <>
               <Loader2 size={14} className="animate-spin" />
-              Running…
+              {sdsUploadBusy ? "Extracting SDS…" : "Running…"}
             </>
           ) : (
             <>

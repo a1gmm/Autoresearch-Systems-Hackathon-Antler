@@ -19,6 +19,9 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   const [input, setInput] = useState("");
   const [sdsDocuments, setSdsDocuments] = useState<SdsDocumentInput[]>([]);
   const sdsDocumentsRef = useRef<SdsDocumentInput[]>([]);
+  const [sdsUploadBusy, setSdsUploadBusy] = useState(false);
+  const sdsUploadBusyRef = useRef(false);
+  const [pendingProjectDescription, setPendingProjectDescription] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
@@ -27,6 +30,19 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   function handleSdsDocumentsChange(nextDocuments: SdsDocumentInput[]) {
     sdsDocumentsRef.current = nextDocuments;
     setSdsDocuments(nextDocuments);
+  }
+
+  function handleSdsBusyChange(nextBusy: boolean) {
+    sdsUploadBusyRef.current = nextBusy;
+    setSdsUploadBusy(nextBusy);
+  }
+
+  function startCompletedRun(projectDescription: string) {
+    onStarted();
+    void startRun({
+      project_description: projectDescription,
+      demo_documents: sdsDocumentsRef.current
+    });
   }
 
   async function send(history: ChatMessage[]) {
@@ -43,11 +59,11 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
         throw new Error("error" in data ? data.error : "Intake failed");
       }
       if (data.complete) {
-        onStarted();
-        void startRun({
-          project_description: data.project_description,
-          demo_documents: sdsDocumentsRef.current
-        });
+        if (sdsUploadBusyRef.current) {
+          setPendingProjectDescription(data.project_description);
+        } else {
+          startCompletedRun(data.project_description);
+        }
         return;
       }
       setMessages([...history, { role: "assistant", content: data.message }]);
@@ -68,6 +84,14 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
+
+  useEffect(() => {
+    if (!pendingProjectDescription || sdsUploadBusy) return;
+    const projectDescription = pendingProjectDescription;
+    setPendingProjectDescription(null);
+    startCompletedRun(projectDescription);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingProjectDescription, sdsUploadBusy]);
 
   function handleSend() {
     const text = input.trim();
@@ -162,7 +186,11 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
         </div>
 
         <div className="border-t border-slate-700/40 p-3.5">
-          <SdsDocumentPicker documents={sdsDocuments} onChange={handleSdsDocumentsChange} />
+          <SdsDocumentPicker
+            documents={sdsDocuments}
+            onChange={handleSdsDocumentsChange}
+            onBusyChange={handleSdsBusyChange}
+          />
         </div>
 
         {/* Input */}

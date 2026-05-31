@@ -170,4 +170,71 @@ describe("SdsDocumentPicker", () => {
       ]);
     });
   });
+
+  it("merges uploaded files with latest parent documents after extraction resolves", async () => {
+    let resolveExtraction: (value: Awaited<ReturnType<typeof extractSdsTextFromClientFile>>) => void;
+    const onChange = vi.fn();
+    const initialDocuments: SdsDocumentInput[] = [
+      {
+        name: "initial SDS",
+        type: "sds",
+        text: "Section 1",
+        source_type: "pasted_text",
+        retention: "ephemeral",
+        text_extraction_status: "ok"
+      }
+    ];
+    const parentAddedDocument: SdsDocumentInput = {
+      name: "parent-added SDS",
+      type: "sds",
+      text: "Section 3",
+      source_type: "pasted_text",
+      retention: "save_for_audit",
+      text_extraction_status: "ok"
+    };
+    mockExtractSdsTextFromClientFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveExtraction = resolve;
+      })
+    );
+    const { rerender } = render(
+      <SdsDocumentPicker documents={initialDocuments} onChange={onChange} />
+    );
+
+    const file = new File(["Section 2"], "upload.txt", {
+      type: "text/plain"
+    });
+    fireEvent.change(screen.getByLabelText("Upload SDS"), {
+      target: { files: [file] }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Extracting")).toBeInTheDocument();
+    });
+
+    rerender(
+      <SdsDocumentPicker
+        documents={[...initialDocuments, parentAddedDocument]}
+        onChange={onChange}
+      />
+    );
+
+    resolveExtraction!({
+      name: "upload.txt",
+      source_type: "pasted_text",
+      text: "Section 2",
+      text_extraction_status: "ok"
+    });
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith([
+        initialDocuments[0],
+        parentAddedDocument,
+        expect.objectContaining({
+          name: "upload.txt",
+          text: "Section 2"
+        })
+      ]);
+    });
+  });
 });
