@@ -7,23 +7,32 @@ import type {
   ScopePack,
   VerificationVerdict
 } from "./types";
+import type { PermitHandoffFact, SdsReview } from "@/lib/sds/types";
 
 export function synthesize(
   scope: ScopePack,
   hypotheses: ResearchHypothesis[],
   angles: RegulatoryAngle[],
   evidenceBundles: EvidenceBundle[],
-  verdicts: VerificationVerdict[]
+  verdicts: VerificationVerdict[],
+  sdsReviews: SdsReview[] = []
 ) {
   const evidenceByHypothesis = new Map(evidenceBundles.map((bundle) => [bundle.hypothesis_id, bundle]));
   const verdictByHypothesis = new Map(verdicts.map((verdict) => [verdict.hypothesis_id, verdict]));
   const angleById = new Map(angles.map((angle) => [angle.id, angle]));
+  const sdsHandoffFacts = sdsReviews.flatMap((review) => review.permit_handoff_facts);
 
   const determinations = hypotheses.map((hypothesis) => {
     const evidence = evidenceByHypothesis.get(hypothesis.id);
     const verdict = verdictByHypothesis.get(hypothesis.id);
     const angle = angleById.get(hypothesis.angle_id);
-    return determinationFor(scope, hypothesis, angle?.label ?? hypothesis.family, evidence, verdict);
+    const determination = determinationFor(scope, hypothesis, angle?.label ?? hypothesis.family, evidence, verdict);
+    const sds_handoff_refs = matchingSdsHandoffFacts(hypothesis, determination, sdsHandoffFacts);
+
+    return {
+      ...determination,
+      ...(sds_handoff_refs.length > 0 ? { sds_handoff_refs } : {})
+    };
   });
 
   const memory_updates = determinations
@@ -42,6 +51,45 @@ export function synthesize(
   const report_markdown = renderReport(scope, determinations);
 
   return { determinations, memory_updates, report_markdown };
+}
+
+function matchingSdsHandoffFacts(
+  hypothesis: ResearchHypothesis,
+  determination: Determination,
+  facts: PermitHandoffFact[]
+) {
+  if (facts.length === 0) {
+    return [];
+  }
+
+  const requirement = determination.requirement.toLowerCase();
+  const fieldMatches = fieldsForRequirement(hypothesis, requirement);
+  return facts.filter((fact) => fieldMatches.has(fact.field));
+}
+
+function fieldsForRequirement(hypothesis: ResearchHypothesis, requirement: string) {
+  if (hypothesis.id === "H-HAZMAT-HMBP" || requirement.includes("hmbp") || requirement.includes("hazardous material")) {
+    return new Set([
+      "hazardous_material_inventory_review",
+      "flammable_liquid_storage_review",
+      "incompatible_storage_review",
+      "california_ehs_review"
+    ]);
+  }
+
+  if (hypothesis.id === "H-WASTE-GENERATOR" || requirement.includes("hazardous waste")) {
+    return new Set(["hazardous_waste_review", "california_ehs_review"]);
+  }
+
+  if (hypothesis.family === "air" || requirement.includes("voc") || requirement.includes("scaqmd")) {
+    return new Set(["voc_air_emissions_review", "flammable_liquid_storage_review", "california_ehs_review"]);
+  }
+
+  if (hypothesis.family === "stormwater" || requirement.includes("stormwater") || requirement.includes("spill")) {
+    return new Set(["spill_stormwater_containment_review"]);
+  }
+
+  return new Set<string>();
 }
 
 function determinationFor(

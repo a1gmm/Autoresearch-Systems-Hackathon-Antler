@@ -1,10 +1,11 @@
 import type { EvidenceBundle, ResearchRun, ResearchRunInput, VerificationVerdict } from "./types";
-import { parseScope, createRunId, projectFacts } from "./scope";
+import { applySdsHandoffToScope, parseScope, createRunId, projectFacts } from "./scope";
 import { planResearch } from "./planner";
 import { runLocalResearchPool } from "./workers";
 import { repairEvidence, verifyEvidence } from "./verifier";
 import { synthesize } from "./synthesis";
 import { trace } from "./trace";
+import { reviewSdsInputs } from "@/lib/sds/reviewer";
 import { Raindrop } from "raindrop-ai";
 
 const raindrop = new Raindrop({
@@ -13,6 +14,8 @@ const raindrop = new Raindrop({
 
 export async function runResearch(input: ResearchRunInput): Promise<ResearchRun> {
   const run_id = createRunId();
+  const runStartedAt = new Date();
+  const sds_reviews = reviewSdsInputs(input.demo_documents ?? [], run_id, { asOfDate: runStartedAt });
   const interaction = raindrop.begin({
     eventId: run_id,
     event: "permit_research_run",
@@ -21,6 +24,7 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
     properties: {
       project_description_chars: input.project_description.length,
       demo_documents_count: input.demo_documents?.length ?? 0,
+      sds_reviews_count: sds_reviews.length,
       use_modal: process.env.USE_MODAL === "1",
     },
   });
@@ -28,9 +32,23 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
     trace(run_id, "scope_agent", "scope", "running", "Parsing intake into ScopePack")
   ];
 
-  const scope_pack = parseScope(input, run_id);
+  const base_scope_pack = parseScope(input, run_id);
   trace_events.push(trace(run_id, "scope_agent", "scope", "done", "ScopePack created", run_id));
 
+  for (const review of sds_reviews) {
+    trace_events.push(
+      trace(
+        run_id,
+        "sds_reviewer",
+        "sds_review",
+        review.overall_status === "unreadable" ? "needs_review" : "done",
+        `Reviewed SDS ${review.document.name}: ${review.overall_status}`,
+        review.document.id
+      )
+    );
+  }
+
+  const scope_pack = applySdsHandoffToScope(base_scope_pack, sds_reviews);
   const plan = planResearch(scope_pack);
   trace_events.push(
     trace(
@@ -92,7 +110,7 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
 
   const latestVerdicts = latestByHypothesis(verification_verdicts);
   const latestEvidence = latestByHypothesis(evidence_bundles);
-  const synthesis = synthesize(scope_pack, plan.research_graph, plan.regulatory_angles, latestEvidence, latestVerdicts);
+  const synthesis = synthesize(scope_pack, plan.research_graph, plan.regulatory_angles, latestEvidence, latestVerdicts, sds_reviews);
   trace_events.push(trace(run_id, "synthesis_agent", "matrix", "done", "Applicability matrix synthesized"));
 
   const status = synthesis.determinations.some((row) => row.review_flag) ? "needs_review" : "done";
@@ -103,6 +121,7 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
     project_facts: projectFacts(scope_pack),
     jurisdiction_stack: scope_pack.facility.jurisdiction_stack,
     scope_pack,
+    sds_reviews,
     coverage_family_statuses: plan.coverage_family_statuses,
     regulatory_angles: plan.regulatory_angles,
     research_graph: plan.research_graph,
@@ -126,6 +145,7 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
     determinations_count: synthesis.determinations.length,
     needs_review_count: synthesis.determinations.filter((d) => d.review_flag).length,
     trace_events_count: trace_events.length,
+    sds_reviews_count: sds_reviews.length,
   });
   // Fire-and-forget — don't block the API response on Workshop ingestion.
   // SDK auto-flushes via internal timer; no external flush needed.

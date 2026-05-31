@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runResearch } from "@/lib/research/run";
+import type { ResearchRunInput } from "@/lib/research/types";
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
       project_description?: string;
-      demo_documents?: Array<{ name: string; type: string; text: string }>;
+      demo_documents?: ResearchRunInput["demo_documents"];
     };
 
     const run = await runResearch({
