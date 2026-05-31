@@ -138,6 +138,68 @@ describe("research run SDS integration", () => {
     expect(augmentedScope.assumptions).toEqual([]);
   });
 
+  it("keeps California-only SDS facts as assumptions without activating hazmat scope", () => {
+    const scope: ScopePack = {
+      run_id: "run_sds_california_only",
+      facility: {
+        address: "Southern California light industrial site",
+        jurisdiction_stack: ["California Water Boards"],
+        naics: null,
+        sic: null,
+      },
+      project_change: {
+        description: "Construction project with no confirmed chemical inventory.",
+        equipment: [],
+        chemicals: [],
+        waste_streams: [],
+        disturbance_acres: 1.2,
+        process_discharge: false,
+      },
+      missing_facts: [],
+      assumptions: [],
+    };
+    const review = {
+      document: {
+        id: "run_sds_california_only_sds_1",
+        run_id: "run_sds_california_only",
+        name: "California-only SDS",
+        source_type: "pasted_text",
+        retention: "ephemeral",
+        extracted_text: SDS_TEXT,
+        text_extraction_status: "ok",
+      },
+      section_map: {
+        document_id: "run_sds_california_only_sds_1",
+        sections: [],
+      },
+      overall_status: "complete",
+      quality_findings: [],
+      safety_findings: [],
+      permit_handoff_facts: [
+        {
+          field: "california_ehs_review",
+          value: true,
+          source_section: 15,
+          quote: "California Proposition 65: This product contains toluene.",
+          confidence: 0.85,
+          review_flag: true,
+          reason: "California-specific language should remain review metadata only.",
+        },
+      ],
+    } satisfies SdsReview;
+
+    const augmentedScope = applySdsHandoffToScope(scope, [review]);
+
+    expect(augmentedScope.project_change.chemicals).toEqual([]);
+    expect(augmentedScope.missing_facts.map((fact) => fact.field)).not.toContain("chemicals.quantity");
+    expect(augmentedScope.assumptions).toEqual([
+      expect.objectContaining({
+        claim: "SDS candidate fact: california_ehs_review=true",
+        basis: "Section 15: California Proposition 65: This product contains toluene.",
+      }),
+    ]);
+  });
+
   it("omits false or null review-flagged SDS facts from determination refs", () => {
     const scope: ScopePack = {
       run_id: "run_sds_synthesis_regression",
@@ -311,6 +373,13 @@ describe("research run SDS integration", () => {
 
     const constructionStormwater = run.determinations.find((determination) =>
       determination.requirement.toLowerCase().includes("construction stormwater"),
+    );
+    const industrialStormwater = run.determinations.find((determination) =>
+      determination.requirement.toLowerCase().includes("industrial general permit"),
+    );
+    expect(industrialStormwater).toBeDefined();
+    expect(industrialStormwater?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain(
+      "spill_stormwater_containment_review",
     );
     expect(constructionStormwater).toBeDefined();
     expect(constructionStormwater?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain(

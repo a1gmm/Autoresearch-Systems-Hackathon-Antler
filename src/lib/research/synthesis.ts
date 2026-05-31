@@ -80,8 +80,7 @@ function fieldsForHypothesis(hypothesisId: string) {
       "hazardous_material_inventory_review",
       "flammable_liquid_storage_review"
     ],
-    "H-WASTE-GENERATOR": ["hazardous_waste_review"],
-    "H-STORM-IGP": ["spill_stormwater_containment_review"]
+    "H-WASTE-GENERATOR": ["hazardous_waste_review"]
   };
 
   return new Set(map[hypothesisId] ?? []);

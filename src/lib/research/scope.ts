@@ -118,8 +118,7 @@ function isHazardousMaterialFact(fact: SdsReview["permit_handoff_facts"][number]
   return [
     "hazardous_material_inventory_review",
     "flammable_liquid_storage_review",
-    "incompatible_storage_review",
-    "california_ehs_review"
+    "incompatible_storage_review"
   ].includes(fact.field);
 }
 
