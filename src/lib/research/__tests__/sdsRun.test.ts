@@ -294,6 +294,7 @@ describe("research run SDS integration", () => {
     expect(hmbp?.sds_handoff_refs?.map((fact) => fact.field)).toEqual(
       expect.arrayContaining(["hazardous_material_inventory_review"]),
     );
+    expect(hmbp?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain("california_ehs_review");
     expect(hmbp?.verified).toBe(false);
     expect(hmbp?.review_flag).toBe(true);
 
@@ -304,8 +305,17 @@ describe("research run SDS integration", () => {
     expect(waste?.sds_handoff_refs?.map((fact) => fact.field)).toEqual(
       expect.arrayContaining(["hazardous_waste_review"]),
     );
+    expect(waste?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain("california_ehs_review");
     expect(waste?.verified).toBe(false);
     expect(waste?.review_flag).toBe(true);
+
+    const constructionStormwater = run.determinations.find((determination) =>
+      determination.requirement.toLowerCase().includes("construction stormwater"),
+    );
+    expect(constructionStormwater).toBeDefined();
+    expect(constructionStormwater?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain(
+      "spill_stormwater_containment_review",
+    );
   });
 
   it("attaches VOC SDS refs with provenance only to VOC determinations", async () => {

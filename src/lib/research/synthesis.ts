@@ -78,13 +78,10 @@ function fieldsForHypothesis(hypothesisId: string) {
     "H-AIR-VOC": ["voc_air_emissions_review"],
     "H-HAZMAT-HMBP": [
       "hazardous_material_inventory_review",
-      "flammable_liquid_storage_review",
-      "incompatible_storage_review",
-      "california_ehs_review"
+      "flammable_liquid_storage_review"
     ],
-    "H-WASTE-GENERATOR": ["hazardous_waste_review", "california_ehs_review"],
-    "H-STORM-IGP": ["spill_stormwater_containment_review"],
-    "H-STORM-CGP": ["spill_stormwater_containment_review"]
+    "H-WASTE-GENERATOR": ["hazardous_waste_review"],
+    "H-STORM-IGP": ["spill_stormwater_containment_review"]
   };
 
   return new Set(map[hypothesisId] ?? []);
