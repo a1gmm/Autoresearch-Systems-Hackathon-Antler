@@ -47,6 +47,11 @@ const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   15: /\bregulatory\b|\bregulation\b/i,
   16: /\bother information\b/i,
 };
+const SPLIT_HEADING_TITLE_ALIASES: Partial<Record<number, string[]>> = {
+  10: ["Reactivity", "Stability"],
+  13: ["Disposal"],
+  15: ["California regulatory information", "Regulatory"],
+};
 
 export function normalizeText(text: string): string {
   return text
@@ -142,11 +147,21 @@ function removeSplitHeadingTitle(text: string, sectionNumber: number): string {
   const normalizedText = normalizeText(text);
   const [firstLine, ...remainingLines] = normalizedText.split("\n");
 
-  if (headingFingerprint(firstLine) === headingFingerprint(SDS_SECTION_HEADINGS[sectionNumber])) {
+  if (isSplitHeadingTitle(firstLine, sectionNumber)) {
     return normalizeText(remainingLines.join("\n"));
   }
 
   return normalizedText;
+}
+
+function isSplitHeadingTitle(heading: string, sectionNumber: number): boolean {
+  const fingerprint = headingFingerprint(heading);
+  const titleFingerprints = [
+    SDS_SECTION_HEADINGS[sectionNumber],
+    ...(SPLIT_HEADING_TITLE_ALIASES[sectionNumber] ?? []),
+  ].map(headingFingerprint);
+
+  return titleFingerprints.includes(fingerprint);
 }
 
 function headingFingerprint(heading: string): string {

@@ -105,6 +105,14 @@ function withoutSectionBody(text: string, sectionNumber: number) {
   );
 }
 
+function replaceWithSplitTitleOnly(text: string, sectionNumber: number, title: string) {
+  const nextSection = sectionNumber + 1;
+  return text.replace(
+    new RegExp(`Section ${sectionNumber}:[^\\n]*\\n[\\s\\S]*?(?=\\nSection ${nextSection}:)`, "m"),
+    `Section ${sectionNumber}:\n${title}\n`,
+  );
+}
+
 describe("reviewSdsDocument", () => {
   it("maps all 16 sections and emits quality, safety, and permit handoff artifacts", () => {
     const review = reviewText(COMPLETE_SDS_TEXT);
@@ -405,6 +413,40 @@ describe("mapSdsSections", () => {
     expect(review.safety_findings.find((finding) => finding.source_section === 13)).toBeUndefined();
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toEqual(
       expect.arrayContaining(["incompatible_storage_review", "hazardous_waste_review"]),
+    );
+  });
+
+  it("does not emit evidence from shortened split title-only sections", () => {
+    const titleOnlyText = replaceWithSplitTitleOnly(
+      replaceWithSplitTitleOnly(
+        replaceWithSplitTitleOnly(COMPLETE_SDS_TEXT, 10, "Reactivity"),
+        13,
+        "Disposal",
+      ),
+      15,
+      "California regulatory information",
+    );
+    const sectionMap = mapSdsSections("short_title_doc", titleOnlyText);
+    const review = reviewText(titleOnlyText, "run_short_titles");
+
+    expect(sectionMap.sections.find((section) => section.section_number === 10)).toEqual(
+      expect.objectContaining({ text: "" }),
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 13)).toEqual(
+      expect.objectContaining({ text: "" }),
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 15)).toEqual(
+      expect.objectContaining({ text: "" }),
+    );
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toEqual(
+      expect.arrayContaining([13, 15]),
+    );
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toEqual(
+      expect.arrayContaining([
+        "incompatible_storage_review",
+        "hazardous_waste_review",
+        "california_ehs_review",
+      ]),
     );
   });
 });
