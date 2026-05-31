@@ -180,9 +180,13 @@ describe("SdsReviewPanel", () => {
 
     render(<SdsReviewPanel />);
 
-    const body = screen.getByTestId("sds-review-scroll");
+    const body = screen.getByRole("region", { name: "SDS review artifacts" });
+    expect(body).toHaveAttribute("tabindex", "0");
     expect(body).toHaveClass("max-h-80");
     expect(body).toHaveClass("overflow-y-auto");
+    expect(body).toHaveClass("focus:ring-1");
+    expect(body).toHaveClass("focus:ring-cyan-500/50");
+    expect(body).toHaveAttribute("data-testid", "sds-review-scroll");
     expect(body).toHaveClass("pr-1");
     expect(screen.getByText("very-long-document-name-with-unbroken-identifier-1234567890.pdf")).toBeInTheDocument();
   });

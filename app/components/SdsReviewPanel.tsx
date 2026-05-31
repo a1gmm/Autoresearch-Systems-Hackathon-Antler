@@ -37,7 +37,13 @@ export function SdsReviewPanel() {
         <ShieldAlert size={13} />
         SDS review
       </div>
-      <div data-testid="sds-review-scroll" className="max-h-80 space-y-2 overflow-y-auto pr-1">
+      <div
+        data-testid="sds-review-scroll"
+        role="region"
+        aria-label="SDS review artifacts"
+        tabIndex={0}
+        className="max-h-80 space-y-2 overflow-y-auto pr-1 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+      >
         {reviews.map((review) => (
           <ReviewArticle key={review.document.id} review={review} />
         ))}
