@@ -16,6 +16,8 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
   const [busy, setBusy] = useState(false);
 
   function addPastedText() {
+    if (busy) return;
+
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -35,7 +37,7 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
   }
 
   async function addFiles(files: FileList | null) {
-    if (!files?.length) return;
+    if (busy || !files?.length) return;
 
     setBusy(true);
     try {
@@ -60,6 +62,8 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
   }
 
   function removeAt(index: number) {
+    if (busy) return;
+
     onChange(documents.filter((_, current) => current !== index));
   }
 
@@ -67,7 +71,11 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
     <section className="flex flex-col gap-2 rounded-xl border border-slate-800/60 bg-slate-950/35 p-3 text-xs">
       <div className="flex items-center justify-between gap-2">
         <div className="brand-label">SDS review</div>
-        <label className="flex cursor-pointer items-center gap-1.5 text-slate-400 transition-colors hover:text-cyan-300">
+        <label
+          className={`flex items-center gap-1.5 text-slate-400 transition-colors ${
+            busy ? "cursor-wait opacity-70" : "cursor-pointer hover:text-cyan-300"
+          }`}
+        >
           {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
           <span>{busy ? "Extracting" : "Upload"}</span>
           <input
@@ -91,6 +99,7 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder="Paste SDS text"
+        disabled={busy}
         className="w-full resize-y rounded-lg border border-slate-700/40 bg-slate-950/60 p-2 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-cyan-600/50 focus:outline-none"
       />
 
@@ -99,6 +108,7 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
           aria-label="Save SDS text for audit"
           type="checkbox"
           checked={retention === "save_for_audit"}
+          disabled={busy}
           onChange={(event) =>
             setRetention(event.target.checked ? "save_for_audit" : "ephemeral")
           }
@@ -109,7 +119,7 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
       <button
         type="button"
         onClick={addPastedText}
-        disabled={!text.trim()}
+        disabled={busy || !text.trim()}
         className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 font-semibold text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-default disabled:opacity-40"
       >
         <FileText size={13} />
@@ -125,13 +135,18 @@ export function SdsDocumentPicker({ documents, onChange }: Props) {
             >
               <span className="truncate text-slate-300">{document.name}</span>
               <span className="shrink-0 text-[10px] uppercase tracking-wide text-slate-600">
-                {document.retention === "save_for_audit" ? "Audit" : "Ephemeral"}
+                {document.text_extraction_status && document.text_extraction_status !== "ok"
+                  ? document.text_extraction_status.replaceAll("_", " ")
+                  : document.retention === "save_for_audit"
+                    ? "Audit"
+                    : "Ephemeral"}
               </span>
               <button
                 type="button"
                 aria-label={`Remove ${document.name}`}
+                disabled={busy}
                 onClick={() => removeAt(index)}
-                className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-transparent text-slate-500 transition-colors hover:bg-red-950/50 hover:text-red-300"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-transparent text-slate-500 transition-colors hover:bg-red-950/50 hover:text-red-300 disabled:cursor-wait disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
               >
                 <X size={13} />
               </button>

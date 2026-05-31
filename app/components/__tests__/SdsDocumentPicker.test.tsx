@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SdsDocumentPicker } from "../SdsDocumentPicker";
 import { extractSdsTextFromClientFile } from "@/lib/sds/clientExtraction";
 import type { SdsDocumentInput } from "@/lib/sds/types";
@@ -11,6 +11,10 @@ vi.mock("@/lib/sds/clientExtraction", () => ({
 const mockExtractSdsTextFromClientFile = vi.mocked(extractSdsTextFromClientFile);
 
 describe("SdsDocumentPicker", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("adds pasted SDS text with ephemeral retention by default", () => {
     const onChange = vi.fn();
     render(<SdsDocumentPicker documents={[]} onChange={onChange} />);
@@ -106,5 +110,64 @@ describe("SdsDocumentPicker", () => {
     fireEvent.click(screen.getByLabelText("Remove first SDS"));
 
     expect(onChange).toHaveBeenCalledWith([documents[1]]);
+  });
+
+  it("disables document mutations while file extraction is pending", async () => {
+    let resolveExtraction: (value: Awaited<ReturnType<typeof extractSdsTextFromClientFile>>) => void;
+    const onChange = vi.fn();
+    const documents: SdsDocumentInput[] = [
+      {
+        name: "existing SDS",
+        type: "sds",
+        text: "Section 1",
+        source_type: "pasted_text",
+        retention: "ephemeral",
+        text_extraction_status: "ok"
+      }
+    ];
+    mockExtractSdsTextFromClientFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveExtraction = resolve;
+      })
+    );
+    render(<SdsDocumentPicker documents={documents} onChange={onChange} />);
+
+    const file = new File(["Section 2"], "pending.txt", {
+      type: "text/plain"
+    });
+    fireEvent.change(screen.getByLabelText("Upload SDS"), {
+      target: { files: [file] }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Extracting")).toBeInTheDocument();
+      expect(screen.getByText("Add SDS text")).toBeDisabled();
+      expect(screen.getByLabelText("Remove existing SDS")).toBeDisabled();
+      expect(screen.getByLabelText("Upload SDS")).toBeDisabled();
+    });
+
+    fireEvent.change(screen.getByLabelText("SDS text"), {
+      target: { value: "Section 3: Composition" }
+    });
+    fireEvent.click(screen.getByText("Add SDS text"));
+    fireEvent.click(screen.getByLabelText("Remove existing SDS"));
+    expect(onChange).not.toHaveBeenCalled();
+
+    resolveExtraction!({
+      name: "pending.txt",
+      source_type: "pasted_text",
+      text: "Section 2",
+      text_extraction_status: "ok"
+    });
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith([
+        documents[0],
+        expect.objectContaining({
+          name: "pending.txt",
+          text: "Section 2"
+        })
+      ]);
+    });
   });
 });

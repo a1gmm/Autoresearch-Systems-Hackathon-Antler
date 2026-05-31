@@ -18,10 +18,16 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sdsDocuments, setSdsDocuments] = useState<SdsDocumentInput[]>([]);
+  const sdsDocumentsRef = useRef<SdsDocumentInput[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  function handleSdsDocumentsChange(nextDocuments: SdsDocumentInput[]) {
+    sdsDocumentsRef.current = nextDocuments;
+    setSdsDocuments(nextDocuments);
+  }
 
   async function send(history: ChatMessage[]) {
     setBusy(true);
@@ -38,7 +44,10 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
       }
       if (data.complete) {
         onStarted();
-        void startRun({ project_description: data.project_description, demo_documents: sdsDocuments });
+        void startRun({
+          project_description: data.project_description,
+          demo_documents: sdsDocumentsRef.current
+        });
         return;
       }
       setMessages([...history, { role: "assistant", content: data.message }]);
@@ -153,7 +162,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
         </div>
 
         <div className="border-t border-slate-700/40 p-3.5">
-          <SdsDocumentPicker documents={sdsDocuments} onChange={setSdsDocuments} />
+          <SdsDocumentPicker documents={sdsDocuments} onChange={handleSdsDocumentsChange} />
         </div>
 
         {/* Input */}
@@ -175,6 +184,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
           />
           <button
             type="button"
+            aria-label="Send message"
             onClick={handleSend}
             disabled={busy || input.trim().length === 0}
             className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-30 transition-all duration-200 border-0 cursor-pointer hover:shadow-glow disabled:cursor-default"
