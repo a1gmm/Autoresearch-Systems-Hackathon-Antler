@@ -8,8 +8,8 @@ export type HarnessCall = {
 
 export type HarnessContext = {
   role: AgentRole;
-  allowed_tools: HarnessToolId[];
-  blocked_tools: HarnessToolId[];
+  allowed_tools: readonly HarnessToolId[];
+  blocked_tools: readonly HarnessToolId[];
   calls: HarnessCall[];
   callTool: (toolId: HarnessToolId) => void;
 };
@@ -23,12 +23,14 @@ export class HarnessToolScopeError extends Error {
 
 export function createHarnessContext(input: {
   role: AgentRole;
-  allowed_tools: HarnessToolId[];
-  blocked_tools: HarnessToolId[];
+  allowed_tools: readonly HarnessToolId[];
+  blocked_tools: readonly HarnessToolId[];
 }): HarnessContext {
   const calls: HarnessCall[] = [];
-  const allowedTools = [...input.allowed_tools];
-  const blockedTools = [...input.blocked_tools];
+  const allowedTools = Object.freeze([...input.allowed_tools]);
+  const blockedTools = Object.freeze([...input.blocked_tools]);
+  const allowedToolSet = new Set(input.allowed_tools);
+  const blockedToolSet = new Set(input.blocked_tools);
 
   return {
     role: input.role,
@@ -36,7 +38,7 @@ export function createHarnessContext(input: {
     blocked_tools: blockedTools,
     calls,
     callTool(toolId: HarnessToolId) {
-      assertToolAllowed(input.role, toolId, allowedTools, blockedTools);
+      assertToolAllowed(input.role, toolId, allowedToolSet, blockedToolSet);
       calls.push({ tool_id: toolId, ts: new Date().toISOString() });
     }
   };
@@ -45,14 +47,14 @@ export function createHarnessContext(input: {
 export function assertToolAllowed(
   role: AgentRole,
   toolId: HarnessToolId,
-  allowedTools: readonly HarnessToolId[],
-  blockedTools: readonly HarnessToolId[]
+  allowedTools: ReadonlySet<HarnessToolId>,
+  blockedTools: ReadonlySet<HarnessToolId>
 ) {
   getTool(toolId);
-  if (blockedTools.includes(toolId)) {
+  if (blockedTools.has(toolId)) {
     throw new HarnessToolScopeError(`${role} cannot call blocked tool ${toolId}`);
   }
-  if (!allowedTools.includes(toolId)) {
+  if (!allowedTools.has(toolId)) {
     throw new HarnessToolScopeError(`${role} was not granted tool ${toolId}`);
   }
   if (!isToolScopedToRole(toolId, role)) {

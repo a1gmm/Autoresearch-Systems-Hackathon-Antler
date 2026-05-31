@@ -3,6 +3,7 @@ import { seededComplexScope } from "../fixtures/scenarios";
 import { planResearch } from "../planner";
 import {
   blockedToolIdsForRole,
+  getTool,
   harnessToolCatalog,
   isToolScopedToRole,
   researchWorkerToolIds,
@@ -84,6 +85,14 @@ describe("harness tool catalog", () => {
     );
     expect(allowedTools).not.toContain("build_applicability_matrix");
     expect(isToolScopedToRole("emit_permit_handoff_facts", "researcher")).toBe(false);
+  });
+
+  it("limits SDS reviewer tools to SDS artifact and audit-safe write targets", () => {
+    const allowedWrites = new Set(["none", "audit_log", "sds_documents", "sds_reviews", "permit_handoff_facts"]);
+
+    for (const toolId of sdsReviewerToolIds()) {
+      expect(allowedWrites.has(getTool(toolId).writes)).toBe(true);
+    }
   });
 
   it("rejects tools outside a role scope", () => {
