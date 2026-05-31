@@ -113,6 +113,14 @@ function replaceWithSplitTitleOnly(text: string, sectionNumber: number, title: s
   );
 }
 
+function replaceSectionBlock(text: string, sectionNumber: number, replacement: string) {
+  const nextSection = sectionNumber + 1;
+  return text.replace(
+    new RegExp(`Section ${sectionNumber}:[\\s\\S]*?(?=\\nSection ${nextSection}:)`, "m"),
+    replacement,
+  );
+}
+
 describe("reviewSdsDocument", () => {
   it("maps all 16 sections and emits quality, safety, and permit handoff artifacts", () => {
     const review = reviewText(COMPLETE_SDS_TEXT);
@@ -384,6 +392,34 @@ describe("reviewSdsDocument", () => {
 
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("voc_air_emissions_review");
   });
+
+  it("preserves a body-looking first line after a bare split heading", () => {
+    const bareHazardText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      2,
+      "Section 2:\nDanger. Highly flammable liquid and vapor.\n",
+    );
+    const review = reviewText(bareHazardText, "run_bare_hazard_body");
+    const section2 = review.section_map.sections.find((section) => section.section_number === 2);
+
+    expect(section2).toEqual(
+      expect.objectContaining({
+        status: "present",
+        text: "Danger. Highly flammable liquid and vapor.",
+      }),
+    );
+    expect(review.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "hazard_identification",
+          quote: expect.stringContaining("Highly flammable liquid and vapor"),
+        }),
+      ]),
+    );
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).toContain(
+      "hazardous_material_inventory_review",
+    );
+  });
 });
 
 describe("mapSdsSections", () => {
@@ -401,6 +437,58 @@ describe("mapSdsSections", () => {
       "Product identifier",
     );
     expect(sectionMap.sections.find((section) => section.section_number === 2)?.text).toContain("Danger");
+  });
+
+  it("does not treat decimal subsection lines as top-level SDS headings", () => {
+    const subsectionText = COMPLETE_SDS_TEXT
+      .replace(
+        "Use chemical splash goggles, nitrile gloves, and local exhaust ventilation.",
+        "8.1 Control parameters\nOccupational exposure limits are listed by ingredient.\n8.2 Exposure controls\nUse chemical splash goggles, nitrile gloves, and local exhaust ventilation.",
+      )
+      .replace(
+        "Flash point: -4 F. VOC content: 620 g/L. Vapor pressure: 180 mmHg at 20 C.",
+        "9.1 Physical state\nLiquid.\nFlash point: -4 F. VOC content: 620 g/L. Vapor pressure: 180 mmHg at 20 C.",
+      )
+      .replace(
+        "Stable under recommended storage conditions.",
+        "10.1 Reactivity\nStable under recommended storage conditions.",
+      )
+      .replace(
+        "California Proposition 65: This product contains toluene known to the State of California to cause birth defects.",
+        "15.1 Regulatory information\nCalifornia Proposition 65: This product contains toluene known to the State of California to cause birth defects.",
+      );
+    const sectionMap = mapSdsSections("subsection_doc", subsectionText);
+
+    for (const sectionNumber of [8, 9, 10, 15]) {
+      expect(sectionMap.sections.find((section) => section.section_number === sectionNumber)).toEqual(
+        expect.objectContaining({ status: "present" }),
+      );
+    }
+    expect(sectionMap.sections.find((section) => section.section_number === 8)?.text).toContain(
+      "8.2 Exposure controls",
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 8)?.text).toContain(
+      "Use chemical splash goggles",
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 10)?.text).toContain(
+      "Stable under recommended storage conditions.",
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 15)?.text).toContain(
+      "California Proposition 65",
+    );
+  });
+
+  it("preserves later body text when duplicate same-number headings are ambiguous", () => {
+    const duplicateSection8Text = COMPLETE_SDS_TEXT.replace(
+      "Section 8: Exposure controls/personal protection\nUse chemical splash goggles, nitrile gloves, and local exhaust ventilation.",
+      "Section 8: Exposure controls/personal protection\nInitial exposure control summary.\n\nSection 8: Exposure controls/personal protection\nLater duplicate body keeps local exhaust ventilation.",
+    );
+    const sectionMap = mapSdsSections("duplicate_doc", duplicateSection8Text);
+    const section8 = sectionMap.sections.find((section) => section.section_number === 8);
+
+    expect(section8).toEqual(expect.objectContaining({ status: "ambiguous" }));
+    expect(section8?.text).toContain("Initial exposure control summary.");
+    expect(section8?.text).toContain("Later duplicate body keeps local exhaust ventilation.");
   });
 
   it("maps bare section-prefixed headings split across OCR/PDF lines", () => {

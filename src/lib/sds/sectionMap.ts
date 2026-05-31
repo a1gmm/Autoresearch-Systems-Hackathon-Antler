@@ -27,7 +27,7 @@ type HeadingMatch = {
   inlineHeadingText: string;
 };
 
-const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
+const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?!(?:\.\d))(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
 const MIN_USEFUL_SECTION_TEXT_LENGTH = 24;
 const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   1: /\bidentification\b/i,
@@ -125,7 +125,9 @@ function isSdsSectionHeading(sectionNumber: number, headingText: string, hasSect
 }
 
 function extractSectionText(text: string, matches: HeadingMatch[], match: HeadingMatch): string {
-  const nextMatch = matches.find((candidate) => candidate.lineStart > match.lineStart);
+  const nextMatch = matches.find(
+    (candidate) => candidate.lineStart > match.lineStart && candidate.sectionNumber !== match.sectionNumber,
+  );
   const start = text[match.lineEnd] === "\n" ? match.lineEnd + 1 : match.lineEnd;
   const end = nextMatch?.lineStart ?? text.length;
   const rawSectionText = text.slice(start, end);
@@ -139,9 +141,30 @@ function extractSectionText(text: string, matches: HeadingMatch[], match: Headin
 
 function removeSplitHeadingTitle(text: string): string {
   const normalizedText = normalizeText(text);
-  const [_titleLine, ...remainingLines] = normalizedText.split("\n");
+  const [firstLine, ...remainingLines] = normalizedText.split("\n");
+
+  if (!isSplitTitleLine(firstLine)) {
+    return normalizedText;
+  }
 
   return normalizeText(remainingLines.join("\n"));
+}
+
+function isSplitTitleLine(line: string): boolean {
+  const normalizedLine = line.trim();
+  if (normalizedLine.length === 0) {
+    return false;
+  }
+
+  if (/[:;]/.test(normalizedLine) || /[.!?]$/.test(normalizedLine)) {
+    return false;
+  }
+
+  if (/^(danger|warning)\b/i.test(normalizedLine)) {
+    return false;
+  }
+
+  return true;
 }
 
 function getSectionStatus(matchCount: number, text: string): SdsSectionStatus {
