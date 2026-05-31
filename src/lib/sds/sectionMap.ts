@@ -77,7 +77,10 @@ export function mapSdsSections(documentId: string, text: string): SdsSectionMap 
       };
     }
 
-    const sectionText = extractSectionText(normalizedText, matches, firstMatch);
+    const sectionText =
+      sectionMatches.length > 1
+        ? extractDuplicateSectionText(normalizedText, matches, sectionMatches)
+        : extractSectionText(normalizedText, matches, firstMatch);
     const status = getSectionStatus(sectionMatches.length, sectionText);
 
     return {
@@ -137,6 +140,17 @@ function extractSectionText(text: string, matches: HeadingMatch[], match: Headin
   }
 
   return normalizeText(rawSectionText);
+}
+
+function extractDuplicateSectionText(text: string, matches: HeadingMatch[], sectionMatches: HeadingMatch[]): string {
+  return normalizeText(
+    sectionMatches
+      .map((match) => {
+        const nextMatch = matches.find((candidate) => candidate.lineStart > match.lineStart);
+        return text.slice(match.lineStart, nextMatch?.lineStart ?? text.length);
+      })
+      .join("\n\n"),
+  );
 }
 
 function removeSplitHeadingTitle(text: string): string {

@@ -382,6 +382,22 @@ describe("reviewSdsDocument", () => {
     expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("hazardous_waste_review");
   });
 
+  it("preserves out-of-order duplicate section body text without emitting ambiguous section evidence", () => {
+    const outOfOrderDuplicateText = COMPLETE_SDS_TEXT.replace(
+      "Section 13: Disposal considerations\nDispose of contents and containers as hazardous waste in accordance with federal, state, and local regulations.\n\nSection 14: Transport information\nUN1993, Flammable liquids, n.o.s., Class 3, Packing Group II.",
+      "Section 13: Disposal considerations\nInitial disposal handling summary.\n\nSection 14: Transport information\nUN1993, Flammable liquids, n.o.s., Class 3, Packing Group II.\n\nSection 13: Disposal considerations\nLater duplicate body says dispose as hazardous waste.",
+    );
+    const review = reviewText(outOfOrderDuplicateText, "run_out_of_order_duplicate");
+    const section13 = review.section_map.sections.find((section) => section.section_number === 13);
+
+    expect(review.overall_status).toBe("needs_expert_review");
+    expect(section13).toEqual(expect.objectContaining({ status: "ambiguous" }));
+    expect(section13?.text).toContain("Initial disposal handling summary.");
+    expect(section13?.text).toContain("Later duplicate body says dispose as hazardous waste.");
+    expect(review.safety_findings.map((finding) => finding.source_section)).not.toContain(13);
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("hazardous_waste_review");
+  });
+
   it("keeps expert review status when stale documents also have ambiguous sections", () => {
     const staleText = COMPLETE_SDS_TEXT.replaceAll("January 3, 2025", "January 3, 2020");
     const staleDuplicateText = staleText.replace(
