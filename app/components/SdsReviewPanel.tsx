@@ -37,7 +37,7 @@ export function SdsReviewPanel() {
         <ShieldAlert size={13} />
         SDS review
       </div>
-      <div className="space-y-2">
+      <div data-testid="sds-review-scroll" className="max-h-80 space-y-2 overflow-y-auto pr-1">
         {reviews.map((review) => (
           <ReviewArticle key={review.document.id} review={review} />
         ))}
@@ -53,7 +53,7 @@ function ReviewArticle({ review }: { review: SdsReview }) {
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
             <FileText size={13} className="shrink-0 text-slate-400" />
-            <span className="truncate">{review.document.name}</span>
+            <span className="min-w-0 break-words">{review.document.name}</span>
           </div>
           <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
             <span>{review.document.source_type}</span>
@@ -94,7 +94,7 @@ function FindingList({
       </div>
       <div className="space-y-1.5">
         {findings.map((finding) => (
-          <div key={finding.id} className="flex gap-1.5 text-[11px] leading-snug text-slate-300">
+          <div key={finding.id} className="flex gap-1.5 break-words text-[11px] leading-snug text-slate-300">
             {finding.severity === "info" ? (
               <CheckCircle2
                 size={12}
@@ -113,7 +113,7 @@ function FindingList({
                 <span>{formatToken(finding.category)}</span>
                 {finding.source_section !== undefined && <span>section {finding.source_section}</span>}
               </div>
-              {finding.quote && <div className="mt-0.5 text-slate-500">"{finding.quote}"</div>}
+              {finding.quote && <div className="mt-0.5 break-words text-slate-500">"{finding.quote}"</div>}
             </div>
           </div>
         ))}
@@ -130,15 +130,31 @@ function PermitHandoffFacts({ facts }: { facts: PermitHandoffFact[] }) {
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
         Permit handoff candidates
       </div>
+      <div className="mb-1.5 text-[10px] leading-snug text-slate-500">
+        Review-only candidate facts from SDS content; not final determinations.
+      </div>
       <div className="space-y-1.5">
         {facts.map((fact) => (
-          <div key={`${fact.field}-${fact.source_section}-${fact.quote}`} className="text-[11px] leading-snug">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="font-mono text-cyan-300">{fact.field}</span>
+          <div
+            key={`${fact.field}-${fact.source_section}-${fact.quote}`}
+            className="min-w-0 break-words border-l border-cyan-800/40 pl-2 text-[11px] leading-snug"
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="min-w-0 break-all font-mono text-cyan-300">{fact.field}</span>
               <span className="text-slate-500">section {fact.source_section}</span>
+              <span className="text-slate-500">{formatConfidence(fact.confidence)} confidence</span>
               <span className="border border-cyan-800/50 bg-cyan-950/20 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300">
                 candidate fact
               </span>
+              <span className="border border-slate-700/70 bg-slate-900/60 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+                {fact.review_flag ? "review flagged" : "not review flagged"}
+              </span>
+            </div>
+            <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 text-slate-400">
+              <span className="text-slate-600">value</span>
+              <span className="min-w-0 break-words font-mono text-slate-200">{formatFactValue(fact.value)}</span>
+              <span className="text-slate-600">quote</span>
+              <span className="min-w-0 break-words text-slate-300">"{fact.quote}"</span>
             </div>
             <div className="mt-0.5 text-slate-500">{fact.reason}</div>
           </div>
@@ -150,4 +166,14 @@ function PermitHandoffFacts({ facts }: { facts: PermitHandoffFact[] }) {
 
 function formatToken(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function formatFactValue(value: PermitHandoffFact["value"]) {
+  if (value === null) return "null";
+  return String(value);
+}
+
+function formatConfidence(confidence: number) {
+  const percent = confidence <= 1 ? confidence * 100 : confidence;
+  return `${Math.round(percent)}%`;
 }
