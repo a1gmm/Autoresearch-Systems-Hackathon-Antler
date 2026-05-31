@@ -1,16 +1,17 @@
 "use client";
 import type { FamilyReport } from "@/lib/ui/selectors";
 import type { ResearchRun } from "@/lib/research/types";
+import type { Variants } from "framer-motion";
 import { getRepairHistory } from "@/lib/ui/selectors";
 import { CheckCircle2, XCircle, AlertTriangle, FileSearch, Wrench } from "lucide-react";
 import { motion } from "framer-motion";
 
-const cardVariants = {
+const cardVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] },
+    transition: { delay: i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] as const },
   }),
 };
 

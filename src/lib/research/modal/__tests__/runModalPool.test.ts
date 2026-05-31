@@ -88,20 +88,22 @@ const hypotheses: ResearchHypothesis[] = [
     id: "H-AIR-201",
     angle_id: "A-1",
     family: "air",
-    question: "?",
+    question: "Does Rule 201 require a permit for new emitting equipment?",
+    claim_to_test: "SCAQMD Permit to Construct may apply.",
     required_facts: [],
     expected_source_type: "regulation",
-    success_criteria: [],
+    success_criteria: ["official source"],
     dependencies: [],
   },
   {
     id: "H-AIR-219",
     angle_id: "A-1",
     family: "air",
-    question: "?",
+    question: "Is Rule 219 exemption available?",
+    claim_to_test: "Rule 219 may exempt listed equipment.",
     required_facts: [],
     expected_source_type: "regulation",
-    success_criteria: [],
+    success_criteria: ["official source"],
     dependencies: [],
   },
 ];
@@ -137,6 +139,17 @@ describe("runModalResearchPool", () => {
       const spec = JSON.parse(argv[3]);
       expect(spec).toHaveProperty("task_id");
       expect(spec).toHaveProperty("hypothesis_id");
+      expect(spec.assigned_agent).toBe("modal-worker");
+      expect(spec.allowed_tools).toEqual([]);
+      expect(spec.blocked_tools).toEqual([]);
+      expect(spec.budget).toEqual({ max_sources: 1, max_runtime_seconds: 30, max_model_calls: 1 });
+      expect(spec.question).toMatch(/Rule/);
+      expect(spec.claim_to_test).toMatch(/Rule|Permit/);
+      expect(spec.success_criteria).toEqual(["official source"]);
+      expect(spec.skill_id).toBe("scaqmd-air");
+      expect(spec.source_url).toMatch(/^https:\/\/www\.aqmd\.gov\//);
+      expect(spec.source_name).toMatch(/SCAQMD Rule/);
+      expect(spec.authority_rank).toBe(1);
     }
 
     expect(result).toHaveLength(2);

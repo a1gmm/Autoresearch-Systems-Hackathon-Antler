@@ -13,15 +13,121 @@ Invocation:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import hashlib
 import json
+import os
 import sys
+import urllib.request
+from typing import Callable
 
-import modal
+# modal is only needed for the remote/sandbox entrypoints. The pure research
+# core (run_research_core) must be importable without it so it can be unit
+# tested offline (worker_core_test.py) and reused outside Modal.
+try:
+    import modal
 
-app = modal.App("permitpilot-research")
+    app = modal.App("permitpilot-research")
+    # Slim image — sandbox payload is just `echo`, no deps needed.
+    sandbox_image = modal.Image.debian_slim()
+    _HAS_MODAL = True
+except ModuleNotFoundError:  # pragma: no cover - exercised only without modal installed
+    modal = None  # type: ignore[assignment]
+    app = None  # type: ignore[assignment]
+    sandbox_image = None  # type: ignore[assignment]
+    _HAS_MODAL = False
 
-# Slim image — sandbox payload is just `echo`, no deps needed.
-sandbox_image = modal.Image.debian_slim()
+
+FetchFn = Callable[[str], dict]
+ExtractFn = Callable[[str, str], dict]
+
+
+def run_research_core(
+    hypothesis_id: str,
+    question: str,
+    source_url: str,
+    fetch_fn: FetchFn,
+    extract_fn: ExtractFn,
+) -> dict:
+    """Pure, injectable research loop: fetch a source, extract a grounded claim,
+    assemble an EvidenceBundle. No modal, no network, no SDK dependency of its
+    own — all IO arrives through fetch_fn / extract_fn. Fails closed to a
+    needs_review bundle if any step raises, so a fetch/extract failure can never
+    masquerade as a real determination.
+    """
+    try:
+        source = fetch_fn(source_url)
+        source_text = source["text"]
+        extracted = extract_fn(question, source_text)
+    except Exception as exc:  # noqa: BLE001 - any failure must fail closed
+        return _failed_bundle(hypothesis_id, f"research failed: {exc}")
+
+    quote = extracted.get("quote", source_text)
+    fetched_at = source.get("fetched_at") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    content_hash = source.get("content_hash") or _content_hash(source_text)
+    return {
+        "hypothesis_id": hypothesis_id,
+        "sources": [
+            {
+                "url": source["url"],
+                "source_name": source.get("source_name", source["url"]),
+                "authority_rank": source.get("authority_rank", 1),
+                "fetched_at": fetched_at,
+                "content_hash": content_hash,
+                "effective_date": source.get("effective_date"),
+                "quote": quote,
+            }
+        ],
+        "extracted_claims": [
+            {
+                "field": extracted.get("field", "source_claim"),
+                "value": str(extracted.get("value", "")),
+                "source_url": source["url"],
+                "quote": quote,
+                "confidence": extracted.get("confidence", 0.5),
+            }
+        ],
+        "researcher_conclusion": extracted.get("conclusion", "needs_review"),
+        "uncertainties": extracted.get("uncertainties", []),
+    }
+
+
+def _content_hash(text: str) -> str:
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def default_fetch_fn(url: str) -> dict:
+    """Real source fetch over HTTP. Returns the page text for extraction."""
+    req = urllib.request.Request(url, headers={"User-Agent": "permitpilot-research/0.1"})
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - allowlisted sources upstream
+        text = resp.read().decode("utf-8", errors="replace")
+    return {"url": url, "source_name": url, "authority_rank": 1, "text": text}
+
+
+def default_extract_fn(question: str, source_text: str) -> dict:
+    """Real extraction via OpenAI. Raises when no key is set so the core fails
+    closed rather than fabricating a claim."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY unset; extraction unavailable")
+    from openai import OpenAI  # imported lazily so the core stays dependency-free
+
+    client = OpenAI(api_key=api_key)
+    model = os.environ.get("OPENAI_INTAKE_MODEL", "gpt-4o-mini")
+    prompt = (
+        "Given the regulation text, answer the research question. Return ONLY JSON: "
+        '{"field":string,"value":string,"quote":string (verbatim span from the text '
+        'that grounds the claim),"confidence":number,"conclusion":'
+        '"applies"|"does_not_apply"|"needs_review"}.\n\n'
+        f"QUESTION: {question}\n\nTEXT:\n{source_text[:8000]}"
+    )
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        max_tokens=800,
+    )
+    return json.loads(completion.choices[0].message.content or "{}")
 
 
 # Mirror of src/lib/research/fixtures/sources.ts. Kept in sync by hand
@@ -182,35 +288,56 @@ def _build_evidence_bundle(hypothesis_id: str) -> dict:
     }
 
 
-@app.function(image=sandbox_image, timeout=120)
-def research_task(task_spec: dict) -> dict:
-    """Run one research task: spin up a Modal Sandbox, prove isolation, return evidence.
+def _modal_function(**kwargs):
+    """Apply @app.function only when modal is installed; otherwise a no-op so the
+    module (and its pure core) imports without modal for offline unit tests."""
+    if _HAS_MODAL:
+        return app.function(**kwargs)
+    return lambda fn: fn
 
-    The sandbox is currently a stand-in for the real fetcher/extractor pipeline.
-    It runs `echo` to prove sandbox-per-task isolation works end-to-end; the
-    deterministic fixture lookup happens in the caller process so we don't
-    waste sandbox-cold-start time on a pure dict lookup.
+
+def _modal_local_entrypoint():
+    if _HAS_MODAL:
+        return app.local_entrypoint()
+    return lambda fn: fn
+
+
+@_modal_function(image=sandbox_image, timeout=120)
+def research_task(task_spec: dict) -> dict:
+    """Run one research task inside a Modal Sandbox: fetch the hypothesis's
+    primary source, extract a grounded claim via the real core, return evidence.
+    Falls back to the deterministic fixture bundle when no source URL is known
+    for the hypothesis, so unmapped hypotheses still fail closed cleanly.
     """
     hypothesis_id = task_spec.get("hypothesis_id", "")
-    task_id = task_spec.get("task_id", "unknown-task")
+    question = task_spec.get("question") or task_spec.get("claim_to_test") or ""
+    source_url = task_spec.get("source_url") or _fixture_source_url(hypothesis_id)
 
-    # Prove sandbox isolation: ephemeral sandbox, runs one command, exits.
-    sandbox = modal.Sandbox.create(
-        "echo",
-        f"permitpilot worker isolated run for task={task_id} hypothesis={hypothesis_id}",
-        app=app,
-        image=sandbox_image,
-        timeout=60,
+    if not source_url:
+        return _build_evidence_bundle(hypothesis_id)
+
+    def fetch_with_task_metadata(url: str) -> dict:
+        source = default_fetch_fn(url)
+        source["source_name"] = task_spec.get("source_name") or source["source_name"]
+        source["authority_rank"] = task_spec.get("authority_rank") or source["authority_rank"]
+        source["effective_date"] = task_spec.get("effective_date")
+        return source
+
+    return run_research_core(
+        hypothesis_id=hypothesis_id,
+        question=question,
+        source_url=source_url,
+        fetch_fn=fetch_with_task_metadata,
+        extract_fn=default_extract_fn,
     )
-    try:
-        sandbox.wait()
-    finally:
-        sandbox.terminate()
-
-    return _build_evidence_bundle(hypothesis_id)
 
 
-@app.local_entrypoint()
+def _fixture_source_url(hypothesis_id: str) -> str:
+    fixture = SOURCE_FIXTURES.get(HYPOTHESIS_TO_FIXTURE.get(hypothesis_id, ""))
+    return fixture["url"] if fixture else ""
+
+
+@_modal_local_entrypoint()
 def main(task_json: str) -> None:
     """Entry point for `modal run`. Parses task JSON, calls research_task, prints result JSON.
 

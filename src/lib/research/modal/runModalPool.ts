@@ -1,6 +1,8 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import type { EvidenceBundle, ResearchHypothesis, ResearchTask } from "../types";
+import { sourceFixtures } from "../fixtures/sources";
+import { skillForHypothesis } from "../skillForHypothesis";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const BUNDLE_MARKER = "PERMITPILOT_BUNDLE_JSON ";
@@ -55,13 +57,42 @@ async function runSingleTask(
   task: ResearchTask,
   hypothesis: ResearchHypothesis
 ): Promise<EvidenceBundle> {
+  const fixture = sourceFixtures[fixtureForHypothesis(hypothesis.id)];
   const taskSpec = {
     task_id: task.task_id,
     hypothesis_id: hypothesis.id,
+    assigned_agent: task.assigned_agent,
+    allowed_tools: task.allowed_tools,
+    blocked_tools: task.blocked_tools,
+    budget: task.budget,
+    question: hypothesis.question,
+    claim_to_test: hypothesis.claim_to_test ?? null,
+    required_facts: hypothesis.required_facts,
+    success_criteria: hypothesis.success_criteria,
+    skill_id: skillForHypothesis(hypothesis.id),
+    source_url: fixture?.url ?? null,
+    source_name: fixture?.source_name ?? null,
+    authority_rank: fixture?.authority_rank ?? 1,
+    effective_date: fixture?.effective_date ?? null,
   };
   const argv = ["run", WORKER_SCRIPT, "--task-json", JSON.stringify(taskSpec)];
   const stdout = await spawnModalRun(argv, DEFAULT_TIMEOUT_MS);
   return parseBundleFromStdout(stdout, hypothesis.id);
+}
+
+function fixtureForHypothesis(hypothesisId: string): keyof typeof sourceFixtures | "" {
+  const map: Record<string, keyof typeof sourceFixtures> = {
+    "H-AIR-201": "scaqmd_rule_201",
+    "H-AIR-VOC": "scaqmd_rule_201",
+    "H-AIR-219": "scaqmd_rule_219",
+    "H-AIR-222": "scaqmd_rule_222",
+    "H-STORM-IGP": "industrial_general_permit",
+    "H-STORM-CGP": "construction_general_permit",
+    "H-HAZMAT-HMBP": "hmbp_threshold_bad",
+    "H-WASTE-GENERATOR": "hazardous_waste_generator",
+    "H-WASTEWATER-PRETREATMENT": "wastewater_pretreatment",
+  };
+  return map[hypothesisId] ?? "";
 }
 
 function spawnModalRun(argv: string[], timeoutMs: number): Promise<string> {

@@ -1,8 +1,11 @@
 import type { EvidenceBundle, ResearchHypothesis, ResearchTask } from "./types";
 import { sourceFixtures } from "./fixtures/sources";
+import { isLiveMode } from "./config";
 
 export async function runLocalResearchPool(tasks: ResearchTask[], hypotheses: ResearchHypothesis[]) {
-  if (process.env.USE_MODAL === "1") {
+  // RESEARCH_MODE governs routing (config.ts). live_local / live_modal both run
+  // the real worker pool; fixture (default) stays deterministic and offline.
+  if (isLiveMode()) {
     const { runModalResearchPool } = await import("./modal/runModalPool");
     return runModalResearchPool(tasks, hypotheses);
   }

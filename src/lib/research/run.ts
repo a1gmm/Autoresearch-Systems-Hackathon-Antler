@@ -1,10 +1,11 @@
 import type { EvidenceBundle, ResearchRun, ResearchRunInput, VerificationVerdict } from "./types";
-import { applySdsHandoffToScope, parseScope, createRunId, projectFacts } from "./scope";
+import { applySdsHandoffToScope, resolveScope, createRunId, projectFacts } from "./scope";
 import { planResearch } from "./planner";
 import { runLocalResearchPool } from "./workers";
 import { repairEvidence, verifyEvidence } from "./verifier";
 import { synthesize } from "./synthesis";
 import { trace } from "./trace";
+import { getResearchMode } from "./config";
 import { reviewSdsInputs } from "@/lib/sds/reviewer";
 import { Raindrop } from "raindrop-ai";
 
@@ -25,14 +26,14 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
       project_description_chars: input.project_description.length,
       demo_documents_count: input.demo_documents?.length ?? 0,
       sds_reviews_count: sds_reviews.length,
-      use_modal: process.env.USE_MODAL === "1",
+      research_mode: getResearchMode(),
     },
   });
   const trace_events = [
     trace(run_id, "scope_agent", "scope", "running", "Parsing intake into ScopePack")
   ];
 
-  const base_scope_pack = parseScope(input, run_id);
+  const base_scope_pack = await resolveScope(input, run_id);
   trace_events.push(trace(run_id, "scope_agent", "scope", "done", "ScopePack created", run_id));
 
   for (const review of sds_reviews) {
