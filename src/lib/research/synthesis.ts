@@ -22,7 +22,7 @@ export function synthesize(
   const angleById = new Map(angles.map((angle) => [angle.id, angle]));
   const sdsHandoffFacts = sdsReviews.flatMap((review) =>
     review.permit_handoff_facts
-      .filter((fact) => fact.review_flag)
+      .filter((fact) => fact.review_flag && fact.value === true)
       .map((fact) => ({
         ...fact,
         document_id: review.document.id,
@@ -35,7 +35,7 @@ export function synthesize(
     const verdict = verdictByHypothesis.get(hypothesis.id);
     const angle = angleById.get(hypothesis.angle_id);
     const determination = determinationFor(scope, hypothesis, angle?.label ?? hypothesis.family, evidence, verdict);
-    const sds_handoff_refs = matchingSdsHandoffFacts(hypothesis, determination, sdsHandoffFacts);
+    const sds_handoff_refs = matchingSdsHandoffFacts(hypothesis, sdsHandoffFacts);
 
     return {
       ...determination,
@@ -63,7 +63,6 @@ export function synthesize(
 
 function matchingSdsHandoffFacts(
   hypothesis: ResearchHypothesis,
-  determination: Determination,
   facts: SdsHandoffRef[]
 ) {
   if (facts.length === 0) {

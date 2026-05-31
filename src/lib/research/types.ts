@@ -1,5 +1,5 @@
 import type { HarnessToolId } from "./toolCatalog";
-import type { PermitHandoffFact, SdsDocumentInput, SdsReview } from "@/lib/sds/types";
+import type { SdsDocumentInput, SdsHandoffRef, SdsReview } from "@/lib/sds/types";
 
 export type RunStatus =
   | "idle"
@@ -174,7 +174,7 @@ export type Determination = {
   confidence: number;
   verified: boolean;
   review_flag: boolean;
-  sds_handoff_refs?: PermitHandoffFact[];
+  sds_handoff_refs?: SdsHandoffRef[];
   permit_filing?: {
     form_name: string;
     form_url: string;

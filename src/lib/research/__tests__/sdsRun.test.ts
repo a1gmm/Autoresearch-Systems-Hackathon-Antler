@@ -3,6 +3,7 @@ import type { SdsReview } from "@/lib/sds/types";
 import type { ScopePack } from "@/lib/research/types";
 import { runResearch } from "@/lib/research/run";
 import { applySdsHandoffToScope } from "@/lib/research/scope";
+import { synthesize } from "@/lib/research/synthesis";
 
 const SDS_TEXT = `
 Section 1: Identification
@@ -137,6 +138,113 @@ describe("research run SDS integration", () => {
     expect(augmentedScope.assumptions).toEqual([]);
   });
 
+  it("omits false or null review-flagged SDS facts from determination refs", () => {
+    const scope: ScopePack = {
+      run_id: "run_sds_synthesis_regression",
+      facility: {
+        address: "Los Angeles County manufacturing facility",
+        jurisdiction_stack: ["SCAQMD"],
+        naics: "332813",
+        sic: "3471",
+      },
+      project_change: {
+        description: "Coating booth with solvent use.",
+        equipment: [{ kind: "coating_booth", description: "new emitting equipment" }],
+        chemicals: [{ name: "flammable solvent", quantity: 60, unit: "gallons", hazard: "flammable" }],
+        waste_streams: [],
+        disturbance_acres: 0,
+        process_discharge: false,
+      },
+      missing_facts: [],
+      assumptions: [],
+    };
+    const review = {
+      document: {
+        id: "run_sds_synthesis_regression_sds_1",
+        run_id: "run_sds_synthesis_regression",
+        name: "VOC SDS",
+        source_type: "pasted_text",
+        retention: "ephemeral",
+        extracted_text: SDS_TEXT,
+        text_extraction_status: "ok",
+      },
+      section_map: {
+        document_id: "run_sds_synthesis_regression_sds_1",
+        sections: [],
+      },
+      overall_status: "complete",
+      quality_findings: [],
+      safety_findings: [],
+      permit_handoff_facts: [
+        {
+          field: "voc_air_emissions_review",
+          value: true,
+          source_section: 9,
+          quote: "VOC content: 620 g/L.",
+          confidence: 0.85,
+          review_flag: true,
+          reason: "True candidate fact should be emitted as metadata.",
+        },
+        {
+          field: "voc_air_emissions_review",
+          value: false,
+          source_section: 9,
+          quote: "No VOC review indicated.",
+          confidence: 0.85,
+          review_flag: true,
+          reason: "False candidate fact should not be emitted.",
+        },
+        {
+          field: "voc_air_emissions_review",
+          value: null,
+          source_section: 9,
+          quote: "VOC review unknown.",
+          confidence: 0.4,
+          review_flag: true,
+          reason: "Null candidate fact should not be emitted.",
+        },
+      ],
+    } satisfies SdsReview;
+
+    const result = synthesize(
+      scope,
+      [
+        {
+          id: "H-AIR-VOC",
+          angle_id: "A-AIR-EMITTING-EQUIPMENT",
+          family: "air",
+          question: "Do solvent VOC emissions require additional review?",
+          required_facts: [],
+          expected_source_type: "regulation",
+          success_criteria: [],
+          dependencies: [],
+        },
+      ],
+      [
+        {
+          id: "A-AIR-EMITTING-EQUIPMENT",
+          family: "air",
+          label: "New or modified emitting equipment",
+          reason: "Coating or process equipment may require air district authorization.",
+          triggering_facts: [],
+          status: "active",
+        },
+      ],
+      [],
+      [],
+      [review],
+    );
+
+    expect(result.determinations[0].sds_handoff_refs).toEqual([
+      expect.objectContaining({
+        field: "voc_air_emissions_review",
+        value: true,
+        document_id: "run_sds_synthesis_regression_sds_1",
+        document_name: "VOC SDS",
+      }),
+    ]);
+  });
+
   it("reviews SDS documents and carries handoff refs without bypassing verification", async () => {
     const run = await runResearch({
       project_description:
@@ -169,6 +277,7 @@ describe("research run SDS integration", () => {
 
     const allHandoffRefs = run.determinations.flatMap((determination) => determination.sds_handoff_refs ?? []);
     expect(allHandoffRefs.length).toBeGreaterThan(0);
+    expect(allHandoffRefs.every((fact) => fact.document_id.length > 0 && fact.document_name.length > 0)).toBe(true);
     expect(run.determinations.every((determination) => !determination.source_url.startsWith("sds:"))).toBe(true);
     expect(
       run.determinations.every((determination) =>
