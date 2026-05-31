@@ -118,6 +118,26 @@ describe("harness runtime scope", () => {
 
     expect(harness.calls.map((call) => call.tool_id)).toEqual(["map_sds_sections"]);
   });
+
+  it("does not let public context properties shadow the audit log", () => {
+    const harness = createHarnessContext({
+      role: "sds_reviewer",
+      allowed_tools: ["map_sds_sections"],
+      blocked_tools: []
+    });
+    const forgedCalls: HarnessCall[] = [
+      {
+        tool_id: "emit_permit_handoff_facts",
+        ts: "2026-05-31T00:00:00.000Z"
+      }
+    ];
+
+    harness.callTool("map_sds_sections");
+    tryOverwriteContextCalls(harness, []);
+    tryRedefineContextCalls(harness, forgedCalls);
+
+    expect(harness.calls.map((call) => call.tool_id)).toEqual(["map_sds_sections"]);
+  });
 });
 
 function tryMutateTools(tools: readonly HarnessToolId[], toolId: HarnessToolId) {
@@ -141,5 +161,24 @@ function tryForgeCall(calls: readonly HarnessCall[], call: HarnessCall) {
     (calls as HarnessCall[]).push(call);
   } catch {
     // Frozen snapshots are acceptable; the assertion is that enforcement is unchanged.
+  }
+}
+
+function tryOverwriteContextCalls(harness: { readonly calls: readonly HarnessCall[] }, calls: HarnessCall[]) {
+  try {
+    (harness as { calls: HarnessCall[] }).calls = calls;
+  } catch {
+    // Frozen contexts are acceptable; the assertion is that audit state is unchanged.
+  }
+}
+
+function tryRedefineContextCalls(harness: object, calls: HarnessCall[]) {
+  try {
+    Object.defineProperty(harness, "calls", {
+      configurable: true,
+      value: calls
+    });
+  } catch {
+    // Frozen contexts are acceptable; the assertion is that audit state is unchanged.
   }
 }

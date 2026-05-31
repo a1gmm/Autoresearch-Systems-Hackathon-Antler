@@ -81,7 +81,13 @@ describe("harness tool catalog", () => {
     );
     expect(allowedTools.every((toolId) => sdsReviewerTools.includes(toolId))).toBe(true);
     expect(blockedTools).toEqual(
-      expect.arrayContaining(["build_applicability_matrix", "verify_determination", "freshness_sweep"])
+      expect.arrayContaining([
+        "build_applicability_matrix",
+        "verify_determination",
+        "freshness_sweep",
+        "generate_compliance_calendar",
+        "assemble_review_package"
+      ])
     );
     expect(allowedTools).not.toContain("build_applicability_matrix");
     expect(allowedTools).not.toContain("get_form");

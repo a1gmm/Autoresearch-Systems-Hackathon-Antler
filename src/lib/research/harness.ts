@@ -8,10 +8,10 @@ export type HarnessCall = {
 
 export type HarnessContext = {
   readonly role: AgentRole;
-  allowed_tools: readonly HarnessToolId[];
-  blocked_tools: readonly HarnessToolId[];
+  readonly allowed_tools: readonly HarnessToolId[];
+  readonly blocked_tools: readonly HarnessToolId[];
   readonly calls: readonly HarnessCall[];
-  callTool: (toolId: HarnessToolId) => void;
+  readonly callTool: (toolId: HarnessToolId) => void;
 };
 
 export class HarnessToolScopeError extends Error {
@@ -30,10 +30,10 @@ export function createHarnessContext(input: {
   const calls: HarnessCall[] = [];
   const allowedTools = Object.freeze([...input.allowed_tools]);
   const blockedTools = Object.freeze([...input.blocked_tools]);
-  const allowedToolSet = new Set(input.allowed_tools);
-  const blockedToolSet = new Set(input.blocked_tools);
+  const allowedToolSet = new Set(allowedTools);
+  const blockedToolSet = new Set(blockedTools);
 
-  return {
+  return Object.freeze({
     role,
     allowed_tools: allowedTools,
     blocked_tools: blockedTools,
@@ -44,7 +44,7 @@ export function createHarnessContext(input: {
       assertToolAllowed(role, toolId, allowedToolSet, blockedToolSet);
       calls.push({ tool_id: toolId, ts: new Date().toISOString() });
     }
-  };
+  });
 }
 
 export function assertToolAllowed(
