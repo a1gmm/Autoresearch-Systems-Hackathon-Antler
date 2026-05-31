@@ -37,7 +37,7 @@ const RETENTION_VALUES: SdsRetention[] = ["ephemeral", "save_for_audit"];
 const EXTRACTION_STATUSES: SdsTextExtractionStatus[] = ["ok", "empty", "unreadable", "needs_pasted_text"];
 
 export type SdsReviewOptions = {
-  asOfDate?: Date;
+  asOfDate: Date;
 };
 
 const QUALITY_RULE_IDS = {
@@ -169,19 +169,23 @@ export function createSdsDocument(input: SdsDocumentInput, runId: string, index:
   };
 }
 
-export function reviewSdsInputs(documents: unknown[], runId: string, options: SdsReviewOptions = {}): SdsReview[] {
+export function reviewSdsInputs(documents: unknown[], runId: string, options: SdsReviewOptions): SdsReview[] {
+  const asOfDate = requireAsOfDate(options);
+
   return documents
     .filter(isSdsDocumentInput)
-    .map((input, index) => reviewSdsDocument(createSdsDocument(input, runId, index), options));
+    .map((input, index) => reviewSdsDocument(createSdsDocument(input, runId, index), { asOfDate }));
 }
 
-export function reviewSdsDocument(document: SdsDocument, options: SdsReviewOptions = {}): SdsReview {
+export function reviewSdsDocument(document: SdsDocument, options: SdsReviewOptions): SdsReview {
+  const asOfDate = requireAsOfDate(options);
+
   if (document.text_extraction_status !== "ok" || document.extracted_text.length === 0) {
     return reviewUnreadableSdsDocument(document);
   }
 
   const sectionMap = mapSdsSections(document.id, document.extracted_text);
-  const qualityFindings = buildQualityFindings(document, sectionMap, options.asOfDate ?? new Date());
+  const qualityFindings = buildQualityFindings(document, sectionMap, asOfDate);
   const safetyFindings = buildSafetyFindings(document, sectionMap);
   const permitHandoffFacts = buildPermitHandoffFacts(sectionMap);
 
@@ -354,10 +358,6 @@ function determineOverallStatus(
     return "incomplete";
   }
 
-  if (hasFindingRule(qualityFindings, QUALITY_RULE_IDS.revisionDateStale)) {
-    return "stale";
-  }
-
   if (
     hasFindingRule(qualityFindings, QUALITY_RULE_IDS.ambiguousOrMergedSections) ||
     safetyFindings.some((finding) => finding.severity === "critical")
@@ -365,7 +365,19 @@ function determineOverallStatus(
     return "needs_expert_review";
   }
 
+  if (hasFindingRule(qualityFindings, QUALITY_RULE_IDS.revisionDateStale)) {
+    return "stale";
+  }
+
   return "complete";
+}
+
+function requireAsOfDate(options: SdsReviewOptions | undefined): Date {
+  if (!options?.asOfDate || Number.isNaN(options.asOfDate.getTime())) {
+    throw new Error("asOfDate is required");
+  }
+
+  return options.asOfDate;
 }
 
 function qualityFindingId(documentId: string, ruleId: (typeof QUALITY_RULE_IDS)[keyof typeof QUALITY_RULE_IDS]): string {

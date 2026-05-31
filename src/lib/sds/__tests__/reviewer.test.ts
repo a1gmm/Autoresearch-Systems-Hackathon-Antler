@@ -97,6 +97,14 @@ function splitSectionHeadings(text: string) {
   });
 }
 
+function withoutSectionBody(text: string, sectionNumber: number) {
+  const nextSection = sectionNumber + 1;
+  return text.replace(
+    new RegExp(`(Section ${sectionNumber}:[^\\n]*\\n)[\\s\\S]*?(?=\\nSection ${nextSection}:)`, "m"),
+    "$1",
+  );
+}
+
 describe("reviewSdsDocument", () => {
   it("maps all 16 sections and emits quality, safety, and permit handoff artifacts", () => {
     const review = reviewText(COMPLETE_SDS_TEXT);
@@ -246,7 +254,7 @@ describe("reviewSdsDocument", () => {
       "run_pdf",
       0,
     );
-    const review = reviewSdsDocument(document);
+    const review = reviewSdsDocument(document, { asOfDate: REVIEW_AS_OF_DATE });
 
     expect(review.overall_status).toBe("unreadable");
     expect(review.document.text_extraction_status).toBe("needs_pasted_text");
@@ -262,6 +270,16 @@ describe("reviewSdsDocument", () => {
     );
     expect(review.safety_findings).toEqual([]);
     expect(review.permit_handoff_facts).toEqual([]);
+  });
+
+  it("requires an explicit as-of date for document review", () => {
+    const document = createSdsDocument(
+      { name: "Solvent Blend 42 SDS", type: "sds", text: COMPLETE_SDS_TEXT },
+      "run_no_date",
+      0,
+    );
+
+    expect(() => reviewSdsDocument(document, undefined as never)).toThrow("asOfDate is required");
   });
 
   it("adds quoted safety findings for incompatible storage and California EHS implication terms", () => {
@@ -303,6 +321,23 @@ describe("reviewSdsDocument", () => {
           category: "section_completeness",
           title: "Ambiguous or merged SDS sections",
         }),
+      ]),
+    );
+  });
+
+  it("keeps expert review status when stale documents also have ambiguous sections", () => {
+    const staleText = COMPLETE_SDS_TEXT.replaceAll("January 3, 2025", "January 3, 2020");
+    const staleDuplicateText = staleText.replace(
+      "Section 8: Exposure controls/personal protection",
+      "Section 8: Exposure controls/personal protection\nDuplicate exposure control note.\n\nSection 8: Exposure controls/personal protection",
+    );
+    const review = reviewText(staleDuplicateText, "run_stale_ambiguous");
+
+    expect(review.overall_status).toBe("needs_expert_review");
+    expect(review.quality_findings.map((finding) => finding.id)).toEqual(
+      expect.arrayContaining([
+        "run_stale_ambiguous_sds_1_quality_revision_date_stale",
+        "run_stale_ambiguous_sds_1_quality_ambiguous_or_merged_sections",
       ]),
     );
   });
@@ -352,7 +387,25 @@ describe("mapSdsSections", () => {
         text: expect.stringContaining("Product identifier: Solvent Blend 42."),
       }),
     );
+    expect(section1?.text).not.toContain("Identification\nProduct identifier");
     expect(section1?.text).not.toContain("Danger. Highly flammable liquid and vapor.");
+  });
+
+  it("does not treat split heading title lines as section body evidence", () => {
+    const headingOnlyText = splitSectionHeadings(
+      withoutSectionBody(withoutSectionBody(COMPLETE_SDS_TEXT, 10), 13),
+    );
+    const sectionMap = mapSdsSections("heading_only_doc", headingOnlyText);
+    const section10 = sectionMap.sections.find((section) => section.section_number === 10);
+    const section13 = sectionMap.sections.find((section) => section.section_number === 13);
+    const review = reviewText(headingOnlyText, "run_heading_only");
+
+    expect(section10).toEqual(expect.objectContaining({ text: "" }));
+    expect(section13).toEqual(expect.objectContaining({ text: "" }));
+    expect(review.safety_findings.find((finding) => finding.source_section === 13)).toBeUndefined();
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toEqual(
+      expect.arrayContaining(["incompatible_storage_review", "hazardous_waste_review"]),
+    );
   });
 });
 
@@ -366,12 +419,23 @@ describe("reviewSdsInputs", () => {
         null,
       ],
       "run_inputs",
+      { asOfDate: REVIEW_AS_OF_DATE },
     );
 
     expect(reviews).toHaveLength(1);
     expect(reviews[0].document.id).toBe("run_inputs_sds_1");
     expect(reviews[0].document.retention).toBe("ephemeral");
     expect(reviews[0].document.source_type).toBe("pasted_text");
+  });
+
+  it("requires an explicit as-of date for bulk review", () => {
+    expect(() =>
+      reviewSdsInputs(
+        [{ name: "Solvent Blend 42 SDS", type: "sds", text: COMPLETE_SDS_TEXT }],
+        "run_no_bulk_date",
+        undefined as never,
+      ),
+    ).toThrow("asOfDate is required");
   });
 
   it("passes as-of date options through to each SDS document review", () => {

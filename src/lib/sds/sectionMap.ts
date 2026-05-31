@@ -23,6 +23,8 @@ type HeadingMatch = {
   sectionNumber: number;
   lineStart: number;
   lineEnd: number;
+  hasSectionPrefix: boolean;
+  inlineHeadingText: string;
 };
 
 const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
@@ -105,6 +107,8 @@ function findSectionHeadings(text: string): HeadingMatch[] {
         sectionNumber: Number(headingMatch[2]),
         lineStart: offset,
         lineEnd: offset + line.length,
+        hasSectionPrefix: Boolean(headingMatch[1]),
+        inlineHeadingText: headingMatch[3].trim(),
       });
     }
     offset += line.length + 1;
@@ -125,8 +129,32 @@ function extractSectionText(text: string, matches: HeadingMatch[], match: Headin
   const nextMatch = matches.find((candidate) => candidate.lineStart > match.lineStart);
   const start = text[match.lineEnd] === "\n" ? match.lineEnd + 1 : match.lineEnd;
   const end = nextMatch?.lineStart ?? text.length;
+  const rawSectionText = text.slice(start, end);
 
-  return normalizeText(text.slice(start, end));
+  if (match.hasSectionPrefix && match.inlineHeadingText.length === 0) {
+    return removeSplitHeadingTitle(rawSectionText, match.sectionNumber);
+  }
+
+  return normalizeText(rawSectionText);
+}
+
+function removeSplitHeadingTitle(text: string, sectionNumber: number): string {
+  const normalizedText = normalizeText(text);
+  const [firstLine, ...remainingLines] = normalizedText.split("\n");
+
+  if (headingFingerprint(firstLine) === headingFingerprint(SDS_SECTION_HEADINGS[sectionNumber])) {
+    return normalizeText(remainingLines.join("\n"));
+  }
+
+  return normalizedText;
+}
+
+function headingFingerprint(heading: string): string {
+  return heading
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function getSectionStatus(matchCount: number, text: string): SdsSectionStatus {
