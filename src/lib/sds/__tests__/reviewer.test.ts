@@ -484,12 +484,12 @@ describe("mapSdsSections", () => {
   it("does not emit evidence from long split title-only sections", () => {
     const titleOnlyText = replaceWithSplitTitleOnly(
       replaceWithSplitTitleOnly(
-        replaceWithSplitTitleOnly(COMPLETE_SDS_TEXT, 6, "Spill response and containment"),
+        replaceWithSplitTitleOnly(COMPLETE_SDS_TEXT, 6, "Spill response and containment planning requirements"),
         13,
-        "Waste disposal considerations",
+        "Waste disposal considerations and regulatory disposal requirements",
       ),
       15,
-      "California regulatory requirements",
+      "California regulatory compliance and state environmental disclosure requirements",
     );
     const sectionMap = mapSdsSections("long_title_doc", titleOnlyText);
     const review = reviewText(titleOnlyText, "run_long_titles");
@@ -515,8 +515,16 @@ describe("mapSdsSections", () => {
 
   it("keeps real Section 6, 13, and 15 body text as handoff evidence", () => {
     const review = reviewText(COMPLETE_SDS_TEXT, "run_real_body_evidence");
+    const splitReview = reviewText(splitSectionHeadings(COMPLETE_SDS_TEXT), "run_split_real_body_evidence");
 
     expect(review.permit_handoff_facts.map((fact) => fact.field)).toEqual(
+      expect.arrayContaining([
+        "spill_stormwater_containment_review",
+        "hazardous_waste_review",
+        "california_ehs_review",
+      ]),
+    );
+    expect(splitReview.permit_handoff_facts.map((fact) => fact.field)).toEqual(
       expect.arrayContaining([
         "spill_stormwater_containment_review",
         "hazardous_waste_review",

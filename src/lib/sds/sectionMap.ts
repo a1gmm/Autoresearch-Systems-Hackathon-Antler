@@ -47,12 +47,6 @@ const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   15: /\bregulatory\b|\bregulation\b/i,
   16: /\bother information\b/i,
 };
-const SPLIT_HEADING_TITLE_ALIASES: Partial<Record<number, string[]>> = {
-  10: ["Reactivity", "Stability"],
-  13: ["Disposal"],
-  15: ["California regulatory information", "Regulatory"],
-};
-
 export function normalizeText(text: string): string {
   return text
     .replace(/\r\n?/g, "\n")
@@ -137,49 +131,17 @@ function extractSectionText(text: string, matches: HeadingMatch[], match: Headin
   const rawSectionText = text.slice(start, end);
 
   if (match.hasSectionPrefix && match.inlineHeadingText.length === 0) {
-    return removeSplitHeadingTitle(rawSectionText, match.sectionNumber);
+    return removeSplitHeadingTitle(rawSectionText);
   }
 
   return normalizeText(rawSectionText);
 }
 
-function removeSplitHeadingTitle(text: string, sectionNumber: number): string {
+function removeSplitHeadingTitle(text: string): string {
   const normalizedText = normalizeText(text);
-  const [firstLine, ...remainingLines] = normalizedText.split("\n");
+  const [_titleLine, ...remainingLines] = normalizedText.split("\n");
 
-  if (isSplitHeadingTitle(firstLine, sectionNumber)) {
-    return normalizeText(remainingLines.join("\n"));
-  }
-
-  return normalizedText;
-}
-
-function isSplitHeadingTitle(heading: string, sectionNumber: number): boolean {
-  const fingerprint = headingFingerprint(heading);
-  const titleFingerprints = [
-    SDS_SECTION_HEADINGS[sectionNumber],
-    ...(SPLIT_HEADING_TITLE_ALIASES[sectionNumber] ?? []),
-  ].map(headingFingerprint);
-
-  return titleFingerprints.includes(fingerprint) || isLikelySplitHeadingTitle(heading);
-}
-
-function isLikelySplitHeadingTitle(heading: string): boolean {
-  const normalizedHeading = heading.trim();
-  if (normalizedHeading.length === 0 || /[:;]/.test(normalizedHeading) || /[.!?]$/.test(normalizedHeading)) {
-    return false;
-  }
-
-  const wordCount = normalizedHeading.split(/\s+/).filter(Boolean).length;
-  return wordCount > 0 && wordCount <= 6;
-}
-
-function headingFingerprint(heading: string): string {
-  return heading
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return normalizeText(remainingLines.join("\n"));
 }
 
 function getSectionStatus(matchCount: number, text: string): SdsSectionStatus {
