@@ -7,7 +7,7 @@ import type {
   ScopePack,
   VerificationVerdict
 } from "./types";
-import type { PermitHandoffFact, SdsReview } from "@/lib/sds/types";
+import type { SdsHandoffRef, SdsReview } from "@/lib/sds/types";
 
 export function synthesize(
   scope: ScopePack,
@@ -21,7 +21,13 @@ export function synthesize(
   const verdictByHypothesis = new Map(verdicts.map((verdict) => [verdict.hypothesis_id, verdict]));
   const angleById = new Map(angles.map((angle) => [angle.id, angle]));
   const sdsHandoffFacts = sdsReviews.flatMap((review) =>
-    review.permit_handoff_facts.filter((fact) => fact.review_flag)
+    review.permit_handoff_facts
+      .filter((fact) => fact.review_flag)
+      .map((fact) => ({
+        ...fact,
+        document_id: review.document.id,
+        document_name: review.document.name
+      }))
   );
 
   const determinations = hypotheses.map((hypothesis) => {
@@ -58,56 +64,31 @@ export function synthesize(
 function matchingSdsHandoffFacts(
   hypothesis: ResearchHypothesis,
   determination: Determination,
-  facts: PermitHandoffFact[]
+  facts: SdsHandoffRef[]
 ) {
   if (facts.length === 0) {
     return [];
   }
 
-  const requirement = determination.requirement.toLowerCase();
-  const trigger = determination.trigger.toLowerCase();
-  const fieldMatches = fieldsForRequirement(hypothesis, requirement, trigger);
+  const fieldMatches = fieldsForHypothesis(hypothesis.id);
   return facts.filter((fact) => fieldMatches.has(fact.field));
 }
 
-function fieldsForRequirement(hypothesis: ResearchHypothesis, requirement: string, trigger: string) {
-  if (hypothesis.id === "H-HAZMAT-HMBP" || requirement.includes("hmbp") || requirement.includes("hazardous material")) {
-    return new Set([
+function fieldsForHypothesis(hypothesisId: string) {
+  const map: Record<string, string[]> = {
+    "H-AIR-VOC": ["voc_air_emissions_review"],
+    "H-HAZMAT-HMBP": [
       "hazardous_material_inventory_review",
       "flammable_liquid_storage_review",
       "incompatible_storage_review",
       "california_ehs_review"
-    ]);
-  }
+    ],
+    "H-WASTE-GENERATOR": ["hazardous_waste_review", "california_ehs_review"],
+    "H-STORM-IGP": ["spill_stormwater_containment_review"],
+    "H-STORM-CGP": ["spill_stormwater_containment_review"]
+  };
 
-  if (hypothesis.id === "H-WASTE-GENERATOR" || requirement.includes("hazardous waste")) {
-    return new Set(["hazardous_waste_review", "california_ehs_review"]);
-  }
-
-  const combinedText = `${requirement} ${trigger}`;
-  if (hasAny(combinedText, ["voc", "air emissions", "emitting", "emissions", "permit to construct", "permit to operate"])) {
-    const fields = new Set(["voc_air_emissions_review"]);
-
-    if (hasAny(combinedText, ["storage", "flammable"])) {
-      fields.add("flammable_liquid_storage_review");
-    }
-
-    if (hasAny(combinedText, ["california", "ehs", "cupa", "dtsc", "title 22"])) {
-      fields.add("california_ehs_review");
-    }
-
-    return fields;
-  }
-
-  if (hypothesis.family === "stormwater" || requirement.includes("stormwater") || requirement.includes("spill")) {
-    return new Set(["spill_stormwater_containment_review"]);
-  }
-
-  return new Set<string>();
-}
-
-function hasAny(text: string, terms: string[]) {
-  return terms.some((term) => text.includes(term));
+  return new Set(map[hypothesisId] ?? []);
 }
 
 function determinationFor(

@@ -60,7 +60,7 @@ Prepared by EHS. Revision date: January 3, 2025.
 `;
 
 describe("research run SDS integration", () => {
-  it("ignores SDS handoff facts that are not review-flagged", () => {
+  it("ignores SDS handoff facts that are not active review-flagged facts", () => {
     const scope: ScopePack = {
       run_id: "run_sds_regression",
       facility: {
@@ -115,6 +115,15 @@ describe("research run SDS integration", () => {
           confidence: 0.85,
           review_flag: false,
           reason: "Synthetic non-review-flagged fact must not alter scope.",
+        },
+        {
+          field: "hazardous_material_inventory_review",
+          value: false,
+          source_section: 2,
+          quote: "No hazardous material inventory review indicated.",
+          confidence: 0.85,
+          review_flag: true,
+          reason: "Synthetic false-valued fact must not alter scope.",
         },
       ],
     } satisfies SdsReview;
@@ -190,7 +199,7 @@ describe("research run SDS integration", () => {
     expect(waste?.review_flag).toBe(true);
   });
 
-  it("attaches VOC SDS refs to VOC determinations but not generic Rule 219 or Rule 222 checks", async () => {
+  it("attaches VOC SDS refs with provenance only to VOC determinations", async () => {
     const run = await runResearch({
       project_description:
         "A Los Angeles County manufacturer is adding a coating booth and storing 60 gallons of a new flammable solvent.",
@@ -203,9 +212,20 @@ describe("research run SDS integration", () => {
           text_extraction_status: "ok",
           text: SDS_TEXT,
         },
+        {
+          name: "Backup Solvent Blend 42 SDS",
+          type: "sds",
+          source_type: "pasted_text",
+          retention: "ephemeral",
+          text_extraction_status: "ok",
+          text: SDS_TEXT,
+        },
       ],
     });
 
+    const permit201 = run.determinations.find((determination) =>
+      determination.requirement.toLowerCase().includes("permit to construct"),
+    );
     const voc = run.determinations.find((determination) =>
       determination.requirement.toLowerCase().includes("voc"),
     );
@@ -215,10 +235,13 @@ describe("research run SDS integration", () => {
     const rule222 = run.determinations.find((determination) =>
       determination.requirement.toLowerCase().includes("rule 222"),
     );
+    const vocRefs = voc?.sds_handoff_refs?.filter((fact) => fact.field === "voc_air_emissions_review") ?? [];
 
-    expect(voc?.sds_handoff_refs?.map((fact) => fact.field)).toEqual(
-      expect.arrayContaining(["voc_air_emissions_review"]),
+    expect(vocRefs).toHaveLength(2);
+    expect(vocRefs.map((fact) => ({ id: fact.document_id, name: fact.document_name }))).toEqual(
+      run.sds_reviews.map((review) => ({ id: review.document.id, name: review.document.name })),
     );
+    expect(permit201?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain("voc_air_emissions_review");
     expect(rule219?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain("voc_air_emissions_review");
     expect(rule222?.sds_handoff_refs?.map((fact) => fact.field) ?? []).not.toContain("voc_air_emissions_review");
     expect(run.determinations.every((determination) => !determination.source_url.startsWith("sds:"))).toBe(true);

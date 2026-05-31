@@ -76,6 +76,13 @@ export type PermitHandoffFact = {
   confidence: number;
   review_flag: boolean;
   reason: string;
+  document_id?: string;
+  document_name?: string;
+};
+
+export type SdsHandoffRef = PermitHandoffFact & {
+  document_id: string;
+  document_name: string;
 };
 
 export type SdsReview = {
