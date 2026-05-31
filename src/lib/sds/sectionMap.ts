@@ -25,8 +25,26 @@ type HeadingMatch = {
   lineEnd: number;
 };
 
-const SECTION_HEADING_RE = /^(?:section|sec\.?)\s*(0?[1-9]|1[0-6])(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
+const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?:\s*[:.)-]+\s*|\s+)(.+)$/i;
 const MIN_USEFUL_SECTION_TEXT_LENGTH = 24;
+const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
+  1: /\bidentification\b/i,
+  2: /\bhazards?\b|\bhazard\(s\)\b/i,
+  3: /\bcomposition\b|\bingredients?\b/i,
+  4: /\bfirst[- ]aid\b/i,
+  5: /\bfire[- ]fighting\b|\bfirefighting\b/i,
+  6: /\baccidental release\b|\brelease measures\b/i,
+  7: /\bhandling\b|\bstorage\b/i,
+  8: /\bexposure controls?\b|\bpersonal protection\b/i,
+  9: /\bphysical\b|\bchemical properties\b/i,
+  10: /\bstability\b|\breactivity\b/i,
+  11: /\btoxicological\b|\btoxicology\b/i,
+  12: /\becological\b|\becology\b/i,
+  13: /\bdisposal\b/i,
+  14: /\btransport\b/i,
+  15: /\bregulatory\b|\bregulation\b/i,
+  16: /\bother information\b/i,
+};
 
 export function normalizeText(text: string): string {
   return text
@@ -82,9 +100,9 @@ function findSectionHeadings(text: string): HeadingMatch[] {
 
   for (const line of text.split("\n")) {
     const headingMatch = line.match(SECTION_HEADING_RE);
-    if (headingMatch) {
+    if (headingMatch && isSdsSectionHeading(Number(headingMatch[2]), headingMatch[3], Boolean(headingMatch[1]))) {
       matches.push({
-        sectionNumber: Number(headingMatch[1]),
+        sectionNumber: Number(headingMatch[2]),
         lineStart: offset,
         lineEnd: offset + line.length,
       });
@@ -93,6 +111,14 @@ function findSectionHeadings(text: string): HeadingMatch[] {
   }
 
   return matches.sort((a, b) => a.lineStart - b.lineStart);
+}
+
+function isSdsSectionHeading(sectionNumber: number, headingText: string, hasSectionPrefix: boolean): boolean {
+  if (hasSectionPrefix) {
+    return true;
+  }
+
+  return NUMERIC_HEADING_KEYWORDS[sectionNumber].test(headingText);
 }
 
 function extractSectionText(text: string, matches: HeadingMatch[], match: HeadingMatch): string {

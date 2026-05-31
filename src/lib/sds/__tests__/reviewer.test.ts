@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createSdsDocument, reviewSdsDocument, reviewSdsInputs } from "../reviewer";
+import { mapSdsSections } from "../sectionMap";
+
+const REVIEW_AS_OF_DATE = new Date("2026-05-30T00:00:00Z");
 
 const COMPLETE_SDS_TEXT = `
 Section 1: Identification
@@ -66,14 +69,26 @@ Section 16: Other information
 Prepared by EHS. Revision date: January 3, 2025.
 `;
 
-function reviewText(text: string, runId = "run_review") {
+function reviewText(text: string, runId = "run_review", asOfDate = REVIEW_AS_OF_DATE) {
   const document = createSdsDocument({ name: "Solvent Blend 42 SDS", type: "sds", text }, runId, 0);
-  return reviewSdsDocument(document);
+  return reviewSdsDocument(document, { asOfDate });
 }
 
 function withoutSection(text: string, sectionNumber: number) {
   const nextSection = sectionNumber + 1;
   return text.replace(new RegExp(`\\nSection ${sectionNumber}:[\\s\\S]*?(?=\\nSection ${nextSection}:)`, "m"), "");
+}
+
+function withoutRevisionDates(text: string) {
+  return text
+    .replace("Revision date: January 3, 2025.", "")
+    .replace("Prepared by EHS. Revision date: January 3, 2025.", "Prepared by EHS compliance team.");
+}
+
+function numericOnlyHeadings(text: string) {
+  return text.replace(/^Section (\d+): (.+)$/gm, (_line, number, heading) => {
+    return Number(number) % 2 === 0 ? `${number} ${heading}` : `${number}. ${heading}`;
+  });
 }
 
 describe("reviewSdsDocument", () => {
@@ -89,6 +104,7 @@ describe("reviewSdsDocument", () => {
     expect(review.quality_findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          id: "run_review_sds_1_quality_all_sections_found",
           severity: "info",
           category: "section_completeness",
           title: "All 16 SDS sections found",
@@ -104,6 +120,17 @@ describe("reviewSdsDocument", () => {
         "fire_spill_disposal",
         "transport",
         "california_ehs_implication",
+      ]),
+    );
+    expect(review.safety_findings.map((finding) => finding.id)).toEqual(
+      expect.arrayContaining([
+        "run_review_sds_1_safety_hazard_identification",
+        "run_review_sds_1_safety_composition",
+        "run_review_sds_1_safety_handling_storage",
+        "run_review_sds_1_safety_ppe_exposure",
+        "run_review_sds_1_safety_fire_spill_disposal",
+        "run_review_sds_1_safety_transport",
+        "run_review_sds_1_safety_california_ehs_implication",
       ]),
     );
     expect(review.permit_handoff_facts.map((fact) => fact.field)).toEqual(
@@ -171,6 +198,36 @@ describe("reviewSdsDocument", () => {
     );
   });
 
+  it("uses the provided as-of date for deterministic stale revision decisions", () => {
+    const review = reviewText(COMPLETE_SDS_TEXT, "run_future", new Date("2029-01-04T00:00:00Z"));
+
+    expect(review.overall_status).toBe("stale");
+    expect(review.quality_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "run_future_sds_1_quality_revision_date_stale",
+          category: "freshness",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when no revision, prepared, or issue date is found", () => {
+    const review = reviewText(withoutRevisionDates(COMPLETE_SDS_TEXT), "run_no_revision");
+
+    expect(review.overall_status).toBe("complete");
+    expect(review.quality_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "run_no_revision_sds_1_quality_revision_date_missing",
+          severity: "warning",
+          category: "freshness",
+          title: "Revision date not found",
+        }),
+      ]),
+    );
+  });
+
   it("marks empty extracted PDF text that needs pasted text as unreadable", () => {
     const document = createSdsDocument(
       {
@@ -220,6 +277,56 @@ describe("reviewSdsDocument", () => {
         quote: expect.stringContaining("California Proposition 65"),
       }),
     );
+  });
+
+  it("marks duplicate section headings as ambiguous and requires expert review", () => {
+    const duplicateSection8Text = COMPLETE_SDS_TEXT.replace(
+      "Section 8: Exposure controls/personal protection",
+      "Section 8: Exposure controls/personal protection\nDuplicate exposure control note.\n\nSection 8: Exposure controls/personal protection",
+    );
+    const review = reviewText(duplicateSection8Text, "run_ambiguous");
+    const section8 = review.section_map.sections.find((section) => section.section_number === 8);
+
+    expect(review.overall_status).toBe("needs_expert_review");
+    expect(section8).toEqual(expect.objectContaining({ status: "ambiguous", confidence: 0.5 }));
+    expect(review.quality_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "run_ambiguous_sds_1_quality_ambiguous_or_merged_sections",
+          severity: "warning",
+          category: "section_completeness",
+          title: "Ambiguous or merged SDS sections",
+        }),
+      ]),
+    );
+  });
+
+  it("does not emit permit handoff facts without a matching source quote", () => {
+    const noVocText = COMPLETE_SDS_TEXT.replace(
+      "Flash point: -4 F. VOC content: 620 g/L. Vapor pressure: 180 mmHg at 20 C.",
+      "Boiling range: 56 C to 111 C. Appearance: clear liquid.",
+    );
+    const review = reviewText(noVocText, "run_no_voc");
+
+    expect(review.permit_handoff_facts.map((fact) => fact.field)).not.toContain("voc_air_emissions_review");
+  });
+});
+
+describe("mapSdsSections", () => {
+  it("maps numeric-only SDS headings with dots or whitespace", () => {
+    const numericText = numericOnlyHeadings(COMPLETE_SDS_TEXT);
+
+    expect(numericText).toMatch(/^1\. Identification/m);
+    expect(numericText).toMatch(/^2 Hazard\(s\) identification/m);
+
+    const sectionMap = mapSdsSections("numeric_doc", numericText);
+
+    expect(sectionMap.sections).toHaveLength(16);
+    expect(sectionMap.sections.every((section) => section.status === "present")).toBe(true);
+    expect(sectionMap.sections.find((section) => section.section_number === 1)?.text).toContain(
+      "Product identifier",
+    );
+    expect(sectionMap.sections.find((section) => section.section_number === 2)?.text).toContain("Danger");
   });
 });
 
