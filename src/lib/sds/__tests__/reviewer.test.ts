@@ -556,6 +556,57 @@ describe("reviewSdsDocument", () => {
       "hazardous_waste_review",
     );
   });
+
+  it("preserves short rule-term split body evidence for safety and handoff review", () => {
+    const nitrileGlovesText = replaceSectionBlock(COMPLETE_SDS_TEXT, 8, "Section 8:\nNitrile gloves\n");
+    const wearGlovesText = replaceSectionBlock(COMPLETE_SDS_TEXT, 8, "Section 8:\nWear nitrile gloves\n");
+    const vocText = replaceSectionBlock(COMPLETE_SDS_TEXT, 9, "Section 9:\nVOC content 620 g/L\n");
+    const storageText = replaceSectionBlock(
+      COMPLETE_SDS_TEXT,
+      7,
+      "Section 7:\nFlammable liquid storage cabinet\n",
+    );
+    const nitrileReview = reviewText(nitrileGlovesText, "run_short_nitrile");
+    const wearReview = reviewText(wearGlovesText, "run_short_wear_nitrile");
+    const vocReview = reviewText(vocText, "run_short_voc");
+    const storageReview = reviewText(storageText, "run_short_storage");
+
+    expect(nitrileReview.section_map.sections.find((section) => section.section_number === 8)).toEqual(
+      expect.objectContaining({ status: "present", text: "Nitrile gloves" }),
+    );
+    expect(nitrileReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "ppe_exposure",
+          quote: "Nitrile gloves",
+        }),
+      ]),
+    );
+
+    expect(wearReview.section_map.sections.find((section) => section.section_number === 8)).toEqual(
+      expect.objectContaining({ status: "present", text: "Wear nitrile gloves" }),
+    );
+    expect(wearReview.safety_findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "ppe_exposure",
+          quote: "Wear nitrile gloves",
+        }),
+      ]),
+    );
+
+    expect(vocReview.section_map.sections.find((section) => section.section_number === 9)).toEqual(
+      expect.objectContaining({ status: "present", text: "VOC content 620 g/L" }),
+    );
+    expect(vocReview.permit_handoff_facts.map((fact) => fact.field)).toContain("voc_air_emissions_review");
+
+    expect(storageReview.section_map.sections.find((section) => section.section_number === 7)).toEqual(
+      expect.objectContaining({ status: "present", text: "Flammable liquid storage cabinet" }),
+    );
+    expect(storageReview.permit_handoff_facts.map((fact) => fact.field)).toContain(
+      "flammable_liquid_storage_review",
+    );
+  });
 });
 
 describe("mapSdsSections", () => {
@@ -613,6 +664,68 @@ describe("mapSdsSections", () => {
       "California Proposition 65",
     );
   });
+
+  it.each([
+    [
+      "8 .2 Exposure controls",
+      8,
+      "Use chemical splash goggles, nitrile gloves, and local exhaust ventilation.",
+      "8 .2 Exposure controls\nUse chemical splash goggles, nitrile gloves, and local exhaust ventilation.",
+    ],
+    [
+      "Section 8 .2 Exposure controls",
+      8,
+      "Use chemical splash goggles, nitrile gloves, and local exhaust ventilation.",
+      "Section 8 .2 Exposure controls\nUse chemical splash goggles, nitrile gloves, and local exhaust ventilation.",
+    ],
+    [
+      "9 .1 Physical state",
+      9,
+      "Flash point: -4 F. VOC content: 620 g/L. Vapor pressure: 180 mmHg at 20 C.",
+      "9 .1 Physical state\nFlash point: -4 F. VOC content: 620 g/L. Vapor pressure: 180 mmHg at 20 C.",
+    ],
+    [
+      "Section 9 .1 Physical state",
+      9,
+      "Flash point: -4 F. VOC content: 620 g/L. Vapor pressure: 180 mmHg at 20 C.",
+      "Section 9 .1 Physical state\nFlash point: -4 F. VOC content: 620 g/L. Vapor pressure: 180 mmHg at 20 C.",
+    ],
+    [
+      "10 .1 Reactivity",
+      10,
+      "Stable under recommended storage conditions.",
+      "10 .1 Reactivity\nStable under recommended storage conditions.",
+    ],
+    [
+      "Section 10 .1 Reactivity",
+      10,
+      "Stable under recommended storage conditions.",
+      "Section 10 .1 Reactivity\nStable under recommended storage conditions.",
+    ],
+    [
+      "15 .1 Regulatory information",
+      15,
+      "California Proposition 65: This product contains toluene known to the State of California to cause birth defects.",
+      "15 .1 Regulatory information\nCalifornia Proposition 65: This product contains toluene known to the State of California to cause birth defects.",
+    ],
+    [
+      "Section 15 .1 Regulatory information",
+      15,
+      "California Proposition 65: This product contains toluene known to the State of California to cause birth defects.",
+      "Section 15 .1 Regulatory information\nCalifornia Proposition 65: This product contains toluene known to the State of California to cause birth defects.",
+    ],
+  ])(
+    "does not treat OCR-spaced decimal subsection %s as a top-level heading",
+    (subsectionLine, sectionNumber, target, replacement) => {
+      const subsectionText = COMPLETE_SDS_TEXT.replace(target, replacement);
+      const sectionMap = mapSdsSections("spaced_decimal_doc", subsectionText);
+      const section = sectionMap.sections.find((candidate) => candidate.section_number === sectionNumber);
+
+      expect(section).toEqual(expect.objectContaining({ status: "present" }));
+      expect(section?.text).toContain(subsectionLine);
+      expect(section?.text).toContain(String(target));
+    },
+  );
 
   it("preserves later body text when duplicate same-number headings are ambiguous", () => {
     const duplicateSection8Text = COMPLETE_SDS_TEXT.replace(

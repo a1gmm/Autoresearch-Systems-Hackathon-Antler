@@ -27,7 +27,8 @@ type HeadingMatch = {
   inlineHeadingText: string;
 };
 
-const SECTION_HEADING_RE = /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?!(?:\.\d))(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
+const SECTION_HEADING_RE =
+  /^(?:(section|sec\.?)\s*)?(0?[1-9]|1[0-6])(?!(?:\s*\.\s*\d))(?:\s*[:.)-]+\s*|\s+)(.*)$/i;
 const MIN_USEFUL_SECTION_TEXT_LENGTH = 24;
 const SPLIT_TITLE_LINES = new Set([
   ...Object.values(SDS_SECTION_HEADINGS),
@@ -47,7 +48,7 @@ const TITLE_METADATA_LINE_RE =
 const BODY_ACTION_LINE_RE =
   /\b(?:required|use|wear|store|dispose(?:\s+of)?|prevent|avoid|eliminate|absorb|keep away|causes?|may cause|highly|danger|warning|harmful)\b/i;
 const BODY_EVIDENCE_LINE_RE =
-  /\b(?:danger|warning|highly|causes?|may cause|harmful|flammable liquid|local exhaust ventilation|required|prevent|contain spill|avoid|eliminate|absorb|dispose(?:\s+of)?|wear|use|store|keep away|hazardous waste|storm drains?|waterways?)\b/i;
+  /\b(?:danger|warning|highly|causes?|may cause|harmful|flammable liquid storage cabinet|flammable liquid|local exhaust ventilation|nitrile gloves|voc content|required|prevent|contain spill|avoid|eliminate|absorb|dispose(?:\s+of)?|wear|use|store|keep away|hazardous waste|storm drains?|waterways?)\b/i;
 const NUMERIC_HEADING_KEYWORDS: Record<number, RegExp> = {
   1: /\bidentification\b/i,
   2: /\bhazards?\b|\bhazard\(s\)\b/i,
@@ -217,11 +218,15 @@ function getSectionStatus(matchCount: number, text: string): SdsSectionStatus {
     return "ambiguous";
   }
 
-  if (text.length < MIN_USEFUL_SECTION_TEXT_LENGTH) {
+  if (text.length < MIN_USEFUL_SECTION_TEXT_LENGTH && !hasBodyEvidenceText(text)) {
     return "merged";
   }
 
   return "present";
+}
+
+function hasBodyEvidenceText(text: string): boolean {
+  return BODY_EVIDENCE_LINE_RE.test(text);
 }
 
 function confidenceForStatus(status: SdsSectionStatus): number {
