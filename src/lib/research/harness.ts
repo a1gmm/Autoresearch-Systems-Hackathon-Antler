@@ -2,15 +2,15 @@ import type { AgentRole, HarnessToolId } from "./toolCatalog";
 import { getTool, isToolScopedToRole } from "./toolCatalog";
 
 export type HarnessCall = {
-  tool_id: HarnessToolId;
-  ts: string;
+  readonly tool_id: HarnessToolId;
+  readonly ts: string;
 };
 
 export type HarnessContext = {
-  role: AgentRole;
+  readonly role: AgentRole;
   allowed_tools: readonly HarnessToolId[];
   blocked_tools: readonly HarnessToolId[];
-  calls: HarnessCall[];
+  readonly calls: readonly HarnessCall[];
   callTool: (toolId: HarnessToolId) => void;
 };
 
@@ -26,6 +26,7 @@ export function createHarnessContext(input: {
   allowed_tools: readonly HarnessToolId[];
   blocked_tools: readonly HarnessToolId[];
 }): HarnessContext {
+  const role = input.role;
   const calls: HarnessCall[] = [];
   const allowedTools = Object.freeze([...input.allowed_tools]);
   const blockedTools = Object.freeze([...input.blocked_tools]);
@@ -33,12 +34,14 @@ export function createHarnessContext(input: {
   const blockedToolSet = new Set(input.blocked_tools);
 
   return {
-    role: input.role,
+    role,
     allowed_tools: allowedTools,
     blocked_tools: blockedTools,
-    calls,
+    get calls() {
+      return Object.freeze(calls.map((call) => ({ ...call })));
+    },
     callTool(toolId: HarnessToolId) {
-      assertToolAllowed(input.role, toolId, allowedToolSet, blockedToolSet);
+      assertToolAllowed(role, toolId, allowedToolSet, blockedToolSet);
       calls.push({ tool_id: toolId, ts: new Date().toISOString() });
     }
   };

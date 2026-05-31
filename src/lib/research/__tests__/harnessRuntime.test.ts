@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createHarnessContext, HarnessToolScopeError } from "../harness";
-import { type HarnessToolId, sdsReviewerToolIds } from "../toolCatalog";
+import { createHarnessContext, type HarnessCall, HarnessToolScopeError } from "../harness";
+import { type AgentRole, type HarnessToolId, sdsReviewerToolIds } from "../toolCatalog";
 
 describe("harness runtime scope", () => {
   it("allows SDS reviewer tools and records calls in order", () => {
@@ -79,11 +79,66 @@ describe("harness runtime scope", () => {
     expect(() => harness.callTool("build_applicability_matrix")).toThrow(HarnessToolScopeError);
     expect(harness.calls).toEqual([]);
   });
+
+  it("does not let input role mutation alter enforcement", () => {
+    const input: {
+      role: AgentRole;
+      allowed_tools: HarnessToolId[];
+      blocked_tools: HarnessToolId[];
+    } = {
+      role: "sds_reviewer",
+      allowed_tools: ["build_applicability_matrix"],
+      blocked_tools: []
+    };
+    const harness = createHarnessContext(input);
+
+    input.role = "synthesizer";
+
+    expect(harness.role).toBe("sds_reviewer");
+    expect(() => harness.callTool("build_applicability_matrix")).toThrow(HarnessToolScopeError);
+    expect(harness.calls).toEqual([]);
+  });
+
+  it("does not let calls snapshots erase or forge the audit log", () => {
+    const harness = createHarnessContext({
+      role: "sds_reviewer",
+      allowed_tools: ["map_sds_sections"],
+      blocked_tools: []
+    });
+
+    harness.callTool("map_sds_sections");
+    tryEraseCalls(harness.calls);
+
+    expect(harness.calls.map((call) => call.tool_id)).toEqual(["map_sds_sections"]);
+
+    tryForgeCall(harness.calls, {
+      tool_id: "emit_permit_handoff_facts",
+      ts: "2026-05-31T00:00:00.000Z"
+    });
+
+    expect(harness.calls.map((call) => call.tool_id)).toEqual(["map_sds_sections"]);
+  });
 });
 
 function tryMutateTools(tools: readonly HarnessToolId[], toolId: HarnessToolId) {
   try {
     (tools as HarnessToolId[]).push(toolId);
+  } catch {
+    // Frozen snapshots are acceptable; the assertion is that enforcement is unchanged.
+  }
+}
+
+function tryEraseCalls(calls: readonly HarnessCall[]) {
+  try {
+    (calls as HarnessCall[]).splice(0, calls.length);
+  } catch {
+    // Frozen snapshots are acceptable; the assertion is that enforcement is unchanged.
+  }
+}
+
+function tryForgeCall(calls: readonly HarnessCall[], call: HarnessCall) {
+  try {
+    (calls as HarnessCall[]).push(call);
   } catch {
     // Frozen snapshots are acceptable; the assertion is that enforcement is unchanged.
   }

@@ -84,6 +84,9 @@ describe("harness tool catalog", () => {
       expect.arrayContaining(["build_applicability_matrix", "verify_determination", "freshness_sweep"])
     );
     expect(allowedTools).not.toContain("build_applicability_matrix");
+    expect(allowedTools).not.toContain("get_form");
+    expect(allowedTools).not.toContain("generate_compliance_calendar");
+    expect(allowedTools).not.toContain("assemble_review_package");
     expect(isToolScopedToRole("emit_permit_handoff_facts", "researcher")).toBe(false);
   });
 
