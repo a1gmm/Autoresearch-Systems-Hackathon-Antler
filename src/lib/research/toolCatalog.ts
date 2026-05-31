@@ -5,6 +5,7 @@ export type AgentRole =
   | "researcher"
   | "verifier"
   | "synthesizer"
+  | "sds_reviewer"
   | "discovery"
   | "system"
   | "all";
@@ -15,6 +16,7 @@ export type ToolCategory =
   | "retrieval_currency"
   | "verification_defensibility"
   | "discovery"
+  | "sds_review"
   | "output_compliance"
   | "harness_control";
 
@@ -25,6 +27,9 @@ export type ToolWriteTarget =
   | "extractions"
   | "verification_records"
   | "determinations"
+  | "sds_documents"
+  | "sds_reviews"
+  | "permit_handoff_facts"
   | "staging"
   | "audit_log"
   | "fetched_sources_and_determinations";
@@ -288,6 +293,70 @@ export const harnessToolCatalog = [
     safetyCritical: true
   },
   {
+    id: "parse_sds_text",
+    category: "sds_review",
+    description: "Parse uploaded safety data sheet text into a normalized SDS document artifact.",
+    writes: "sds_documents",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
+    id: "map_sds_sections",
+    category: "sds_review",
+    description: "Map parsed safety data sheet content to canonical SDS section identifiers.",
+    writes: "sds_reviews",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
+    id: "validate_sds_section_completeness",
+    category: "sds_review",
+    description: "Check required safety data sheet sections for missing or incomplete review-critical content.",
+    writes: "sds_reviews",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
+    id: "extract_sds_hazard_fields",
+    category: "sds_review",
+    description: "Extract hazard classifications, signal words, pictograms, and related SDS hazard facts.",
+    writes: "sds_reviews",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
+    id: "extract_sds_storage_fields",
+    category: "sds_review",
+    description: "Extract handling, storage, incompatibility, and exposure-control facts from SDS content.",
+    writes: "sds_reviews",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
+    id: "extract_sds_disposal_transport_fields",
+    category: "sds_review",
+    description: "Extract disposal, transport, regulatory, and spill-response facts from SDS content.",
+    writes: "sds_reviews",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
+    id: "flag_sds_inconsistencies",
+    category: "sds_review",
+    description: "Flag SDS contradictions, missing determinative fields, and review handoff warnings.",
+    writes: "sds_reviews",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
+    id: "emit_permit_handoff_facts",
+    category: "sds_review",
+    description: "Emit candidate SDS-derived handoff facts without writing final permit determinations.",
+    writes: "permit_handoff_facts",
+    scopedTo: ["sds_reviewer"],
+    safetyCritical: true
+  },
+  {
     id: "send_message",
     category: "harness_control",
     description: "Emit a controlled status message to the run UI or human-review channel without changing legal determinations.",
@@ -374,6 +443,32 @@ export const blockedResearcherToolIds = [
   "propose_form_entry"
 ] as const satisfies readonly HarnessToolId[];
 
+export const sdsReviewerCoreToolIds = [
+  "parse_sds_text",
+  "map_sds_sections",
+  "validate_sds_section_completeness",
+  "extract_sds_hazard_fields",
+  "extract_sds_storage_fields",
+  "extract_sds_disposal_transport_fields",
+  "flag_sds_inconsistencies",
+  "emit_permit_handoff_facts"
+] as const satisfies readonly HarnessToolId[];
+
+export const blockedSdsReviewerToolIds = [
+  "get_form",
+  "fetch_source",
+  "prove_currency",
+  "extract_threshold",
+  "verify_determination",
+  "verify_determination_set",
+  "build_applicability_matrix",
+  "generate_compliance_calendar",
+  "assemble_review_package",
+  "freshness_sweep",
+  "propose_map_entry",
+  "propose_form_entry"
+] as const satisfies readonly HarnessToolId[];
+
 export function toolIdsForRole(role: AgentRole): HarnessToolId[] {
   return harnessToolCatalog
     .filter((tool) => isToolScopedToRole(tool.id, role))
@@ -397,9 +492,16 @@ export function researchWorkerToolIds(): HarnessToolId[] {
   return uniqueToolIds([...universalHarnessToolIds, ...researcherCoreToolIds]);
 }
 
+export function sdsReviewerToolIds(): HarnessToolId[] {
+  return uniqueToolIds([...universalHarnessToolIds, ...sdsReviewerCoreToolIds]);
+}
+
 export function blockedToolIdsForRole(role: AgentRole): HarnessToolId[] {
   if (role === "researcher") {
     return [...blockedResearcherToolIds];
+  }
+  if (role === "sds_reviewer") {
+    return [...blockedSdsReviewerToolIds];
   }
   return [];
 }

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { seededComplexScope } from "../fixtures/scenarios";
 import { planResearch } from "../planner";
 import {
+  blockedToolIdsForRole,
   harnessToolCatalog,
   isToolScopedToRole,
   researchWorkerToolIds,
+  sdsReviewerToolIds,
   subagentControlToolIds,
   toolIdsForRole,
   universalHarnessToolIds
@@ -55,6 +57,33 @@ describe("harness tool catalog", () => {
     expect(workerTools.every((toolId) => researcherTools.includes(toolId))).toBe(true);
     expect(workerTools).not.toContain("get_form");
     expect(workerTools).not.toContain("build_applicability_matrix");
+  });
+
+  it("scopes SDS reviewers to SDS artifact tools plus universal harness tools", () => {
+    const sdsReviewerTools = toolIdsForRole("sds_reviewer");
+    const allowedTools = sdsReviewerToolIds();
+    const blockedTools = blockedToolIdsForRole("sds_reviewer");
+
+    expect(allowedTools).toEqual(
+      expect.arrayContaining([
+        "parse_sds_text",
+        "map_sds_sections",
+        "validate_sds_section_completeness",
+        "extract_sds_hazard_fields",
+        "extract_sds_storage_fields",
+        "extract_sds_disposal_transport_fields",
+        "flag_sds_inconsistencies",
+        "emit_permit_handoff_facts",
+        "log_step",
+        "validate_artifact_schema"
+      ])
+    );
+    expect(allowedTools.every((toolId) => sdsReviewerTools.includes(toolId))).toBe(true);
+    expect(blockedTools).toEqual(
+      expect.arrayContaining(["build_applicability_matrix", "verify_determination", "freshness_sweep"])
+    );
+    expect(allowedTools).not.toContain("build_applicability_matrix");
+    expect(isToolScopedToRole("emit_permit_handoff_facts", "researcher")).toBe(false);
   });
 
   it("rejects tools outside a role scope", () => {
