@@ -65,11 +65,12 @@ function matchingSdsHandoffFacts(
   }
 
   const requirement = determination.requirement.toLowerCase();
-  const fieldMatches = fieldsForRequirement(hypothesis, requirement);
+  const trigger = determination.trigger.toLowerCase();
+  const fieldMatches = fieldsForRequirement(hypothesis, requirement, trigger);
   return facts.filter((fact) => fieldMatches.has(fact.field));
 }
 
-function fieldsForRequirement(hypothesis: ResearchHypothesis, requirement: string) {
+function fieldsForRequirement(hypothesis: ResearchHypothesis, requirement: string, trigger: string) {
   if (hypothesis.id === "H-HAZMAT-HMBP" || requirement.includes("hmbp") || requirement.includes("hazardous material")) {
     return new Set([
       "hazardous_material_inventory_review",
@@ -83,14 +84,15 @@ function fieldsForRequirement(hypothesis: ResearchHypothesis, requirement: strin
     return new Set(["hazardous_waste_review", "california_ehs_review"]);
   }
 
-  if (hypothesis.family === "air" || requirement.includes("voc") || requirement.includes("scaqmd")) {
+  const combinedText = `${requirement} ${trigger}`;
+  if (hasAny(combinedText, ["voc", "air emissions", "emitting", "emissions", "permit to construct", "permit to operate"])) {
     const fields = new Set(["voc_air_emissions_review"]);
 
-    if (hasAny(requirement, ["storage", "flammable"])) {
+    if (hasAny(combinedText, ["storage", "flammable"])) {
       fields.add("flammable_liquid_storage_review");
     }
 
-    if (hasAny(requirement, ["california", "ehs", "cupa", "dtsc", "title 22"])) {
+    if (hasAny(combinedText, ["california", "ehs", "cupa", "dtsc", "title 22"])) {
       fields.add("california_ehs_review");
     }
 
