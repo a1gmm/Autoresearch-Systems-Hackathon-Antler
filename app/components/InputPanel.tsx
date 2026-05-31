@@ -17,7 +17,7 @@ export function InputPanel() {
   const error = useStore((s) => s.runError);
   return (
     <aside className="w-80 p-4 border-r border-slate-800/60 bg-slate-900/80 backdrop-blur-sm overflow-y-auto flex flex-col gap-3.5">
-      <ScenarioButtons />
+      <ScenarioButtons disabled={sdsUploadBusy} demoDocuments={sdsDocuments} />
       <div className="flex flex-col gap-1.5">
         <div className="brand-label">
           Or describe a project

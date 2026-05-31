@@ -22,6 +22,8 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   const [sdsUploadBusy, setSdsUploadBusy] = useState(false);
   const sdsUploadBusyRef = useRef(false);
   const [pendingProjectDescription, setPendingProjectDescription] = useState<string | null>(null);
+  const runQueuedRef = useRef(false);
+  const runStartedRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
@@ -38,6 +40,8 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   }
 
   function startCompletedRun(projectDescription: string) {
+    if (runStartedRef.current) return;
+    runStartedRef.current = true;
     onStarted();
     void startRun({
       project_description: projectDescription,
@@ -60,6 +64,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
       }
       if (data.complete) {
         if (sdsUploadBusyRef.current) {
+          runQueuedRef.current = true;
           setPendingProjectDescription(data.project_description);
         } else {
           startCompletedRun(data.project_description);
@@ -88,6 +93,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   useEffect(() => {
     if (!pendingProjectDescription || sdsUploadBusy) return;
     const projectDescription = pendingProjectDescription;
+    runQueuedRef.current = false;
     setPendingProjectDescription(null);
     startCompletedRun(projectDescription);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,12 +101,14 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
 
   function handleSend() {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || runQueuedRef.current || runStartedRef.current) return;
     const history: ChatMessage[] = [...messages, { role: "user", content: text }];
     setMessages(history);
     setInput("");
     void send(history);
   }
+
+  const completionPending = pendingProjectDescription !== null;
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4 text-slate-100" style={{ background: "#05070b" }}>
@@ -208,13 +216,13 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
             onKeyDown={(event) => {
               if (event.key === "Enter") handleSend();
             }}
-            disabled={busy}
+            disabled={busy || completionPending}
           />
           <button
             type="button"
             aria-label="Send message"
             onClick={handleSend}
-            disabled={busy || input.trim().length === 0}
+            disabled={busy || completionPending || input.trim().length === 0}
             className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-30 transition-all duration-200 border-0 cursor-pointer hover:shadow-glow disabled:cursor-default"
           >
             <Send size={16} />

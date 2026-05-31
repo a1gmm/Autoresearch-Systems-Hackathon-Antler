@@ -26,10 +26,6 @@ vi.mock("@/lib/ui/store", () => ({
     })
 }));
 
-vi.mock("../ScenarioButtons", () => ({
-  ScenarioButtons: () => null
-}));
-
 vi.mock("../MissingFactsCard", () => ({
   MissingFactsCard: () => null
 }));
@@ -85,5 +81,58 @@ describe("InputPanel", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^Run$/i })).toBeEnabled();
     });
+  });
+
+  it("disables scenario starts while SDS extraction is pending and includes SDS after extraction", async () => {
+    let resolveExtraction: (value: Awaited<ReturnType<typeof extractSdsTextFromClientFile>>) => void;
+    mockExtractSdsTextFromClientFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveExtraction = resolve;
+      })
+    );
+    render(<InputPanel />);
+
+    const scenarioButton = screen.getByRole("button", {
+      name: /Complex SoCal Manufacturing/i
+    });
+    expect(scenarioButton).toBeEnabled();
+
+    const file = new File(["Section 1"], "scenario-sds.txt", {
+      type: "text/plain"
+    });
+    fireEvent.change(screen.getByLabelText("Upload SDS"), {
+      target: { files: [file] }
+    });
+
+    await waitFor(() => {
+      expect(scenarioButton).toBeDisabled();
+    });
+
+    fireEvent.click(scenarioButton);
+    expect(startRun).not.toHaveBeenCalled();
+
+    resolveExtraction!({
+      name: "scenario-sds.txt",
+      source_type: "pasted_text",
+      text: "Section 1",
+      text_extraction_status: "ok"
+    });
+
+    await waitFor(() => {
+      expect(scenarioButton).toBeEnabled();
+    });
+
+    fireEvent.click(scenarioButton);
+
+    expect(startRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        demo_documents: [
+          expect.objectContaining({
+            name: "scenario-sds.txt",
+            text: "Section 1"
+          })
+        ]
+      })
+    );
   });
 });

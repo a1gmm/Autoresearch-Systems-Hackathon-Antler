@@ -3,10 +3,17 @@ import { SCENARIOS } from "@/lib/ui/scenarios";
 import { useStore } from "@/lib/ui/store";
 import { Zap } from "lucide-react";
 import { motion } from "framer-motion";
+import type { ResearchRunInput } from "@/lib/research/types";
 
-export function ScenarioButtons() {
+type Props = {
+  disabled?: boolean;
+  demoDocuments?: ResearchRunInput["demo_documents"];
+};
+
+export function ScenarioButtons({ disabled = false, demoDocuments }: Props) {
   const startRun = useStore((s) => s.startRun);
   const isRunning = useStore((s) => s.isRunning);
+  const scenarioDisabled = isRunning || disabled;
   return (
     <div className="flex flex-col gap-2">
       <div className="brand-label" style={{ fontSize: 11 }}>
@@ -15,8 +22,11 @@ export function ScenarioButtons() {
       {SCENARIOS.map((s, i) => (
         <motion.button
           key={s.id}
-          disabled={isRunning}
-          onClick={() => startRun(s.payload)}
+          disabled={scenarioDisabled}
+          onClick={() => {
+            if (scenarioDisabled) return;
+            startRun({ ...s.payload, demo_documents: demoDocuments ?? s.payload.demo_documents });
+          }}
           className="p-3 glass rounded-xl text-left text-slate-100 transition-all duration-200 disabled:opacity-40 disabled:cursor-wait cursor-pointer hover:bg-slate-800/80 group border-0"
           initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0 }}

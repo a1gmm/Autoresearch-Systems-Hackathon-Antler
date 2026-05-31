@@ -256,6 +256,102 @@ describe("IntakeChat", () => {
       });
     });
   });
+
+  it("does not send another intake message while completed run waits for SDS extraction", async () => {
+    let resolveExtraction: (value: Awaited<ReturnType<typeof extractSdsTextFromClientFile>>) => void;
+    const finalResponse = deferred<Response>();
+    const onStarted = vi.fn();
+    const onSkip = vi.fn();
+    mockExtractSdsTextFromClientFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveExtraction = resolve;
+      })
+    );
+
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: vi.fn()
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce(
+          jsonResponse({
+            complete: false,
+            message: "Describe the project."
+          })
+        )
+        .mockReturnValueOnce(finalResponse.promise)
+    );
+
+    render(<IntakeChat onStarted={onStarted} onSkip={onSkip} />);
+
+    expect(await screen.findByText("Describe the project.")).toBeInTheDocument();
+
+    const file = new File(["Section 1"], "queued-sds.txt", {
+      type: "text/plain"
+    });
+    fireEvent.change(screen.getByLabelText("Upload SDS"), {
+      target: { files: [file] }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Extracting")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Type your answer…"), {
+      target: { value: "We use a solvent." }
+    });
+    fireEvent.click(screen.getByLabelText("Send message"));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    finalResponse.resolve(
+      jsonResponse({
+        complete: true,
+        project_description: "We use a solvent.",
+        facts: {}
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText(/thinking/)).not.toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText("Type your answer…");
+    expect(input).toBeDisabled();
+    expect(screen.getByLabelText("Send message")).toBeDisabled();
+
+    fireEvent.change(input, {
+      target: { value: "Another answer" }
+    });
+    fireEvent.click(screen.getByLabelText("Send message"));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(startRun).not.toHaveBeenCalled();
+
+    resolveExtraction!({
+      name: "queued-sds.txt",
+      source_type: "pasted_text",
+      text: "Section 1",
+      text_extraction_status: "ok"
+    });
+
+    await waitFor(() => {
+      expect(startRun).toHaveBeenCalledTimes(1);
+      expect(startRun).toHaveBeenCalledWith({
+        project_description: "We use a solvent.",
+        demo_documents: [
+          expect.objectContaining({
+            name: "queued-sds.txt",
+            text: "Section 1"
+          })
+        ]
+      });
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 function jsonResponse(body: IntakeChatResponse): Response {
