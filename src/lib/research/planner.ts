@@ -190,7 +190,7 @@ function hypothesisFromRegistry(
   };
 }
 
-function taskForHypothesis(hypothesis: ResearchHypothesis, jurisdiction_context?: string): ResearchTask {
+export function taskForHypothesis(hypothesis: ResearchHypothesis, jurisdiction_context?: string): ResearchTask {
   return {
     task_id: `T-${hypothesis.id.slice(2)}`,
     hypothesis_id: hypothesis.id,
