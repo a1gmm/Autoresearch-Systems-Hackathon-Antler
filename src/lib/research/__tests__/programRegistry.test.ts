@@ -26,7 +26,7 @@ describe("programRegistry", () => {
 
   it("covers every hypothesis the planner can emit", () => {
     const emitted = new Set(planResearch(maximalScope).research_graph.map((h) => h.id));
-    const covered = new Set(PROGRAM_REGISTRY.flatMap((p) => p.hypothesis_ids));
+    const covered = new Set(PROGRAM_REGISTRY.flatMap((p) => p.hypotheses.map((h) => h.id)));
     expect([...emitted].filter((h) => !covered.has(h))).toEqual([]);
   });
 

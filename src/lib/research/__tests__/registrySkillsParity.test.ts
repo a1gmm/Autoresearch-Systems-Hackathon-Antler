@@ -11,7 +11,7 @@ const SKILLS_DIR = join(HERE, "..", "skills");
 describe("registry <-> skills parity", () => {
   it("every registry hypothesis has a skill whose SKILL.md exists on disk", () => {
     for (const program of PROGRAM_REGISTRY) {
-      for (const hid of program.hypothesis_ids) {
+      for (const { id: hid } of program.hypotheses) {
         const skillId = SKILL_FOR_HYPOTHESIS[hid];
         expect(skillId, `hypothesis ${hid} (program ${program.id}) has no skill mapping`).toBeTruthy();
         expect(
