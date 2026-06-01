@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planResearch } from "../planner";
+import { planResearch, taskForHypothesis } from "../planner";
 import type { ScopePack } from "../types";
 import { scopePackFromFacts } from "../scope";
 
@@ -22,6 +22,17 @@ describe("researcher budget", () => {
     const plan = planResearch(scope);
     expect(plan.research_tasks.length).toBeGreaterThan(0);
     expect(plan.research_tasks.every((t) => t.budget.max_model_calls >= 4)).toBe(true);
+  });
+
+  it("exposes taskForHypothesis so the orchestrator can build tasks for proposed hypotheses", () => {
+    const task = taskForHypothesis({
+      id: "H-DISCOVER-1", angle_id: "A-DISCOVER-1", family: "fire_code",
+      question: "q", claim_to_test: "c", required_facts: [],
+      expected_source_type: "agency_guidance", success_criteria: [], dependencies: [],
+    });
+    expect(task.hypothesis_id).toBe("H-DISCOVER-1");
+    expect(task.assigned_agent).toBe("fire_code_researcher");
+    expect(task.allowed_tools.length).toBeGreaterThan(0);
   });
 });
 

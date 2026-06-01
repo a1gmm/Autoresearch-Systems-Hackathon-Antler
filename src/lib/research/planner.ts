@@ -264,7 +264,7 @@ function hypothesis(id: string, angle: RegulatoryAngle, question: string, claim:
   };
 }
 
-function taskForHypothesis(hypothesis: ResearchHypothesis): ResearchTask {
+export function taskForHypothesis(hypothesis: ResearchHypothesis): ResearchTask {
   return {
     task_id: `T-${hypothesis.id.slice(2)}`,
     hypothesis_id: hypothesis.id,
