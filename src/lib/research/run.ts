@@ -182,7 +182,7 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
   if (poolResult.degraded) {
     fanoutTrace.push(
       trace(run_id, "research_pool", "fanout", "needs_review",
-        `⚠ Modal unreachable — using cached fixtures (${poolResult.degraded.reason})`)
+        `⚠ Live research unavailable — failing closed to needs_review (${poolResult.degraded.reason})`)
     );
   } else {
     fanoutTrace.push(trace(run_id, "research_pool", "fanout", "done", "Research worker pool returned evidence bundles"));
