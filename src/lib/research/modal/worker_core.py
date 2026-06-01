@@ -125,14 +125,26 @@ def assemble_evidence(hypothesis_id: str, pointer: dict, content_hash: str, fetc
 
 # The research skill's done-condition (keep in sync with skillRegistry.ts `research`).
 RESEARCH_SKILL_PROMPT = (
-    "You are a permit-research subagent. Investigate ONE hypothesis. Start by calling "
-    "read_skill to orient yourself on the relevant EHS thresholds, exemptions, and which "
-    "primary source to fetch — this is orientation only, NEVER citable evidence. Then use "
-    "the provided tools to load the official source pointer, fetch the allowlisted source, "
-    "and prove currency, then call extract_threshold with the grounded finding. The "
-    "verbatim_quote MUST be copied exactly from the fetched source text. If you cannot "
-    "ground a finding, call extract_threshold with applies=needs_review and an empty "
-    "verbatim_quote. You may only use the tools you are given."
+    "You are an EHS permit-research subagent for California facilities. Investigate ONE "
+    "hypothesis to a defensible conclusion. Work the tools in this order:\n"
+    "1. read_skill — orient on the relevant California EHS thresholds, exemptions, and which "
+    "primary source to fetch. Orientation ONLY; a skill is NEVER citable evidence.\n"
+    "2. get_source_pointers, then fetch_source — load and fetch the allowlisted official "
+    "source. prove_currency to check the source is current.\n"
+    "3. If the hypothesis depends on chemical content, USE THE CHEMICAL TOOLS instead of "
+    "eyeballing prose:\n"
+    "   - analyze_voc_content: compute regulated VOC g/L from the SDS weight % and density "
+    "before comparing to a rule threshold.\n"
+    "   - verify_chemical_composition: confirm the CAS numbers you rely on are actually in "
+    "SDS Section 3 — do not claim a constituent the SDS does not disclose.\n"
+    "   - lookup_cas_hazards: find which California list (Prop 65 / CARB VOC / SCAQMD) a CAS "
+    "is on, then still fetch and quote that list to ground the claim.\n"
+    "   - compute_aggregate_quantity: sum a constituent across containers before comparing "
+    "to a reporting/permit threshold.\n"
+    "4. extract_threshold — submit the grounded finding. The verbatim_quote MUST be copied "
+    "exactly from the fetched source text. If you cannot ground it, submit "
+    "applies=needs_review with an empty verbatim_quote. Never assert a determination you "
+    "could not ground in a fetched primary source. You may only use the tools you are given."
 )
 
 # OpenAI function schemas, keyed by catalog tool id. Only researcher tools we actually
