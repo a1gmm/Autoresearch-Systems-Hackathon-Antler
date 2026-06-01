@@ -111,7 +111,7 @@ export function finalizeRun(
   // and surfaces it as a needs_review row instead of shipping the run as "complete".
   const investigatedHypotheses = new Set(plan.research_graph.map((h) => h.id));
   const proposedProgramIds = PROGRAM_REGISTRY.filter((program) =>
-    program.hypothesis_ids.some((hid) => investigatedHypotheses.has(hid)),
+    program.hypotheses.some((h) => investigatedHypotheses.has(h.id)),
   ).map((program) => program.id);
   const recall = verifyDeterminationSet(scope_pack, proposedProgramIds);
   for (const program of recall.missing) {
