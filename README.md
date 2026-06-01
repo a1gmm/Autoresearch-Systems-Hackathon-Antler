@@ -1,40 +1,91 @@
-# Autoresearch Systems Hackathon - Antler
+# PermitPilot — EHS Permit Research Swarm
 
-Home repo: https://github.com/a1gmm/Autoresearch-Systems-Hackathon-Antler
+An AI-native Environmental, Health & Safety (EHS) research system. Given a free-text
+facility or project change, it produces a **defensible regulatory applicability
+matrix**: every "this permit applies" row is backed by a current, verbatim-quoted
+primary source, and anything that can't be grounded **fails closed to human review**
+rather than guessing.
 
-This repo is the team home for the EHS Permit-Navigator hackathon project.
+Scope today: **California** (SCAQMD air, CA stormwater IGP/CGP, CA HMBP, hazardous
+waste generator status, wastewater pretreatment).
 
-## Project
+## How it works
 
-We are building an AI-native EHS research swarm that turns a facility or project change into a defensible regulatory applicability matrix.
+```
+intake (LLM, OpenAI) -> ScopePack (typed facts + missing_facts)
+        |
+        v
+planResearch  - derives the hypothesis task list from the PROGRAM REGISTRY
+        |        (single source of truth); each triggered program -> research tasks.
+        |        No hardcoded family list, no fixed angle pool.
+        v
+research pool - one agentic worker per hypothesis (real fetch over an allowlist +
+        |        LLM extraction, grounded against the fetched source). Fails closed
+        |        when the backend is unavailable; never substitutes canned results.
+        v
+verifier      - ID-agnostic mechanical checks: currency, authority, grounding
+        |        (claim quote must be a verbatim span of the source), predicate.
+        |        Confidence < 0.9 or a grounding failure -> re-dispatch the researcher
+        |        (bounded retry) until it verifies or converges to needs_review.
+        v
+completeness  - re-derives the EXPECTED program set from the registry x scope and
+        |        flags any program never investigated (the recall floor).
+        v
+synthesis     - applicability matrix; a row is "verified" only at confidence >= 0.9.
+```
 
-The demo target:
+Subagent memory is **artifact-driven**: each research result is written to an
+`ArtifactStore`, so retries and resumed runs accumulate evidence instead of
+starting cold.
 
-> Given a Southern California manufacturing change, our agent swarm determines applicable EHS obligations, proves each row with current source evidence, and visibly fails closed when evidence is incomplete.
+## Key modules (`src/lib/research/`)
 
-## Start Here
+| File | Role |
+| --- | --- |
+| `scope.ts` | LLM intake -> typed `ScopePack` (fail-closed `emptyScope`) |
+| `programRegistry.ts` | Single source of truth: one entry per permit program, with triggers, hypotheses, and authority URL |
+| `planner.ts` | Registry-driven hypothesis task list |
+| `workers.ts` / `modal/` | Real agentic research worker (fetch + ground + extract) |
+| `verifier.ts` | ID-agnostic mechanical verification + repair tickets |
+| `confidence.ts` | `computeConfidence` (cap-don't-average) + the 0.9 synthesis gate |
+| `completeness.ts` | Recall floor — catches wholly-missed programs |
+| `artifactStore.ts` | Artifact-driven subagent memory |
+| `synthesis.ts` | Applicability matrix + determinations |
+| `toolCatalog.ts` | Role-scoped agent tools (incl. VOC/chemical analysis) |
+| `skills/<id>/SKILL.md` | Per-program orientation docs (read by researchers; never citable evidence) |
 
-Read these in order:
+## Design invariants
 
-1. [Team Share Packet](./TEAM_SHARE_PACKET.md)
-2. [Two-Person Build Split](./TWO_PERSON_BUILD_SPLIT.md)
-3. [Hackathon Demo Design](./HACKATHON_DEMO_DESIGN.md)
-4. [Hacker Resources](./HACKER_RESOURCES.md)
-5. [Tool Integration Plan](./TOOL_INTEGRATION_PLAN.md)
-6. [Product and Build Plan](./ehs-permit-agent-autoplan-review.md)
-7. [Agent Control Loop Contract](./ehs-agent-control-loop-ceo-review.md)
-8. [Test and Eval Plan](./ehs-agent-test-plan.md)
-9. [Harness V Tool Catalog](./docs/HARNESS_V_TOOL_CATALOG.md)
+- **Nothing for show.** No fixture/canned research path; tests drive the real
+  pipeline via an injected transport.
+- **Verifier owns truth, mechanically.** No per-hypothesis-ID rubber-stamping; a
+  determination is only "verified" when its quote is a verbatim span of a current,
+  high-authority source and confidence >= 0.9.
+- **Fail closed.** Missing facts, unreachable sources, and low confidence become
+  `needs_review` — never a guessed "applies".
+- **Registry is the source of truth.** Skills and the recall floor are projections
+  of it; adding a program to the registry adds it to the plan.
 
-## Tooling Story
+## Running locally
 
-- OpenAI Agents SDK: code-first agent loop, structured outputs, guardrails, and traces.
-- Modal: dynamic research fan-out, parallel source extraction, worker isolation, timeouts, and scale-down.
-- Raindrop: local trace debugging, replay, and eval creation.
-- HowToEval: failure-driven eval practice and high-signal golden cases.
+```bash
+npm install
+npm run dev          # Next dev server
+npm run test         # vitest
+npm run typecheck    # tsc --noEmit
+npm run eval         # golden cases + adversarial grounding eval (CI-gated)
+```
 
-## Repository Hygiene
+Environment:
+- `OPENAI_API_KEY` — intake + scope extraction (omit -> fail-closed `emptyScope`).
+- `MODAL_RESEARCH_ENDPOINT` / `MODAL_RESEARCH_TOKEN` — the live research worker
+  (omit -> research fails closed to `needs_review`; the pipeline still runs).
+- `RAINDROP_LOCAL_DEBUGGER` — optional trace debugging (silent when unset).
 
-- Do not commit sponsor credit codes, private API keys, `.env` files, source-cache credentials, or customer data.
-- Keep demo fixtures small, reproducible, and safe to run without live network access.
-- Treat final determinations as human-review research support, not legal advice or autonomous filing.
+## Repository hygiene
+
+- Never commit API keys, `.env` files, or customer data.
+- Treat final determinations as **human-review research support — not legal advice
+  or autonomous filing.**
+
+Planning/design history lives in [`docs/archive/`](./docs/archive/).
