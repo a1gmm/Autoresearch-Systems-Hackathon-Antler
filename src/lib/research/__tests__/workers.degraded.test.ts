@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { runLocalResearchPool } from "../workers";
 import { planResearch } from "../planner";
+import { installFakeResearch, groundedBundle } from "@/test/researchTransport";
 import type { ScopePack } from "../types";
 
 function plan() {
@@ -21,27 +22,37 @@ function plan() {
   return planResearch(scope);
 }
 
-describe("runLocalResearchPool degraded fallback", () => {
+describe("runLocalResearchPool — single real path, fails closed", () => {
+  let cleanup: (() => void) | null = null;
   afterEach(() => {
-    delete process.env.USE_MODAL;
+    cleanup?.();
+    cleanup = null;
     delete process.env.MODAL_RESEARCH_ENDPOINT;
     delete process.env.MODAL_RESEARCH_TOKEN;
   });
 
-  it("falls back to fixture bundles and reports degraded when Modal is unconfigured", async () => {
-    process.env.USE_MODAL = "1"; // endpoint env intentionally unset -> researchPool reports degraded
+  it("no backend configured -> FAILS CLOSED: one needs_review bundle per task, no canned data", async () => {
+    delete process.env.MODAL_RESEARCH_ENDPOINT;
+    delete process.env.MODAL_RESEARCH_TOKEN;
     const p = plan();
     const result = await runLocalResearchPool(p.research_tasks, p.research_graph);
     expect(result.degraded?.reason).toMatch(/not configured/i);
-    // fixture substitution: one bundle per task, not empty
     expect(result.bundles.length).toBe(p.research_tasks.length);
-    expect(result.bundles.length).toBeGreaterThan(0);
+    for (const bundle of result.bundles) {
+      expect(bundle.researcher_conclusion).toBe("needs_review");
+      expect(bundle.sources).toEqual([]);
+    }
   });
 
-  it("returns fixture bundles with no degraded flag when USE_MODAL is off", async () => {
+  it("drives the real pool via injected transport (no fixture codepath)", async () => {
+    cleanup = installFakeResearch((hid) => groundedBundle(hid));
     const p = plan();
     const result = await runLocalResearchPool(p.research_tasks, p.research_graph);
     expect(result.degraded).toBeUndefined();
     expect(result.bundles.length).toBe(p.research_tasks.length);
+    // Every bundle came back grounded from the (faked) real transport.
+    for (const bundle of result.bundles) {
+      expect(bundle.sources[0].quote.length).toBeGreaterThan(0);
+    }
   });
 });

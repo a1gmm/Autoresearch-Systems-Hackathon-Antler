@@ -123,94 +123,13 @@ def assemble_evidence(hypothesis_id: str, pointer: dict, content_hash: str, fetc
 # Catalog-governed agentic researcher loop
 # ---------------------------------------------------------------------------
 
-# The research skill's done-condition (keep in sync with skillRegistry.ts `research`).
-RESEARCH_SKILL_PROMPT = (
-    "You are a permit-research subagent. Investigate ONE hypothesis. Start by calling "
-    "read_skill to orient yourself on the relevant EHS thresholds, exemptions, and which "
-    "primary source to fetch — this is orientation only, NEVER citable evidence. Then use "
-    "the provided tools to load the official source pointer, fetch the allowlisted source, "
-    "and prove currency, then call extract_threshold with the grounded finding. The "
-    "verbatim_quote MUST be copied exactly from the fetched source text. If you cannot "
-    "ground a finding, call extract_threshold with applies=needs_review and an empty "
-    "verbatim_quote. You may only use the tools you are given."
-)
+# Prompts and tool definitions live in sibling modules so this file is just the
+# agent loop + pure mappings.
+from prompts import RESEARCH_SKILL_PROMPT  # noqa: E402
+from tools import TOOL_SCHEMAS, handle_chemical_tool, norm_cas  # noqa: E402
 
-# OpenAI function schemas, keyed by catalog tool id. Only researcher tools we actually
-# implement appear here; everything else (get_form, build_applicability_matrix, ...) is
-# therefore never exposable, and is also hard-refused by the dispatcher.
-TOOL_SCHEMAS: dict[str, dict] = {
-    "read_skill": {
-        "type": "function",
-        "function": {
-            "name": "read_skill",
-            "description": "Read the EHS domain skill for this hypothesis (triggers, threshold ranges, exemptions, and which primary source to fetch). Orientation only — never cite the skill as evidence; you must still fetch and quote the primary source.",
-            "parameters": {"type": "object", "properties": {"skill_id": {"type": "string"}}},
-        },
-    },
-    "get_source_pointers": {
-        "type": "function",
-        "function": {
-            "name": "get_source_pointers",
-            "description": "Return the allowlisted official source URL and authority rank for this hypothesis.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    "get_triggers": {
-        "type": "function",
-        "function": {
-            "name": "get_triggers",
-            "description": "Return the threshold/predicate extraction hint for this hypothesis.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    "fetch_source": {
-        "type": "function",
-        "function": {
-            "name": "fetch_source",
-            "description": "Fetch an allowlisted source URL and return its content hash and extracted text.",
-            "parameters": {
-                "type": "object",
-                "properties": {"url": {"type": "string"}},
-            },
-        },
-    },
-    "prove_currency": {
-        "type": "function",
-        "function": {
-            "name": "prove_currency",
-            "description": "Classify the fetched source as current, stale, or unconfirmed.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    "evaluate_predicate": {
-        "type": "function",
-        "function": {
-            "name": "evaluate_predicate",
-            "description": "Record evaluation of the trigger predicate against project attributes.",
-            "parameters": {"type": "object", "properties": {"note": {"type": "string"}}},
-        },
-    },
-    "extract_threshold": {
-        "type": "function",
-        "function": {
-            "name": "extract_threshold",
-            "description": "Submit the grounded finding. Terminal — ends the investigation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "field": {"type": "string"},
-                    "threshold_value": {"type": ["number", "null"]},
-                    "triggering_clause": {"type": "string"},
-                    "verbatim_quote": {"type": "string"},
-                    "applies": {"type": "string", "enum": ["applies", "does_not_apply", "needs_review"]},
-                    "confidence": {"type": "number"},
-                },
-                "required": ["field", "verbatim_quote", "applies", "confidence"],
-            },
-        },
-    },
-}
-
+_UNUSED_DOC = """OpenAI function schemas, the system prompt, and chemical-tool
+handlers were extracted to tools.py / prompts.py. This file keeps the loop."""
 # Non-LLM-callable researcher tools (allowed in scope but not offered as model tools):
 # get_cached_source (no cache in demo) and quarantine_injection (embedded in fetch_source).
 _NON_CALLABLE = {"get_cached_source", "quarantine_injection"}
@@ -327,25 +246,14 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
             elif name == "evaluate_predicate":
                 payload = {"note": args.get("note", "predicate recorded")}
             else:
-                payload = {"error": f"unknown tool '{name}'"}
+                # Chemical-analysis tools (VOC/composition/CAS/aggregate) are
+                # computed in tools.py; returns None if not one of those.
+                chem = handle_chemical_tool(name, args)
+                payload = chem if chem is not None else {"error": f"unknown tool '{name}'"}
 
             messages.append({"role": "tool", "tool_call_id": call_id, "name": name, "content": json.dumps(payload)})
 
-    # Budget exhausted without a grounded submit -> deterministic fetch+extract fallback.
-    return _deterministic_fallback(hid, pointer, question, fetch_fn, extract_fn, now_iso, fetched_text, content_hash)
-
-
-def _deterministic_fallback(hid, pointer, question, fetch_fn, extract_fn, now_iso, fetched_text, content_hash) -> dict:
-    if not fetched_text:
-        try:
-            content_hash, fetched_text = fetch_fn(pointer["url"])
-        except Exception as exc:  # noqa: BLE001
-            return failed_bundle(hid, f"Fallback fetch failed: {exc}")
-    if extract_fn is None:
-        return failed_bundle(hid, "Budget exhausted with no grounded finding.")
-    extract = extract_fn(fetched_text, question, EXTRACTION_HINTS.get(hid, {}))
-    quote = (extract.get("verbatim_quote") or "").strip()
-    if quote and _norm_ws(quote) not in _norm_ws(fetched_text):
-        extract["verbatim_quote"] = ""
-        extract["applies"] = "needs_review"
-    return assemble_evidence(hid, pointer, content_hash, now_iso, extract)
+    # Budget exhausted without the agent submitting a grounded finding -> FAIL
+    # CLOSED. We do not run a canned/deterministic extraction to manufacture a
+    # result; if the agent could not ground it within budget, it is needs_review.
+    return failed_bundle(hid, "Budget exhausted before the agent submitted a grounded finding.")

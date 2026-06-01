@@ -34,6 +34,12 @@ const PER_EXTRA_FAIL_PENALTY = 0.05;
 const MIN_CONFIDENCE = 0.05;
 const MAX_CONFIDENCE = 0.97;
 
+// The synthesis gate: a determination is only presented as VERIFIED when the
+// verifier passed AND confidence clears this bar. Anything below it fails closed
+// to needs_review — the agent must keep working (re-research, accumulate
+// evidence) until it can clear the bar, never ship a low-confidence "yes".
+export const CONFIDENCE_GATE = 0.9;
+
 export function computeConfidence(checks: VerificationChecks, consistency?: ConsistencySignal): number {
   const failed = Object.entries(checks).filter(([, check]) => !check.pass);
 

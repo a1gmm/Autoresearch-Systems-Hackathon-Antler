@@ -8,6 +8,7 @@ import type {
   VerificationVerdict
 } from "./types";
 import type { SdsHandoffRef, SdsReview } from "@/lib/sds/types";
+import { CONFIDENCE_GATE } from "./confidence";
 
 export function synthesize(
   scope: ScopePack,
@@ -89,7 +90,10 @@ function determinationFor(
   verdict: VerificationVerdict | undefined
 ): Determination {
   const source = evidence?.sources[0];
-  const verified = verdict?.verdict === "pass";
+  // Confidence gate: a determination is only VERIFIED when the verifier passed
+  // AND confidence cleared the bar. A low-confidence pass fails closed to
+  // needs_review — the system keeps researching rather than shipping a weak yes.
+  const verified = verdict?.verdict === "pass" && (verdict?.confidence ?? 0) >= CONFIDENCE_GATE;
   const applies = verified ? appliesFor(scope, hypothesis, evidence) : "needs_review";
 
   return {

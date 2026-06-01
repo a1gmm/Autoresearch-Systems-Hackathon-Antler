@@ -5,7 +5,7 @@ Run: python3 src/lib/research/modal/worker_core_test.py
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from worker_core import (  # noqa: E402
     SKILL_FOR_HYPOTHESIS,
     SOURCE_POINTERS,
@@ -158,16 +158,15 @@ def test_agent_refuses_blocked_tool_and_continues():
     assert bundle["sources"][0]["quote"] == "the text"
 
 
-def test_agent_budget_exhaustion_uses_deterministic_fallback():
-    # llm never submits (keeps calling get_triggers); budget=1 -> deterministic fallback.
+def test_agent_budget_exhaustion_fails_closed():
+    # llm never submits (keeps calling get_triggers); budget=1 -> FAIL CLOSED.
+    # There is no deterministic/canned fallback: an agent that cannot ground a
+    # finding within budget yields needs_review, never a manufactured "applies".
     llm = _scripted_llm({"tool_calls": [_tc("c1", "get_triggers", {})]})
-    fetch_fn = lambda url: ("sha256:x", "fallback source mentioning 55 gallons or more")
-    extract_fn = lambda text, question, hint: {
-        "field": "liquid_gallons_threshold", "threshold_value": 55,
-        "verbatim_quote": "55 gallons or more", "applies": "applies", "confidence": 0.7}
-    bundle = run_research_agent(_spec(max_calls=1), llm_fn=llm, fetch_fn=fetch_fn, extract_fn=extract_fn, now_iso="t")
-    assert bundle["researcher_conclusion"] == "applies"
-    assert bundle["extracted_claims"][0]["field"] == "liquid_gallons_threshold"
+    fetch_fn = lambda url: ("sha256:x", "source mentioning 55 gallons or more")
+    bundle = run_research_agent(_spec(max_calls=1), llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t")
+    assert bundle["researcher_conclusion"] == "needs_review"
+    assert bundle["sources"] == []
 
 
 def test_budget_with_null_values_falls_back_to_defaults():
@@ -267,6 +266,43 @@ def test_read_skill_refused_when_not_allowed():
     bundle = run_research_agent(_spec(allowed=allowed, max_calls=5), llm_fn=llm_fn, fetch_fn=fetch_fn,
                                 extract_fn=None, now_iso="t", read_skill_fn=_must_not_call)
     assert "not permitted" in captured.get("payload", "")
+    assert bundle["researcher_conclusion"] == "applies"
+
+
+def test_voc_tool_computes_grams_per_liter_from_weight_pct_and_density():
+    from tools import voc_grams_per_liter as _voc_grams_per_liter
+    out = _voc_grams_per_liter({"voc_weight_percent": 42, "density_g_per_l": 900})
+    assert out["voc_g_per_l"] == 378.0, out
+    # direct g/L passes through
+    assert _voc_grams_per_liter({"voc_grams_per_liter": 250})["voc_g_per_l"] == 250.0
+    # insufficient inputs -> explicit error, never a guessed number
+    assert "error" in _voc_grams_per_liter({"voc_weight_percent": 42})
+
+
+def test_verify_composition_matches_claimed_cas_against_sds():
+    from worker_core import run_research_agent  # ensure module-level dispatch exists
+    # direct handler exercise via the dispatch helpers is covered through the agent;
+    # here assert the CAS normalizer + list lookup the handler relies on.
+    from tools import norm_cas as _norm_cas, CA_CAS_LISTS
+    assert _norm_cas("CAS No. 108-88-3") == "108-88-3"
+    assert "108-88-3" in CA_CAS_LISTS  # toluene is on the CA orientation list
+
+
+def test_voc_tool_is_callable_through_the_agent_loop():
+    # The agent calls analyze_voc_content, then submits a grounded finding.
+    from worker_core import run_research_agent, SOURCE_POINTERS
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "fetch_source", {})]},
+        {"tool_calls": [_tc("c2", "analyze_voc_content", {"voc_weight_percent": 42, "density_g_per_l": 900})]},
+        {"tool_calls": [_tc("c3", "extract_threshold", {
+            "field": "voc_g_per_l", "threshold_value": 378,
+            "verbatim_quote": "VOC content 42%", "applies": "applies", "confidence": 0.9})]},
+    )
+    fetch_fn = lambda url: ("sha256:x", "Section 9: VOC content 42%. Density 0.9 g/mL.")
+    bundle = run_research_agent(
+        _spec(allowed=[*RESEARCHER_ALLOWED, "analyze_voc_content"], max_calls=5),
+        llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t",
+    )
     assert bundle["researcher_conclusion"] == "applies"
 
 

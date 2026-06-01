@@ -12,9 +12,26 @@ import { trace } from "./trace";
 import { reviewSdsInputs } from "@/lib/sds/reviewer";
 import { Raindrop } from "raindrop-ai";
 
-const raindrop = new Raindrop({
-  endpoint: process.env.RAINDROP_LOCAL_DEBUGGER,
-});
+// Raindrop Workshop is a local trace debugger — pure observability, optional.
+// It is only wired when RAINDROP_LOCAL_DEBUGGER points at a running Workshop.
+// When unset (the common case: demo, CI, prod), we never construct Raindrop —
+// its OpenTelemetry exporter otherwise spams ECONNREFUSED (:5899) + 401 errors
+// that bury real logs. Callers get a no-op interaction with the same shape.
+type Interaction = ReturnType<Raindrop["begin"]>;
+
+const raindrop = process.env.RAINDROP_LOCAL_DEBUGGER
+  ? new Raindrop({ endpoint: process.env.RAINDROP_LOCAL_DEBUGGER })
+  : null;
+
+const NOOP_INTERACTION = {
+  setProperty: () => {},
+  setProperties: () => {},
+  finish: async () => {},
+} as unknown as Interaction;
+
+function beginInteraction(args: Parameters<Raindrop["begin"]>[0]): Interaction {
+  return raindrop ? raindrop.begin(args) : NOOP_INTERACTION;
+}
 
 export type PlannedRun = {
   run_id: string;
@@ -148,7 +165,7 @@ function recallGapDetermination(program: ProgramRegistryEntry): Determination {
 export async function runResearch(input: ResearchRunInput): Promise<ResearchRun> {
   const planned = await planRun(input);
   const { run_id } = planned;
-  const interaction = raindrop.begin({
+  const interaction = beginInteraction({
     eventId: run_id,
     event: "permit_research_run",
     userId: "permitpilot-demo",
@@ -165,7 +182,7 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
   if (poolResult.degraded) {
     fanoutTrace.push(
       trace(run_id, "research_pool", "fanout", "needs_review",
-        `⚠ Modal unreachable — using cached fixtures (${poolResult.degraded.reason})`)
+        `⚠ Live research unavailable — failing closed to needs_review (${poolResult.degraded.reason})`)
     );
   } else {
     fanoutTrace.push(trace(run_id, "research_pool", "fanout", "done", "Research worker pool returned evidence bundles"));
@@ -201,7 +218,7 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
 }
 
 async function runLlmJudgeOnHmbp(
-  interaction: ReturnType<Raindrop["begin"]>,
+  interaction: Interaction,
   evidence: EvidenceBundle[],
   verdicts: VerificationVerdict[],
   trace_events: ResearchRun["trace_events"],

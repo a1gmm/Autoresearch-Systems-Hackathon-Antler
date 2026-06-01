@@ -151,6 +151,38 @@ export const harnessToolCatalog = [
     scopedTo: ["researcher"]
   },
   {
+    id: "analyze_voc_content",
+    category: "retrieval_currency",
+    description: "Compute VOC content (g/L or lb/gal) from an SDS or product data: read VOC %, density, and water/exempt-solvent fractions, and derive the regulated VOC concentration to compare against rule thresholds. Returns the value, the basis lines used, and a grounded quote.",
+    writes: "extractions",
+    scopedTo: ["researcher"],
+    safetyCritical: true
+  },
+  {
+    id: "verify_chemical_composition",
+    category: "retrieval_currency",
+    description: "Verify a chemical's identity and composition against the SDS Section 3 disclosure: confirm CAS numbers, component weight ranges, and that the named hazardous constituents match what the determination relies on. Returns matched/unmatched components with verbatim quotes.",
+    writes: "extractions",
+    scopedTo: ["researcher"],
+    safetyCritical: true
+  },
+  {
+    id: "lookup_cas_hazards",
+    category: "knowledge_base_read",
+    description: "Look up the regulatory hazard profile for a CAS number from authoritative lists (EPA HAP/TRI, Prop 65, SARA 313, RCRA hazardous-waste codes). Returns which lists the substance appears on, with the citation, so the researcher can ground a 'this constituent triggers X' claim.",
+    writes: "none",
+    scopedTo: ["researcher"],
+    safetyCritical: true
+  },
+  {
+    id: "compute_aggregate_quantity",
+    category: "retrieval_currency",
+    description: "Aggregate a hazardous constituent across multiple products/containers (e.g. total gallons of a VOC or a Prop 65 chemical on site) to compare against reporting/permit thresholds. Returns the summed quantity, the inputs, and the unit.",
+    writes: "extractions",
+    scopedTo: ["researcher"],
+    safetyCritical: true
+  },
+  {
     id: "crosscheck_source",
     category: "retrieval_currency",
     description: "Confirm a high-stakes claim against a second authority pointer.",
@@ -369,7 +401,14 @@ export const researcherCoreToolIds = [
   "prove_currency",
   "extract_threshold",
   "evaluate_predicate",
-  "quarantine_injection"
+  "quarantine_injection",
+  // Chemical/VOC analysis tools — let a researcher compute and verify chemical
+  // content (VOC g/L, CAS composition, CA list membership, aggregate quantity)
+  // when proving a chemical hypothesis, instead of only quoting prose.
+  "analyze_voc_content",
+  "verify_chemical_composition",
+  "lookup_cas_hazards",
+  "compute_aggregate_quantity"
 ] as const satisfies readonly HarnessToolId[];
 
 export const blockedResearcherToolIds = [

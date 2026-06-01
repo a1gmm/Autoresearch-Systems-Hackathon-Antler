@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runResearch } from "@/lib/research/run";
 import { deriveSandboxTiles } from "@/lib/ui/sandboxState";
+import { installFakeResearch, groundedBundle } from "@/test/researchTransport";
 import type { ResearchRun } from "@/lib/research/types";
 
 const SOCAL =
@@ -11,6 +12,13 @@ function eventIds(run: ResearchRun, predicate: (e: ResearchRun["trace_events"][n
 }
 
 describe("deriveSandboxTiles", () => {
+  // Drive the real research pool with an injected transport (no fixture codepath).
+  let cleanup: () => void;
+  beforeEach(() => {
+    cleanup = installFakeResearch((hid) => groundedBundle(hid));
+  });
+  afterEach(() => cleanup());
+
   it("starts every active worker tile as queued before replay", async () => {
     const run = await runResearch({ project_description: SOCAL, demo_documents: [] });
     const tiles = deriveSandboxTiles(run, new Set());
