@@ -8,6 +8,7 @@ import { repairEvidence, verifyEvidence } from "./verifier";
 import { synthesize } from "./synthesis";
 import { PROGRAM_REGISTRY, type ProgramRegistryEntry } from "./programRegistry";
 import { verifyDeterminationSet } from "./completeness";
+import { getArtifactStore } from "./artifactStore";
 import { trace } from "./trace";
 import { reviewSdsInputs } from "@/lib/sds/reviewer";
 import { Raindrop } from "raindrop-ai";
@@ -102,6 +103,14 @@ export function finalizeRun(
 
   const latestVerdicts = latestByHypothesis(verification_verdicts);
   const latestEvidence = latestByHypothesis(evidence_bundles);
+
+  // Persist each evidence bundle as a durable artifact (subagent memory): a
+  // retried or resumed run reads these back instead of re-deriving from scratch.
+  const store = getArtifactStore();
+  for (const bundle of latestEvidence) {
+    void store.writeEvidence(run_id, bundle);
+  }
+
   const synthesis = synthesize(scope_pack, plan.research_graph, plan.regulatory_angles, latestEvidence, latestVerdicts, sds_reviews);
   trace_events.push(trace(run_id, "synthesis_agent", "matrix", "done", "Applicability matrix synthesized"));
 
