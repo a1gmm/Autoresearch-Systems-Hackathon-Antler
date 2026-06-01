@@ -1,6 +1,7 @@
 import type { EvidenceBundle, ResearchRun, ResearchRunInput, VerificationVerdict } from "./types";
 import { applySdsHandoffToScope, resolveScope, createRunId, projectFacts } from "./scope";
 import { planResearch } from "./planner";
+import { sdsActiveFamilies } from "./sdsFamilies";
 import { runLocalResearchPool } from "./workers";
 import { repairEvidence, verifyEvidence } from "./verifier";
 import { synthesize } from "./synthesis";
@@ -50,7 +51,8 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
   }
 
   const scope_pack = applySdsHandoffToScope(base_scope_pack, sds_reviews);
-  const plan = planResearch(scope_pack);
+  const sds_active_families = sdsActiveFamilies(sds_reviews);
+  const plan = planResearch(scope_pack, sds_active_families);
   trace_events.push(
     trace(
       run_id,

@@ -387,6 +387,36 @@ describe("research run SDS integration", () => {
     );
   });
 
+  it("opens the air family from a VOC SDS even when intake lists no emitting equipment", async () => {
+    // The reported bug: an SDS flagging VOC/air emissions must surface an air
+    // permit determination even when the project change has no equipment.
+    const run = await runResearch({
+      project_description:
+        "A Southern California light industrial construction project disturbing 1.2 acres with no chemical inventory provided.",
+      demo_documents: [
+        {
+          name: "Solvent Blend 42 SDS",
+          type: "sds",
+          source_type: "pasted_text",
+          retention: "ephemeral",
+          text_extraction_status: "ok",
+          text: SDS_TEXT,
+        },
+      ],
+    });
+
+    const air = run.coverage_family_statuses.find((c) => c.family === "air");
+    expect(air?.status).toBe("active");
+
+    const voc = run.determinations.find((d) => d.requirement.toLowerCase().includes("voc"));
+    expect(voc).toBeDefined();
+    expect(voc?.sds_handoff_refs?.map((f) => f.field)).toEqual(
+      expect.arrayContaining(["voc_air_emissions_review"]),
+    );
+    // The SDS-driven air row is now part of the matrix and carries its provenance.
+    expect(voc?.requirement.toLowerCase()).toContain("voc");
+  });
+
   it("attaches VOC SDS refs with provenance only to VOC determinations", async () => {
     const run = await runResearch({
       project_description:
