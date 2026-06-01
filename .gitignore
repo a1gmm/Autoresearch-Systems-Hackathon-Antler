@@ -17,3 +17,4 @@ __pycache__/
 .claude/
 .mcp.json
 skills-lock.json
+.codegraph/
