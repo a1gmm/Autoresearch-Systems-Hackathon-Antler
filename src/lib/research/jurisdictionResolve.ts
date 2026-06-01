@@ -85,6 +85,36 @@ export function resolveJurisdiction(facility: { county: string | null; city: str
   };
 }
 
+// Build the orienting jurisdiction context handed to a research subagent: the
+// resolved controlling authorities (air district, water board), the local
+// county/city skill bodies (who the CUPA / fire AHJ / building dept are and
+// which codes they adopt), and an explicit list of any UNRESOLVED levels so the
+// subagent knows where it must NOT assume an authority. Pure string; safe to
+// embed in a task spec.
+export function jurisdictionContextFor(facility: { county: string | null; city: string | null }): string {
+  const r = resolveJurisdiction(facility);
+  const parts: string[] = [];
+
+  if (r.stack.length > 0) {
+    parts.push("Resolved controlling authorities for this location:");
+    for (const name of r.stack) parts.push(`  - ${name}`);
+  }
+  if (r.countySkill) parts.push("\n## County local-authority reference\n" + r.countySkill.content.trim());
+  if (r.citySkill) parts.push("\n## City local-authority reference\n" + r.citySkill.content.trim());
+
+  if (r.gaps.length > 0) {
+    parts.push(
+      "\nUNRESOLVED jurisdiction levels — do NOT assume an authority for these; " +
+        "treat any dependent determination as needs_review until confirmed: " +
+        r.gaps.join(", "),
+    );
+  }
+
+  return parts.length > 0
+    ? parts.join("\n")
+    : "Jurisdiction unresolved — no county provided; confirm the controlling authority before any local determination.";
+}
+
 // Which coverage dimensions a jurisdiction gap blocks. A gap means we don't know
 // the controlling authority, so any determination depending on it is unsafe.
 function blocksForGap(gap: string): string[] {

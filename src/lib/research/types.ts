@@ -100,6 +100,10 @@ export type ResearchTask = {
     max_runtime_seconds: number;
     max_model_calls: number;
   };
+  // Resolved local-jurisdiction orientation for the research subagent: the
+  // controlling authorities (air district, water board, CUPA / fire / building)
+  // and any UNRESOLVED levels it must not assume. Absent when no county is known.
+  jurisdiction_context?: string;
 };
 
 export type SourceFixture = {

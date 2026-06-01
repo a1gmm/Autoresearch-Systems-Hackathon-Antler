@@ -60,6 +60,7 @@ async function runSingleTask(
     allowed_tools: task.allowed_tools,
     blocked_tools: task.blocked_tools,
     budget: task.budget,
+    ...(task.jurisdiction_context ? { jurisdiction_context: task.jurisdiction_context } : {}),
   };
 
   const controller = new AbortController();

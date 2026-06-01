@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveJurisdiction, applyJurisdictionToScope } from "../jurisdictionResolve";
+import { resolveJurisdiction, applyJurisdictionToScope, jurisdictionContextFor } from "../jurisdictionResolve";
 import type { ScopePack } from "../types";
 
 function scopeWith(facility: Partial<ScopePack["facility"]>): ScopePack {
@@ -94,5 +94,26 @@ describe("applyJurisdictionToScope", () => {
     applyJurisdictionToScope(input);
     expect(input.facility.jurisdiction_stack).toBe(before);
     expect(input.missing_facts).toEqual([]);
+  });
+});
+
+describe("jurisdictionContextFor (orienting context for the research subagent)", () => {
+  it("includes the resolved authorities and the local skill content", () => {
+    const ctx = jurisdictionContextFor({ county: "Orange", city: "Anaheim" });
+    expect(ctx).toContain("South Coast AQMD"); // resolved air district
+    expect(ctx).toContain("Santa Ana Regional Water Quality Control Board"); // resolved water board
+    expect(ctx).toContain("only full standalone CUPA"); // pulled from the Anaheim skill body
+  });
+
+  it("surfaces unresolved levels so the subagent knows not to assume an authority", () => {
+    const ctx = jurisdictionContextFor({ county: "Riverside", city: null });
+    expect(ctx.toLowerCase()).toContain("unresolved");
+    expect(ctx).toContain("water_geometry:Riverside");
+  });
+
+  it("fails closed with an explicit note when the county is unknown", () => {
+    const ctx = jurisdictionContextFor({ county: null, city: null });
+    expect(ctx.toLowerCase()).toContain("unresolved");
+    expect(ctx).toContain("location:county_unknown");
   });
 });
