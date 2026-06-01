@@ -20,5 +20,7 @@ name: Ventura County
 
 ## Notes
 
-- GOTCHA (Participating Agencies): the County CUPA runs HMBP countywide **except the City of Oxnard and the City of San Buenaventura (Ventura)**, where the city fire departments are Participating Agencies running HMBP/APSA/CalARP/UST.
+- GOTCHA (two cities carved out, but NOT equally): the County RMA CUPA runs the unified program countywide **except the City of Oxnard and the City of San Buenaventura (Ventura)** — but they differ:
+  - **City of Oxnard** is its **own full CUPA** (Oxnard Fire Dept implements all six unified programs).
+  - **City of San Buenaventura (Ventura)** is a **Participating Agency** (HMBP/APSA/CalARP/UST) under the County RMA CUPA — NOT its own CUPA.
 - Hazardous substances ordinance: Ventura County Ordinance Code Division 4, Public Health, Chapter 5.

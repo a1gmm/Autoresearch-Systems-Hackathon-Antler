@@ -40,7 +40,7 @@ describe("county/city jurisdiction skill tree", () => {
     ["Santa Clara", undefined, "FOUR CUPAs"],
     ["Sacramento", undefined, "does NOT run its own CUPA"],
     ["Fresno", undefined, "does NOT run its own CUPA"],
-    ["Ventura", undefined, "Participating Agencies"],
+    ["Ventura", undefined, "Participating Agency"],
     ["Kern", undefined, "Bakersfield"],
     ["Contra Costa", undefined, "Industrial Safety Ordinance"],
   ] as const)("resolves researched county %s with its verified gotcha", (county, city, marker) => {
@@ -56,6 +56,8 @@ describe("county/city jurisdiction skill tree", () => {
     ["Alameda", "Oakland", "decertified"],
     ["Santa Clara", "San José", "does **NOT** run its own CUPA"],
     ["Kern", "Bakersfield", "its own CUPA"],
+    ["Ventura", "Oxnard", "own full CUPA"],
+    ["Ventura", "Ventura", "Participating Agency"],
   ] as const)("resolves researched city %s/%s with its verified gotcha", (county, city, marker) => {
     const r = resolveJurisdictionSkills({ county, city });
     expect(r.city, `${city} city skill missing`).not.toBeNull();
