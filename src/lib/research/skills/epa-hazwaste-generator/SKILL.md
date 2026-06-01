@@ -1,5 +1,5 @@
 ---
-id: hazwaste-generator
+id: epa-hazwaste-generator
 description: EPA RCRA hazardous-waste generator categories — Very Small Quantity Generator (VSQG), Small Quantity Generator (SQG), and Large Quantity Generator (LQG) — keyed to the amount of hazardous waste generated in a calendar month.
 when_to_use: Use for the `waste` coverage family — the project creates or changes a hazardous waste stream (e.g. spent solvent, process waste) and the monthly generation quantity must be mapped to a generator category.
 ---

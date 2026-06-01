@@ -1,5 +1,5 @@
 ---
-id: industrial-pretreatment
+id: epa-pretreatment
 description: EPA National Pretreatment Program — when an industrial user that discharges process wastewater to a publicly owned treatment works (POTW) is subject to pretreatment standards, including categorical and significant industrial user triggers.
 when_to_use: Use for the `wastewater` coverage family — the project discharges process wastewater to a sewer / POTW and the discharge must be checked against National Pretreatment Program requirements.
 ---
