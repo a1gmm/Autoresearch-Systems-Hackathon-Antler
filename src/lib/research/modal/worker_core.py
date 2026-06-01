@@ -123,223 +123,13 @@ def assemble_evidence(hypothesis_id: str, pointer: dict, content_hash: str, fetc
 # Catalog-governed agentic researcher loop
 # ---------------------------------------------------------------------------
 
-# The research skill's done-condition (keep in sync with skillRegistry.ts `research`).
-RESEARCH_SKILL_PROMPT = (
-    "You are an EHS permit-research subagent for California facilities. Investigate ONE "
-    "hypothesis to a defensible conclusion. Work the tools in this order:\n"
-    "1. read_skill — orient on the relevant California EHS thresholds, exemptions, and which "
-    "primary source to fetch. Orientation ONLY; a skill is NEVER citable evidence.\n"
-    "2. get_source_pointers, then fetch_source — load and fetch the allowlisted official "
-    "source. prove_currency to check the source is current.\n"
-    "3. If the hypothesis depends on chemical content, USE THE CHEMICAL TOOLS instead of "
-    "eyeballing prose:\n"
-    "   - analyze_voc_content: compute regulated VOC g/L from the SDS weight % and density "
-    "before comparing to a rule threshold.\n"
-    "   - verify_chemical_composition: confirm the CAS numbers you rely on are actually in "
-    "SDS Section 3 — do not claim a constituent the SDS does not disclose.\n"
-    "   - lookup_cas_hazards: find which California list (Prop 65 / CARB VOC / SCAQMD) a CAS "
-    "is on, then still fetch and quote that list to ground the claim.\n"
-    "   - compute_aggregate_quantity: sum a constituent across containers before comparing "
-    "to a reporting/permit threshold.\n"
-    "4. extract_threshold — submit the grounded finding. The verbatim_quote MUST be copied "
-    "exactly from the fetched source text. If you cannot ground it, submit "
-    "applies=needs_review with an empty verbatim_quote. Never assert a determination you "
-    "could not ground in a fetched primary source. You may only use the tools you are given."
-)
+# Prompts and tool definitions live in sibling modules so this file is just the
+# agent loop + pure mappings.
+from prompts import RESEARCH_SKILL_PROMPT  # noqa: E402
+from tools import TOOL_SCHEMAS, handle_chemical_tool, norm_cas  # noqa: E402
 
-# OpenAI function schemas, keyed by catalog tool id. Only researcher tools we actually
-# implement appear here; everything else (get_form, build_applicability_matrix, ...) is
-# therefore never exposable, and is also hard-refused by the dispatcher.
-TOOL_SCHEMAS: dict[str, dict] = {
-    "read_skill": {
-        "type": "function",
-        "function": {
-            "name": "read_skill",
-            "description": "Read the EHS domain skill for this hypothesis (triggers, threshold ranges, exemptions, and which primary source to fetch). Orientation only — never cite the skill as evidence; you must still fetch and quote the primary source.",
-            "parameters": {"type": "object", "properties": {"skill_id": {"type": "string"}}},
-        },
-    },
-    "get_source_pointers": {
-        "type": "function",
-        "function": {
-            "name": "get_source_pointers",
-            "description": "Return the allowlisted official source URL and authority rank for this hypothesis.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    "get_triggers": {
-        "type": "function",
-        "function": {
-            "name": "get_triggers",
-            "description": "Return the threshold/predicate extraction hint for this hypothesis.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    "fetch_source": {
-        "type": "function",
-        "function": {
-            "name": "fetch_source",
-            "description": "Fetch an allowlisted source URL and return its content hash and extracted text.",
-            "parameters": {
-                "type": "object",
-                "properties": {"url": {"type": "string"}},
-            },
-        },
-    },
-    "prove_currency": {
-        "type": "function",
-        "function": {
-            "name": "prove_currency",
-            "description": "Classify the fetched source as current, stale, or unconfirmed.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    "evaluate_predicate": {
-        "type": "function",
-        "function": {
-            "name": "evaluate_predicate",
-            "description": "Record evaluation of the trigger predicate against project attributes.",
-            "parameters": {"type": "object", "properties": {"note": {"type": "string"}}},
-        },
-    },
-    "extract_threshold": {
-        "type": "function",
-        "function": {
-            "name": "extract_threshold",
-            "description": "Submit the grounded finding. Terminal — ends the investigation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "field": {"type": "string"},
-                    "threshold_value": {"type": ["number", "null"]},
-                    "triggering_clause": {"type": "string"},
-                    "verbatim_quote": {"type": "string"},
-                    "applies": {"type": "string", "enum": ["applies", "does_not_apply", "needs_review"]},
-                    "confidence": {"type": "number"},
-                },
-                "required": ["field", "verbatim_quote", "applies", "confidence"],
-            },
-        },
-    },
-    "analyze_voc_content": {
-        "type": "function",
-        "function": {
-            "name": "analyze_voc_content",
-            "description": "Compute regulated VOC content in g/L from SDS / product data. Provide the values read off the SDS; the tool does the math and returns g/L and lb/gal so you can compare against a rule threshold. Quote the SDS lines you read the inputs from.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "voc_weight_percent": {"type": ["number", "null"], "description": "VOC content as weight % of the product (e.g. 42 for 42%)."},
-                    "density_g_per_l": {"type": ["number", "null"], "description": "Product density/specific gravity in g/L (specific gravity * 1000)."},
-                    "voc_grams_per_liter": {"type": ["number", "null"], "description": "VOC g/L if the SDS states it directly; if given, returned as-is."},
-                    "water_weight_percent": {"type": ["number", "null"], "description": "Water weight % to subtract from the regulated volume basis, if applicable."},
-                    "exempt_solvent_weight_percent": {"type": ["number", "null"], "description": "Exempt-solvent weight % to subtract, if applicable."},
-                },
-            },
-        },
-    },
-    "verify_chemical_composition": {
-        "type": "function",
-        "function": {
-            "name": "verify_chemical_composition",
-            "description": "Verify that the constituents a determination relies on actually appear in the SDS Section 3 disclosure. Provide the SDS components (name, CAS, weight range) and the constituents you are claiming; the tool reports which claimed constituents are matched/unmatched by CAS.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "sds_components": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string"},
-                                "cas": {"type": "string"},
-                                "weight_percent_min": {"type": ["number", "null"]},
-                                "weight_percent_max": {"type": ["number", "null"]},
-                            },
-                        },
-                    },
-                    "claimed_cas": {"type": "array", "items": {"type": "string"}, "description": "CAS numbers the determination claims are present."},
-                },
-                "required": ["sds_components", "claimed_cas"],
-            },
-        },
-    },
-    "lookup_cas_hazards": {
-        "type": "function",
-        "function": {
-            "name": "lookup_cas_hazards",
-            "description": "Look up which California regulatory lists a CAS number appears on (Prop 65, CARB regulated VOC, SCAQMD toxics). Returns the lists + the citation pointer to fetch and quote. Orientation: you must still fetch and quote the cited list to ground the claim.",
-            "parameters": {
-                "type": "object",
-                "properties": {"cas": {"type": "string"}},
-                "required": ["cas"],
-            },
-        },
-    },
-    "compute_aggregate_quantity": {
-        "type": "function",
-        "function": {
-            "name": "compute_aggregate_quantity",
-            "description": "Sum a hazardous constituent across multiple products/containers to compare against a reporting/permit threshold. Provide per-container amounts in a common unit; the tool returns the total and unit.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "amounts": {"type": "array", "items": {"type": "number"}, "description": "Per-container amounts in the same unit."},
-                    "unit": {"type": "string", "description": "The unit (e.g. gallons, pounds, kg)."},
-                },
-                "required": ["amounts", "unit"],
-            },
-        },
-    },
-}
-
-# California regulatory-list membership by CAS. Orientation pointers only — the
-# agent must still fetch and quote the cited primary list to ground a claim.
-# Scoped to California (Prop 65 / CARB / SCAQMD), matching the project scope.
-CA_CAS_LISTS: dict[str, dict] = {
-    # toluene
-    "108-88-3": {"lists": ["CA Prop 65 (developmental)", "CARB regulated VOC"],
-                  "source": "https://oehha.ca.gov/proposition-65/proposition-65-list"},
-    # xylene
-    "1330-20-7": {"lists": ["CARB regulated VOC"],
-                   "source": "https://ww2.arb.ca.gov/resources/documents/regulated-voc"},
-    # methyl ethyl ketone (MEK)
-    "78-93-3": {"lists": ["CARB regulated VOC"],
-                 "source": "https://ww2.arb.ca.gov/resources/documents/regulated-voc"},
-    # ethylene glycol
-    "107-21-1": {"lists": ["CA Prop 65 (developmental)"],
-                  "source": "https://oehha.ca.gov/proposition-65/proposition-65-list"},
-    # formaldehyde
-    "50-00-0": {"lists": ["CA Prop 65 (carcinogen)", "SCAQMD toxic air contaminant"],
-                 "source": "https://oehha.ca.gov/proposition-65/proposition-65-list"},
-}
-
-
-def _voc_grams_per_liter(args: dict) -> dict:
-    """Deterministic VOC math. Either the SDS states g/L directly, or we derive it
-    from weight % * density, optionally on a water/exempt-reduced basis."""
-    direct = args.get("voc_grams_per_liter")
-    if isinstance(direct, (int, float)):
-        g_per_l = float(direct)
-    else:
-        wpct = args.get("voc_weight_percent")
-        density = args.get("density_g_per_l")
-        if not isinstance(wpct, (int, float)) or not isinstance(density, (int, float)):
-            return {"error": "need voc_grams_per_liter, OR both voc_weight_percent and density_g_per_l"}
-        g_per_l = (float(wpct) / 100.0) * float(density)
-    basis = "total product"
-    water = args.get("water_weight_percent") or 0
-    exempt = args.get("exempt_solvent_weight_percent") or 0
-    reduced = float(water) + float(exempt)
-    if reduced > 0:
-        basis = f"less water+exempt ({reduced}% of mass) — approximate; confirm regulated basis in the rule"
-    return {
-        "voc_g_per_l": round(g_per_l, 2),
-        "voc_lb_per_gal": round(g_per_l * 0.0083454, 4),
-        "basis": basis,
-        "note": "Orientation math only. Quote the SDS lines used and the rule's VOC definition; the rule's regulated basis governs.",
-    }
-
+_UNUSED_DOC = """OpenAI function schemas, the system prompt, and chemical-tool
+handlers were extracted to tools.py / prompts.py. This file keeps the loop."""
 # Non-LLM-callable researcher tools (allowed in scope but not offered as model tools):
 # get_cached_source (no cache in demo) and quarantine_injection (embedded in fetch_source).
 _NON_CALLABLE = {"get_cached_source", "quarantine_injection"}
@@ -347,11 +137,6 @@ _NON_CALLABLE = {"get_cached_source", "quarantine_injection"}
 
 def _norm_ws(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
-
-
-def _norm_cas(cas: str) -> str:
-    """Normalize a CAS number to digits-with-dashes for comparison."""
-    return re.sub(r"[^0-9-]", "", str(cas or "")).strip()
 
 
 def _int_or(value, default):
@@ -460,50 +245,15 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
                            else {"status": "unconfirmed", "detail": "no effective date parsed; currency not independently verified"})
             elif name == "evaluate_predicate":
                 payload = {"note": args.get("note", "predicate recorded")}
-            elif name == "analyze_voc_content":
-                payload = _voc_grams_per_liter(args)
-            elif name == "verify_chemical_composition":
-                claimed = {_norm_cas(c) for c in (args.get("claimed_cas") or [])}
-                comps = args.get("sds_components") or []
-                by_cas = {_norm_cas(c.get("cas", "")): c for c in comps if c.get("cas")}
-                matched = sorted(c for c in claimed if c in by_cas)
-                unmatched = sorted(c for c in claimed if c not in by_cas)
-                payload = {
-                    "matched": [{"cas": c, "component": by_cas[c]} for c in matched],
-                    "unmatched_claimed_cas": unmatched,
-                    "all_verified": len(unmatched) == 0,
-                    "note": "A claimed constituent not found in SDS Section 3 must not be relied on; fail closed.",
-                }
-            elif name == "lookup_cas_hazards":
-                cas = _norm_cas(args.get("cas", ""))
-                hit = CA_CAS_LISTS.get(cas)
-                payload = ({"cas": cas, "lists": hit["lists"], "source": hit["source"],
-                            "note": "Orientation only — fetch and quote the cited list to ground the claim."}
-                           if hit else
-                           {"cas": cas, "lists": [], "note": "Not in the CA orientation list; fetch the authoritative list to confirm presence/absence."})
-            elif name == "compute_aggregate_quantity":
-                amounts = [float(a) for a in (args.get("amounts") or []) if isinstance(a, (int, float))]
-                payload = {"total": round(sum(amounts), 4), "unit": args.get("unit", ""), "count": len(amounts)}
             else:
-                payload = {"error": f"unknown tool '{name}'"}
+                # Chemical-analysis tools (VOC/composition/CAS/aggregate) are
+                # computed in tools.py; returns None if not one of those.
+                chem = handle_chemical_tool(name, args)
+                payload = chem if chem is not None else {"error": f"unknown tool '{name}'"}
 
             messages.append({"role": "tool", "tool_call_id": call_id, "name": name, "content": json.dumps(payload)})
 
-    # Budget exhausted without a grounded submit -> deterministic fetch+extract fallback.
-    return _deterministic_fallback(hid, pointer, question, fetch_fn, extract_fn, now_iso, fetched_text, content_hash)
-
-
-def _deterministic_fallback(hid, pointer, question, fetch_fn, extract_fn, now_iso, fetched_text, content_hash) -> dict:
-    if not fetched_text:
-        try:
-            content_hash, fetched_text = fetch_fn(pointer["url"])
-        except Exception as exc:  # noqa: BLE001
-            return failed_bundle(hid, f"Fallback fetch failed: {exc}")
-    if extract_fn is None:
-        return failed_bundle(hid, "Budget exhausted with no grounded finding.")
-    extract = extract_fn(fetched_text, question, EXTRACTION_HINTS.get(hid, {}))
-    quote = (extract.get("verbatim_quote") or "").strip()
-    if quote and _norm_ws(quote) not in _norm_ws(fetched_text):
-        extract["verbatim_quote"] = ""
-        extract["applies"] = "needs_review"
-    return assemble_evidence(hid, pointer, content_hash, now_iso, extract)
+    # Budget exhausted without the agent submitting a grounded finding -> FAIL
+    # CLOSED. We do not run a canned/deterministic extraction to manufacture a
+    # result; if the agent could not ground it within budget, it is needs_review.
+    return failed_bundle(hid, "Budget exhausted before the agent submitted a grounded finding.")

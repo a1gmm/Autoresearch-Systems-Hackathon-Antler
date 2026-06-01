@@ -17,7 +17,7 @@ CI:    exits non-zero if catch-rate < 100% (every planted defect must be caught)
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from worker_core import run_research_agent  # noqa: E402
 
 RESEARCHER_ALLOWED = [

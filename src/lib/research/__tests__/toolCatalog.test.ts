@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { seededComplexScope } from "../fixtures/scenarios";
+import type { ScopePack } from "../types";
+
+// Inline scope literal (no fixture lib). A coating-booth + solvent + waste project
+// that activates several coverage families so the plan emits multiple tasks.
+function complexScope(): ScopePack {
+  return {
+    run_id: "run_tools",
+    facility: { address: "Los Angeles County facility", jurisdiction_stack: ["SCAQMD"], naics: "323111", sic: null },
+    project_change: {
+      description: "demo",
+      equipment: [{ kind: "coating_booth", description: "booth" }],
+      chemicals: [{ name: "solvent", quantity: 60, unit: "gal", hazard: "flammable" }],
+      waste_streams: [{ description: "spent solvent", kg_per_month: 50 }],
+      disturbance_acres: null,
+      process_discharge: true,
+    },
+    missing_facts: [],
+    assumptions: [],
+  };
+}
 import { planResearch } from "../planner";
 import {
   harnessToolCatalog,
@@ -82,7 +101,7 @@ describe("harness tool catalog", () => {
 
   it("plans research tasks with cataloged tool ids", () => {
     const catalogIds = new Set(harnessToolCatalog.map((tool) => tool.id));
-    const plan = planResearch(seededComplexScope("run_tools", "demo"));
+    const plan = planResearch(complexScope());
 
     expect(plan.research_tasks.length).toBeGreaterThanOrEqual(5);
     for (const task of plan.research_tasks) {
