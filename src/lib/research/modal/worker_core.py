@@ -209,7 +209,124 @@ TOOL_SCHEMAS: dict[str, dict] = {
             },
         },
     },
+    "analyze_voc_content": {
+        "type": "function",
+        "function": {
+            "name": "analyze_voc_content",
+            "description": "Compute regulated VOC content in g/L from SDS / product data. Provide the values read off the SDS; the tool does the math and returns g/L and lb/gal so you can compare against a rule threshold. Quote the SDS lines you read the inputs from.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "voc_weight_percent": {"type": ["number", "null"], "description": "VOC content as weight % of the product (e.g. 42 for 42%)."},
+                    "density_g_per_l": {"type": ["number", "null"], "description": "Product density/specific gravity in g/L (specific gravity * 1000)."},
+                    "voc_grams_per_liter": {"type": ["number", "null"], "description": "VOC g/L if the SDS states it directly; if given, returned as-is."},
+                    "water_weight_percent": {"type": ["number", "null"], "description": "Water weight % to subtract from the regulated volume basis, if applicable."},
+                    "exempt_solvent_weight_percent": {"type": ["number", "null"], "description": "Exempt-solvent weight % to subtract, if applicable."},
+                },
+            },
+        },
+    },
+    "verify_chemical_composition": {
+        "type": "function",
+        "function": {
+            "name": "verify_chemical_composition",
+            "description": "Verify that the constituents a determination relies on actually appear in the SDS Section 3 disclosure. Provide the SDS components (name, CAS, weight range) and the constituents you are claiming; the tool reports which claimed constituents are matched/unmatched by CAS.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sds_components": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "cas": {"type": "string"},
+                                "weight_percent_min": {"type": ["number", "null"]},
+                                "weight_percent_max": {"type": ["number", "null"]},
+                            },
+                        },
+                    },
+                    "claimed_cas": {"type": "array", "items": {"type": "string"}, "description": "CAS numbers the determination claims are present."},
+                },
+                "required": ["sds_components", "claimed_cas"],
+            },
+        },
+    },
+    "lookup_cas_hazards": {
+        "type": "function",
+        "function": {
+            "name": "lookup_cas_hazards",
+            "description": "Look up which California regulatory lists a CAS number appears on (Prop 65, CARB regulated VOC, SCAQMD toxics). Returns the lists + the citation pointer to fetch and quote. Orientation: you must still fetch and quote the cited list to ground the claim.",
+            "parameters": {
+                "type": "object",
+                "properties": {"cas": {"type": "string"}},
+                "required": ["cas"],
+            },
+        },
+    },
+    "compute_aggregate_quantity": {
+        "type": "function",
+        "function": {
+            "name": "compute_aggregate_quantity",
+            "description": "Sum a hazardous constituent across multiple products/containers to compare against a reporting/permit threshold. Provide per-container amounts in a common unit; the tool returns the total and unit.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "amounts": {"type": "array", "items": {"type": "number"}, "description": "Per-container amounts in the same unit."},
+                    "unit": {"type": "string", "description": "The unit (e.g. gallons, pounds, kg)."},
+                },
+                "required": ["amounts", "unit"],
+            },
+        },
+    },
 }
+
+# California regulatory-list membership by CAS. Orientation pointers only — the
+# agent must still fetch and quote the cited primary list to ground a claim.
+# Scoped to California (Prop 65 / CARB / SCAQMD), matching the project scope.
+CA_CAS_LISTS: dict[str, dict] = {
+    # toluene
+    "108-88-3": {"lists": ["CA Prop 65 (developmental)", "CARB regulated VOC"],
+                  "source": "https://oehha.ca.gov/proposition-65/proposition-65-list"},
+    # xylene
+    "1330-20-7": {"lists": ["CARB regulated VOC"],
+                   "source": "https://ww2.arb.ca.gov/resources/documents/regulated-voc"},
+    # methyl ethyl ketone (MEK)
+    "78-93-3": {"lists": ["CARB regulated VOC"],
+                 "source": "https://ww2.arb.ca.gov/resources/documents/regulated-voc"},
+    # ethylene glycol
+    "107-21-1": {"lists": ["CA Prop 65 (developmental)"],
+                  "source": "https://oehha.ca.gov/proposition-65/proposition-65-list"},
+    # formaldehyde
+    "50-00-0": {"lists": ["CA Prop 65 (carcinogen)", "SCAQMD toxic air contaminant"],
+                 "source": "https://oehha.ca.gov/proposition-65/proposition-65-list"},
+}
+
+
+def _voc_grams_per_liter(args: dict) -> dict:
+    """Deterministic VOC math. Either the SDS states g/L directly, or we derive it
+    from weight % * density, optionally on a water/exempt-reduced basis."""
+    direct = args.get("voc_grams_per_liter")
+    if isinstance(direct, (int, float)):
+        g_per_l = float(direct)
+    else:
+        wpct = args.get("voc_weight_percent")
+        density = args.get("density_g_per_l")
+        if not isinstance(wpct, (int, float)) or not isinstance(density, (int, float)):
+            return {"error": "need voc_grams_per_liter, OR both voc_weight_percent and density_g_per_l"}
+        g_per_l = (float(wpct) / 100.0) * float(density)
+    basis = "total product"
+    water = args.get("water_weight_percent") or 0
+    exempt = args.get("exempt_solvent_weight_percent") or 0
+    reduced = float(water) + float(exempt)
+    if reduced > 0:
+        basis = f"less water+exempt ({reduced}% of mass) — approximate; confirm regulated basis in the rule"
+    return {
+        "voc_g_per_l": round(g_per_l, 2),
+        "voc_lb_per_gal": round(g_per_l * 0.0083454, 4),
+        "basis": basis,
+        "note": "Orientation math only. Quote the SDS lines used and the rule's VOC definition; the rule's regulated basis governs.",
+    }
 
 # Non-LLM-callable researcher tools (allowed in scope but not offered as model tools):
 # get_cached_source (no cache in demo) and quarantine_injection (embedded in fetch_source).
@@ -218,6 +335,11 @@ _NON_CALLABLE = {"get_cached_source", "quarantine_injection"}
 
 def _norm_ws(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _norm_cas(cas: str) -> str:
+    """Normalize a CAS number to digits-with-dashes for comparison."""
+    return re.sub(r"[^0-9-]", "", str(cas or "")).strip()
 
 
 def _int_or(value, default):
@@ -326,6 +448,30 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
                            else {"status": "unconfirmed", "detail": "no effective date parsed; currency not independently verified"})
             elif name == "evaluate_predicate":
                 payload = {"note": args.get("note", "predicate recorded")}
+            elif name == "analyze_voc_content":
+                payload = _voc_grams_per_liter(args)
+            elif name == "verify_chemical_composition":
+                claimed = {_norm_cas(c) for c in (args.get("claimed_cas") or [])}
+                comps = args.get("sds_components") or []
+                by_cas = {_norm_cas(c.get("cas", "")): c for c in comps if c.get("cas")}
+                matched = sorted(c for c in claimed if c in by_cas)
+                unmatched = sorted(c for c in claimed if c not in by_cas)
+                payload = {
+                    "matched": [{"cas": c, "component": by_cas[c]} for c in matched],
+                    "unmatched_claimed_cas": unmatched,
+                    "all_verified": len(unmatched) == 0,
+                    "note": "A claimed constituent not found in SDS Section 3 must not be relied on; fail closed.",
+                }
+            elif name == "lookup_cas_hazards":
+                cas = _norm_cas(args.get("cas", ""))
+                hit = CA_CAS_LISTS.get(cas)
+                payload = ({"cas": cas, "lists": hit["lists"], "source": hit["source"],
+                            "note": "Orientation only — fetch and quote the cited list to ground the claim."}
+                           if hit else
+                           {"cas": cas, "lists": [], "note": "Not in the CA orientation list; fetch the authoritative list to confirm presence/absence."})
+            elif name == "compute_aggregate_quantity":
+                amounts = [float(a) for a in (args.get("amounts") or []) if isinstance(a, (int, float))]
+                payload = {"total": round(sum(amounts), 4), "unit": args.get("unit", ""), "count": len(amounts)}
             else:
                 payload = {"error": f"unknown tool '{name}'"}
 

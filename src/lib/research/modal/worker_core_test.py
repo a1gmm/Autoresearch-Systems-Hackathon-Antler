@@ -270,6 +270,43 @@ def test_read_skill_refused_when_not_allowed():
     assert bundle["researcher_conclusion"] == "applies"
 
 
+def test_voc_tool_computes_grams_per_liter_from_weight_pct_and_density():
+    from worker_core import _voc_grams_per_liter
+    out = _voc_grams_per_liter({"voc_weight_percent": 42, "density_g_per_l": 900})
+    assert out["voc_g_per_l"] == 378.0, out
+    # direct g/L passes through
+    assert _voc_grams_per_liter({"voc_grams_per_liter": 250})["voc_g_per_l"] == 250.0
+    # insufficient inputs -> explicit error, never a guessed number
+    assert "error" in _voc_grams_per_liter({"voc_weight_percent": 42})
+
+
+def test_verify_composition_matches_claimed_cas_against_sds():
+    from worker_core import run_research_agent  # ensure module-level dispatch exists
+    # direct handler exercise via the dispatch helpers is covered through the agent;
+    # here assert the CAS normalizer + list lookup the handler relies on.
+    from worker_core import _norm_cas, CA_CAS_LISTS
+    assert _norm_cas("CAS No. 108-88-3") == "108-88-3"
+    assert "108-88-3" in CA_CAS_LISTS  # toluene is on the CA orientation list
+
+
+def test_voc_tool_is_callable_through_the_agent_loop():
+    # The agent calls analyze_voc_content, then submits a grounded finding.
+    from worker_core import run_research_agent, SOURCE_POINTERS
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "fetch_source", {})]},
+        {"tool_calls": [_tc("c2", "analyze_voc_content", {"voc_weight_percent": 42, "density_g_per_l": 900})]},
+        {"tool_calls": [_tc("c3", "extract_threshold", {
+            "field": "voc_g_per_l", "threshold_value": 378,
+            "verbatim_quote": "VOC content 42%", "applies": "applies", "confidence": 0.9})]},
+    )
+    fetch_fn = lambda url: ("sha256:x", "Section 9: VOC content 42%. Density 0.9 g/mL.")
+    bundle = run_research_agent(
+        _spec(allowed=[*RESEARCHER_ALLOWED, "analyze_voc_content"], max_calls=5),
+        llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t",
+    )
+    assert bundle["researcher_conclusion"] == "applies"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in tests:

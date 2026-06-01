@@ -401,7 +401,14 @@ export const researcherCoreToolIds = [
   "prove_currency",
   "extract_threshold",
   "evaluate_predicate",
-  "quarantine_injection"
+  "quarantine_injection",
+  // Chemical/VOC analysis tools — let a researcher compute and verify chemical
+  // content (VOC g/L, CAS composition, CA list membership, aggregate quantity)
+  // when proving a chemical hypothesis, instead of only quoting prose.
+  "analyze_voc_content",
+  "verify_chemical_composition",
+  "lookup_cas_hazards",
+  "compute_aggregate_quantity"
 ] as const satisfies readonly HarnessToolId[];
 
 export const blockedResearcherToolIds = [
