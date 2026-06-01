@@ -40,11 +40,12 @@ EXTRACTION_HINTS: dict[str, dict] = {
 # Mirrors skillForHypothesis.ts on the TS side; read_skill resolves the current
 # hypothesis to its skill so the agent can orient before fetching the primary source.
 SKILL_FOR_HYPOTHESIS: dict[str, str] = {
-    "H-AIR-201": "scaqmd-air", "H-AIR-VOC": "scaqmd-air", "H-AIR-219": "scaqmd-air", "H-AIR-222": "scaqmd-air",
-    "H-STORM-IGP": "ca-stormwater", "H-STORM-CGP": "ca-stormwater",
+    "H-AIR-201": "scaqmd-permit-to-construct", "H-AIR-VOC": "scaqmd-permit-to-construct",
+    "H-AIR-219": "scaqmd-rule-219-exemption", "H-AIR-222": "scaqmd-rule-222-registration",
+    "H-STORM-IGP": "ca-industrial-general-permit", "H-STORM-CGP": "ca-construction-general-permit",
     "H-HAZMAT-HMBP": "ca-hmbp",
-    "H-WASTE-GENERATOR": "hazwaste-generator",
-    "H-WASTEWATER-PRETREATMENT": "industrial-pretreatment",
+    "H-WASTE-GENERATOR": "epa-hazwaste-generator",
+    "H-WASTEWATER-PRETREATMENT": "epa-pretreatment",
 }
 
 ALLOWED_HOSTS = {
