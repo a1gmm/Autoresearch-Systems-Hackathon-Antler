@@ -3,6 +3,15 @@
 // projections of it (see registrySkillsParity.test.ts).
 import type { CoverageFamily, ScopePack } from "./types";
 
+// One testable claim the researcher investigates for a program. The registry is
+// the single source of truth: the planner generates its hypothesis task list
+// from these, instead of a hardcoded angle pool.
+export type ProgramHypothesis = {
+  id: string;
+  question: string;
+  claim_to_test: string;
+};
+
 export type ProgramRegistryEntry = {
   id: string;
   family: CoverageFamily;
@@ -11,10 +20,10 @@ export type ProgramRegistryEntry = {
   jurisdiction: string;
   authority_source_url: string;
   authority_rank: number;
-  // The planner hypotheses that investigate this program.
-  hypothesis_ids: string[];
+  // The hypotheses (testable claims) that investigate this program. The planner
+  // emits one research task per hypothesis when the program is triggered.
+  hypotheses: ProgramHypothesis[];
   // Deterministic: does this project's scope make this program potentially applicable?
-  // Mirrors the planner's family activation; the registry is the source of truth going forward.
   triggeredBy: (scope: ScopePack) => boolean;
 };
 
@@ -34,7 +43,10 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "SCAQMD",
     authority_source_url: "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf",
     authority_rank: 1,
-    hypothesis_ids: ["H-AIR-201", "H-AIR-VOC"],
+    hypotheses: [
+      { id: "H-AIR-201", question: "Does the new equipment require an SCAQMD Permit to Construct?", claim_to_test: "SCAQMD Permit to Construct may apply before installing emitting equipment." },
+      { id: "H-AIR-VOC", question: "Do solvent VOC emissions require additional review?", claim_to_test: "Solvent use may create VOC-related review needs." },
+    ],
     triggeredBy: hasEquipment,
   },
   {
@@ -45,7 +57,9 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "SCAQMD",
     authority_source_url: "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-219.pdf",
     authority_rank: 1,
-    hypothesis_ids: ["H-AIR-219"],
+    hypotheses: [
+      { id: "H-AIR-219", question: "Is Rule 219 exemption available?", claim_to_test: "Rule 219 may exempt listed equipment if conditions are satisfied." },
+    ],
     triggeredBy: hasEquipment,
   },
   {
@@ -56,7 +70,9 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "SCAQMD",
     authority_source_url: "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-222.pdf",
     authority_rank: 1,
-    hypothesis_ids: ["H-AIR-222"],
+    hypotheses: [
+      { id: "H-AIR-222", question: "Does Rule 222 registration apply instead?", claim_to_test: "Rule 222 registration may apply to specified equipment categories." },
+    ],
     triggeredBy: hasEquipment,
   },
   {
@@ -67,7 +83,9 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "California Water Boards",
     authority_source_url: "https://www.waterboards.ca.gov/water_issues/programs/stormwater/industrial.html",
     authority_rank: 1,
-    hypothesis_ids: ["H-STORM-IGP"],
+    hypotheses: [
+      { id: "H-STORM-IGP", question: "Does SIC/NAICS trigger Industrial General Permit coverage?", claim_to_test: "SIC/NAICS may trigger California Industrial General Permit coverage." },
+    ],
     triggeredBy: hasCodeOrAcres,
   },
   {
@@ -78,7 +96,9 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "California Water Boards",
     authority_source_url: "https://www.waterboards.ca.gov/water_issues/programs/stormwater/construction.html",
     authority_rank: 1,
-    hypothesis_ids: ["H-STORM-CGP"],
+    hypotheses: [
+      { id: "H-STORM-CGP", question: "Does construction disturb one or more acres?", claim_to_test: "Construction disturbance at or above one acre may require construction stormwater permit coverage." },
+    ],
     triggeredBy: hasCodeOrAcres,
   },
   {
@@ -89,7 +109,9 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "CalEPA / local CUPA",
     authority_source_url: "https://calepa.ca.gov/cupa/hazardous-materials-business-plan/",
     authority_rank: 1,
-    hypothesis_ids: ["H-HAZMAT-HMBP"],
+    hypotheses: [
+      { id: "H-HAZMAT-HMBP", question: "Does hazardous material quantity exceed HMBP thresholds?", claim_to_test: "Hazardous material quantities at or above HMBP thresholds require a business plan." },
+    ],
     triggeredBy: hasChemicals,
   },
   {
@@ -100,7 +122,9 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "US EPA / CA DTSC",
     authority_source_url: "https://www.epa.gov/hwgenerators/categories-hazardous-waste-generators",
     authority_rank: 1,
-    hypothesis_ids: ["H-WASTE-GENERATOR"],
+    hypotheses: [
+      { id: "H-WASTE-GENERATOR", question: "Does waste generation change hazardous waste generator status?", claim_to_test: "Spent solvent or process waste may affect generator category." },
+    ],
     triggeredBy: hasWaste,
   },
   {
@@ -111,7 +135,9 @@ export const PROGRAM_REGISTRY: ProgramRegistryEntry[] = [
     jurisdiction: "US EPA",
     authority_source_url: "https://www.epa.gov/npdes/national-pretreatment-program",
     authority_rank: 1,
-    hypothesis_ids: ["H-WASTEWATER-PRETREATMENT"],
+    hypotheses: [
+      { id: "H-WASTEWATER-PRETREATMENT", question: "Does process wastewater discharge require pretreatment review?", claim_to_test: "Industrial process wastewater may require pretreatment review." },
+    ],
     triggeredBy: dischargePossible,
   },
 ];

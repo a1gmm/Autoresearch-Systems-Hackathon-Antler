@@ -7,39 +7,68 @@ import type {
   ScopePack
 } from "./types";
 import { blockedToolIdsForRole, researchWorkerToolIds } from "./toolCatalog";
+import { PROGRAM_REGISTRY, type ProgramRegistryEntry } from "./programRegistry";
 
-const coverageFamilies: CoverageFamily[] = ["air", "stormwater", "hazmat", "waste", "wastewater"];
-
+// The planner generates a hypothesis TASK LIST from the program registry — the
+// single source of truth — instead of a hardcoded family array or a fixed pool
+// of angles. For each registry program whose triggeredBy(scope) fires (or whose
+// family an SDS review flagged), every hypothesis on that program becomes a
+// research task. Adding a program to the registry adds it to the plan; nothing
+// here is hardcoded per family or per hypothesis id.
 export function planResearch(scope: ScopePack, sdsActiveFamilies: ReadonlySet<CoverageFamily> = new Set()) {
-  const coverage_family_statuses = coverageFamilies.map((family) =>
+  // Families come from the registry, not a hardcoded list.
+  const families = [...new Set(PROGRAM_REGISTRY.map((p) => p.family))];
+  const coverage_family_statuses = families.map((family) =>
     coverageStatusFor(family, scope, sdsActiveFamilies.has(family))
   );
-  const regulatory_angles = coverage_family_statuses.flatMap((status) => anglesFor(status, scope));
-  const research_graph = regulatory_angles.flatMap((angle) => hypothesesFor(angle, scope));
+
+  const activeFamilies = new Set(
+    coverage_family_statuses.filter((s) => s.status !== "out_of_scope").map((s) => s.family)
+  );
+
+  // A program is in-scope when its own trigger fires OR an SDS flagged its family
+  // (and the family wasn't ruled out_of_scope). One regulatory angle per program.
+  const activePrograms = PROGRAM_REGISTRY.filter(
+    (program) =>
+      activeFamilies.has(program.family) && (program.triggeredBy(scope) || sdsActiveFamilies.has(program.family))
+  );
+
+  const familyStatusBy = new Map(coverage_family_statuses.map((s) => [s.family, s]));
+  const regulatory_angles: RegulatoryAngle[] = activePrograms.map((program) =>
+    angleForProgram(program, familyStatusBy.get(program.family))
+  );
+
+  // Hypotheses are the task list: every hypothesis of every active program.
+  const research_graph: ResearchHypothesis[] = activePrograms.flatMap((program) =>
+    program.hypotheses.map((h) => hypothesisFromRegistry(program, h, familyStatusBy.get(program.family)))
+  );
   const research_tasks = research_graph.map(taskForHypothesis);
 
   return { coverage_family_statuses, regulatory_angles, research_graph, research_tasks };
 }
 
+// Per-family in-scope / blocked / out-of-scope status. This is fact-driven (not a
+// hardcoded pool): each family reads the scope facts its programs depend on and
+// reports missing facts that block a confident determination.
 function coverageStatusFor(family: CoverageFamily, scope: ScopePack, sdsFlagged: boolean): CoverageFamilyStatus {
   const equipmentKinds = scope.project_change.equipment.map((item) => item.kind);
   const hasChemicals = scope.project_change.chemicals.length > 0;
   const hasWaste = scope.project_change.waste_streams.length > 0;
   const disturbance = scope.project_change.disturbance_acres;
+  const id = `CF-${family.toUpperCase()}`;
 
   if (family === "air") {
     const equipmentActive = scope.project_change.equipment.length > 0;
     const active = equipmentActive || sdsFlagged;
-    const reason = equipmentActive
-      ? "Project adds equipment that may emit air contaminants."
-      : sdsFlagged
-        ? "SDS review flagged VOC or air-emissions relevance; air permit applicability requires review."
-        : "No equipment added that could emit air contaminants.";
     return {
-      id: "CF-AIR",
+      id,
       family,
       status: active ? "active" : "out_of_scope",
-      reason,
+      reason: equipmentActive
+        ? "Project adds equipment that may emit air contaminants."
+        : sdsFlagged
+          ? "SDS review flagged VOC or air-emissions relevance; air permit applicability requires review."
+          : "No equipment added that could emit air contaminants.",
       project_facts_considered: sdsFlagged ? [...equipmentKinds, "sds:voc_air_emissions_review"] : equipmentKinds,
       missing_facts: []
     };
@@ -48,7 +77,7 @@ function coverageStatusFor(family: CoverageFamily, scope: ScopePack, sdsFlagged:
   if (family === "stormwater") {
     const missingCode = !scope.facility.sic && !scope.facility.naics && disturbance === null;
     return {
-      id: "CF-STORMWATER",
+      id,
       family,
       status: missingCode ? "blocked_missing_fact" : "active",
       reason: missingCode
@@ -61,17 +90,10 @@ function coverageStatusFor(family: CoverageFamily, scope: ScopePack, sdsFlagged:
 
   if (family === "hazmat") {
     const missingQuantity = hasChemicals && scope.project_change.chemicals.some((chemical) => chemical.quantity === null);
-    const status = !hasChemicals
-      ? sdsFlagged
-        ? "active"
-        : "out_of_scope"
-      : missingQuantity
-        ? "blocked_missing_fact"
-        : "active";
     return {
-      id: "CF-HAZMAT",
+      id,
       family,
-      status,
+      status: !hasChemicals ? (sdsFlagged ? "active" : "out_of_scope") : missingQuantity ? "blocked_missing_fact" : "active",
       reason: hasChemicals
         ? "Project includes hazardous material storage."
         : sdsFlagged
@@ -83,11 +105,10 @@ function coverageStatusFor(family: CoverageFamily, scope: ScopePack, sdsFlagged:
   }
 
   if (family === "waste") {
-    const status = hasWaste || sdsFlagged ? "active" : "out_of_scope";
     return {
-      id: "CF-WASTE",
+      id,
       family,
-      status,
+      status: hasWaste || sdsFlagged ? "active" : "out_of_scope",
       reason: hasWaste
         ? "Project identifies waste streams that need generator-status review."
         : sdsFlagged
@@ -100,160 +121,61 @@ function coverageStatusFor(family: CoverageFamily, scope: ScopePack, sdsFlagged:
     };
   }
 
-  const wastewaterStatus =
-    scope.project_change.process_discharge === null
-      ? sdsFlagged
-        ? "active"
-        : "blocked_missing_fact"
-      : scope.project_change.process_discharge
-        ? "active"
-        : sdsFlagged
-          ? "active"
-          : "out_of_scope";
+  if (family === "wastewater") {
+    const discharge = scope.project_change.process_discharge;
+    return {
+      id,
+      family,
+      status: discharge === null ? (sdsFlagged ? "active" : "blocked_missing_fact") : discharge ? "active" : sdsFlagged ? "active" : "out_of_scope",
+      reason:
+        discharge === null
+          ? sdsFlagged
+            ? "SDS review flagged spill/stormwater containment relevance; pretreatment review required."
+            : "Process discharge status is missing."
+          : discharge
+            ? "Project may discharge process wastewater."
+            : "No process wastewater discharge indicated.",
+      project_facts_considered: [`process_discharge=${discharge}`],
+      missing_facts: discharge === null ? ["project_change.process_discharge"] : []
+    };
+  }
+
+  // Any future family in the registry with no special fact logic yet: active when
+  // its programs trigger or an SDS flags it; otherwise out_of_scope. Fail-open to
+  // active (a new family should be investigated, not silently skipped).
   return {
-    id: "CF-WASTEWATER",
+    id,
     family,
-    status: wastewaterStatus,
-    reason:
-      scope.project_change.process_discharge === null
-        ? sdsFlagged
-          ? "SDS review flagged spill/stormwater containment relevance; pretreatment review required."
-          : "Process discharge status is missing."
-        : scope.project_change.process_discharge
-          ? "Project may discharge process wastewater."
-          : "No process wastewater discharge indicated.",
-    project_facts_considered: [`process_discharge=${scope.project_change.process_discharge}`],
-    missing_facts: scope.project_change.process_discharge === null ? ["project_change.process_discharge"] : []
+    status: sdsFlagged ? "active" : "active",
+    reason: "Registry program applies to this family; investigate.",
+    project_facts_considered: [],
+    missing_facts: []
   };
 }
 
-function anglesFor(status: CoverageFamilyStatus, scope: ScopePack): RegulatoryAngle[] {
-  if (status.status === "out_of_scope") {
-    return [];
-  }
-
-  if (status.family === "air") {
-    return [
-      {
-        id: "A-AIR-EMITTING-EQUIPMENT",
-        family: "air",
-        label: "New or modified emitting equipment",
-        reason: "Coating or process equipment may require air district authorization.",
-        triggering_facts: status.project_facts_considered,
-        status: status.status
-      },
-      {
-        id: "A-AIR-EXEMPTION-OR-REGISTRATION",
-        family: "air",
-        label: "Air exemption or registration path",
-        reason: "SCAQMD rules may route some equipment to exemption or registration instead of a permit.",
-        triggering_facts: status.project_facts_considered,
-        status: status.status
-      }
-    ];
-  }
-
-  if (status.family === "stormwater") {
-    return [
-      {
-        id: "A-STORMWATER-INDUSTRIAL",
-        family: "stormwater",
-        label: "Industrial stormwater coverage",
-        reason: "SIC/NAICS may trigger California Industrial General Permit coverage.",
-        triggering_facts: [`sic=${scope.facility.sic}`, `naics=${scope.facility.naics}`],
-        status: scope.facility.sic || scope.facility.naics ? "active" : "blocked_missing_fact"
-      },
-      {
-        id: "A-STORMWATER-CONSTRUCTION",
-        family: "stormwater",
-        label: "Construction stormwater coverage",
-        reason: "Construction activity disturbing one or more acres may require permit coverage.",
-        triggering_facts: [`disturbance_acres=${scope.project_change.disturbance_acres}`],
-        status: scope.project_change.disturbance_acres === null ? "blocked_missing_fact" : "active"
-      }
-    ];
-  }
-
-  if (status.family === "hazmat") {
-    return [
-      {
-        id: "A-HAZMAT-HMBP",
-        family: "hazmat",
-        label: "Hazardous material business plan threshold",
-        reason: "Hazardous material quantities must be compared to reporting thresholds.",
-        triggering_facts: status.project_facts_considered,
-        status: status.status
-      }
-    ];
-  }
-
-  if (status.family === "waste") {
-    return [
-      {
-        id: "A-WASTE-GENERATOR-STATUS",
-        family: "waste",
-        label: "Hazardous waste generator status",
-        reason: "Spent solvent or process waste may affect generator category.",
-        triggering_facts: status.project_facts_considered,
-        status: status.missing_facts.length ? "blocked_missing_fact" : "active"
-      }
-    ];
-  }
-
-  return [
-    {
-      id: "A-WASTEWATER-PRETREATMENT",
-      family: "wastewater",
-      label: "Industrial wastewater pretreatment",
-      reason: "Industrial process wastewater discharges may trigger pretreatment review.",
-      triggering_facts: status.project_facts_considered,
-      status: status.status
-    }
-  ];
-}
-
-function hypothesesFor(angle: RegulatoryAngle, scope: ScopePack): ResearchHypothesis[] {
-  if (angle.id === "A-AIR-EMITTING-EQUIPMENT") {
-    return [
-      hypothesis("H-AIR-201", angle, "Does the new equipment require an SCAQMD Permit to Construct?", "SCAQMD Permit to Construct may apply before installing emitting equipment."),
-      hypothesis("H-AIR-VOC", angle, "Do solvent VOC emissions require additional review?", "Solvent use may create VOC-related review needs.")
-    ];
-  }
-
-  if (angle.id === "A-AIR-EXEMPTION-OR-REGISTRATION") {
-    return [
-      hypothesis("H-AIR-219", angle, "Is Rule 219 exemption available?", "Rule 219 may exempt listed equipment if conditions are satisfied."),
-      hypothesis("H-AIR-222", angle, "Does Rule 222 registration apply instead?", "Rule 222 registration may apply to specified equipment categories.")
-    ];
-  }
-
-  if (angle.id === "A-STORMWATER-INDUSTRIAL") {
-    return [hypothesis("H-STORM-IGP", angle, "Does SIC/NAICS trigger Industrial General Permit coverage?", "SIC/NAICS may trigger California Industrial General Permit coverage.")];
-  }
-
-  if (angle.id === "A-STORMWATER-CONSTRUCTION") {
-    return [hypothesis("H-STORM-CGP", angle, "Does construction disturb one or more acres?", "Construction disturbance at or above one acre may require construction stormwater permit coverage.")];
-  }
-
-  if (angle.id === "A-HAZMAT-HMBP") {
-    return [hypothesis("H-HAZMAT-HMBP", angle, "Does hazardous material quantity exceed HMBP thresholds?", "HMBP applies to all hazardous material storage.")];
-  }
-
-  if (angle.id === "A-WASTE-GENERATOR-STATUS") {
-    return [hypothesis("H-WASTE-GENERATOR", angle, "Does waste generation change hazardous waste generator status?", "Spent solvent may affect generator status.")];
-  }
-
-  return [hypothesis("H-WASTEWATER-PRETREATMENT", angle, "Does process wastewater discharge require pretreatment review?", "Industrial process wastewater may require pretreatment review.")];
-}
-
-function hypothesis(id: string, angle: RegulatoryAngle, question: string, claim: string): ResearchHypothesis {
+function angleForProgram(program: ProgramRegistryEntry, status: CoverageFamilyStatus | undefined): RegulatoryAngle {
   return {
-    id,
-    angle_id: angle.id,
-    family: angle.family,
-    question,
-    claim_to_test: claim,
-    required_facts: angle.triggering_facts,
+    id: `A-${program.id}`,
+    family: program.family,
+    label: program.name,
+    reason: program.what_it_does,
+    triggering_facts: status?.project_facts_considered ?? [],
+    status: status?.status ?? "active"
+  };
+}
+
+function hypothesisFromRegistry(
+  program: ProgramRegistryEntry,
+  h: ProgramRegistryEntry["hypotheses"][number],
+  status: CoverageFamilyStatus | undefined
+): ResearchHypothesis {
+  return {
+    id: h.id,
+    angle_id: `A-${program.id}`,
+    family: program.family,
+    question: h.question,
+    claim_to_test: h.claim_to_test,
+    required_facts: status?.project_facts_considered ?? [],
     expected_source_type: "regulation",
     success_criteria: [
       "official or high-authority source",
