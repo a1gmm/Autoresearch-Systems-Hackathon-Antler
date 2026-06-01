@@ -20,6 +20,16 @@ SOURCE_POINTERS: dict[str, dict] = {
     "H-HAZMAT-HMBP": {"source_name": "California HMBP Threshold Summary", "url": "https://calepa.ca.gov/cupa/hazardous-materials-business-plan/", "authority_rank": 1},
     "H-WASTE-GENERATOR": {"source_name": "EPA Hazardous Waste Generator Categories", "url": "https://www.epa.gov/hwgenerators/categories-hazardous-waste-generators", "authority_rank": 1},
     "H-WASTEWATER-PRETREATMENT": {"source_name": "EPA Pretreatment Program Overview", "url": "https://www.epa.gov/npdes/national-pretreatment-program", "authority_rank": 1},
+    "H-HAZMAT-UST": {"source_name": "California UST Program (HSC 25281)", "url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25281.", "authority_rank": 1},
+    "H-HAZMAT-APSA": {"source_name": "Aboveground Petroleum Storage Act (HSC 25270)", "url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25270.", "authority_rank": 1},
+    "H-HAZMAT-CALARP": {"source_name": "CalARP (19 CCR Ch. 2)", "url": "https://calepa.ca.gov/wp-content/uploads/2024/08/California-Code-of-Regulations-Title-19-Division-5-Chapter-2-%E2%80%93-California-Accidental-Release-Prevention.pdf", "authority_rank": 1},
+    "H-AIR-AB2588": {"source_name": "AB 2588 Air Toxics Hot Spots", "url": "https://ww2.arb.ca.gov/our-work/programs/ab-2588-air-toxics-hot-spots", "authority_rank": 1},
+    "H-HAZMAT-PROP65": {"source_name": "Proposition 65 (HSC 25249.6)", "url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25249.6.", "authority_rank": 1},
+    "H-WASTE-CA-TITLE22": {"source_name": "DTSC non-RCRA hazardous waste", "url": "https://dtsc.ca.gov/non-rcra-hazardous-wastes/", "authority_rank": 1},
+    "H-WASTE-MEDICAL": {"source_name": "Medical Waste Management Act (HSC 117600)", "url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=117600.", "authority_rank": 1},
+    "H-WASTE-UNIVERSAL": {"source_name": "DTSC Universal Waste", "url": "https://dtsc.ca.gov/requirements-for-handlers-and-or-recyclers/", "authority_rank": 1},
+    "H-AIR-TITLE-V": {"source_name": "CARB Title V Operating Permits", "url": "https://ww2.arb.ca.gov/our-work/programs/federal-clean-air-act-title-v-operating-permits/fcaa-title-v-overview", "authority_rank": 1},
+    "H-WASTEWATER-WDR": {"source_name": "Waterboards Waste Discharge Requirements", "url": "https://www.waterboards.ca.gov/water_issues/programs/waste_discharge_requirements/", "authority_rank": 1},
 }
 
 # Per-hypothesis extraction guidance. `field` MUST match what verifier.ts reads
@@ -46,6 +56,16 @@ SKILL_FOR_HYPOTHESIS: dict[str, str] = {
     "H-HAZMAT-HMBP": "ca-hmbp",
     "H-WASTE-GENERATOR": "epa-hazwaste-generator",
     "H-WASTEWATER-PRETREATMENT": "epa-pretreatment",
+    "H-HAZMAT-UST": "ca-ust-program",
+    "H-HAZMAT-APSA": "ca-apsa-spcc",
+    "H-HAZMAT-CALARP": "ca-calarp-program",
+    "H-AIR-AB2588": "ca-ab2588-hot-spots",
+    "H-HAZMAT-PROP65": "ca-prop-65",
+    "H-WASTE-CA-TITLE22": "ca-title22-hazwaste",
+    "H-WASTE-MEDICAL": "ca-medical-waste",
+    "H-WASTE-UNIVERSAL": "ca-universal-waste",
+    "H-AIR-TITLE-V": "ca-title-v-permit",
+    "H-WASTEWATER-WDR": "ca-wdr-npdes",
 }
 
 ALLOWED_HOSTS = {
@@ -53,6 +73,13 @@ ALLOWED_HOSTS = {
     "www.waterboards.ca.gov", "waterboards.ca.gov",
     "calepa.ca.gov", "www.calepa.ca.gov",
     "www.epa.gov", "epa.gov",
+    # Additional verified California authorities (registry-expansion programs):
+    "leginfo.legislature.ca.gov",
+    "oehha.ca.gov",
+    "dtsc.ca.gov",
+    "ww2.arb.ca.gov", "arb.ca.gov",
+    "osfm.fire.ca.gov",
+    "www.cdph.ca.gov", "cdph.ca.gov",
 }
 
 

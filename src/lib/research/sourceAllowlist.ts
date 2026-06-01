@@ -16,6 +16,13 @@ export const ALLOWLISTED_HOSTS: ReadonlySet<string> = new Set<string>([
   "www.waterboards.ca.gov",
   "calepa.ca.gov",
   "www.epa.gov",
+  // Additional verified California authorities (registry-expansion programs):
+  "leginfo.legislature.ca.gov", // California codes (HSC, Water Code, CCR sections)
+  "oehha.ca.gov",               // Proposition 65 list
+  "dtsc.ca.gov",                // DTSC hazardous / universal / non-RCRA waste
+  "ww2.arb.ca.gov",             // CARB — AB 2588, Title V
+  "osfm.fire.ca.gov",           // CAL FIRE OSFM — APSA
+  "www.cdph.ca.gov",            // CDPH — medical waste
 ]);
 
 // Parses the URL and returns true only if its hostname is on the allowlist.

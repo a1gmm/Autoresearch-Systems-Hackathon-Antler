@@ -23,6 +23,17 @@ export const SKILL_FOR_HYPOTHESIS: Record<string, string> = {
   "H-WASTE-GENERATOR": "epa-hazwaste-generator",
   // wastewater pretreatment
   "H-WASTEWATER-PRETREATMENT": "epa-pretreatment",
+  // expanded California state programs
+  "H-HAZMAT-UST": "ca-ust-program",
+  "H-HAZMAT-APSA": "ca-apsa-spcc",
+  "H-HAZMAT-CALARP": "ca-calarp-program",
+  "H-AIR-AB2588": "ca-ab2588-hot-spots",
+  "H-HAZMAT-PROP65": "ca-prop-65",
+  "H-WASTE-CA-TITLE22": "ca-title22-hazwaste",
+  "H-WASTE-MEDICAL": "ca-medical-waste",
+  "H-WASTE-UNIVERSAL": "ca-universal-waste",
+  "H-AIR-TITLE-V": "ca-title-v-permit",
+  "H-WASTEWATER-WDR": "ca-wdr-npdes",
 };
 
 // Returns the skill id for a hypothesis id, or null if none is mapped.
