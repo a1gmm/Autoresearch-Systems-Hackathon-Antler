@@ -11,3 +11,9 @@ coverage/
 .vercel
 __pycache__/
 *.pyc
+
+# Local agent/MCP tooling — not project source
+.agents/
+.claude/
+.mcp.json
+skills-lock.json
