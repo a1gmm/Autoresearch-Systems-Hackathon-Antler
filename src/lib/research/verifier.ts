@@ -1,5 +1,6 @@
 import type { EvidenceBundle, RepairTicket, ScopePack, VerificationVerdict } from "./types";
-import { computeConfidence } from "./confidence";
+import { computeConfidence, CONFIDENCE_GATE } from "./confidence";
+import type { ConsistencySignal } from "./confidence";
 
 // The verifier is hypothesis-ID-AGNOSTIC and mechanical. It never branches on a
 // specific hypothesis ID and never rubber-stamps a result with pass:true
@@ -12,7 +13,11 @@ import { computeConfidence } from "./confidence";
 //                   source quote (whitespace-tolerant); this is the anti-fabrication core
 //   predicate     — the researcher reached a grounded conclusion (needs_review never passes)
 // A grounding failure files a repair ticket. Nothing here knows about fixtures.
-export function verifyEvidence(_scope: ScopePack, bundle: EvidenceBundle): VerificationVerdict {
+export function verifyEvidence(
+  _scope: ScopePack,
+  bundle: EvidenceBundle,
+  consistency?: ConsistencySignal
+): VerificationVerdict {
   const source = bundle.sources[0];
 
   if (!source) {
@@ -67,11 +72,39 @@ export function verifyEvidence(_scope: ScopePack, bundle: EvidenceBundle): Verif
     };
   }
 
+  const confidence = computeConfidence(checks, consistency);
+  const allChecksPass = checks.authority.pass && checks.predicate_math.pass && checks.currency.pass;
+
+  // Confidence drives the agent's continued work, not just a synthesis number.
+  // If the evidence is grounded and the checks pass but confidence is still
+  // below the gate (e.g. a weak source capped it), the answer isn't good enough
+  // to ship — file a low_confidence repair ticket so the orchestrator re-runs
+  // the researcher toward a stronger source instead of silently settling.
+  if (allChecksPass && confidence < CONFIDENCE_GATE) {
+    return {
+      hypothesis_id: bundle.hypothesis_id,
+      verdict: "needs_review",
+      checks,
+      confidence,
+      repair_tickets: [
+        {
+          ticket_id: `R-${bundle.hypothesis_id}-conf`,
+          hypothesis_id: bundle.hypothesis_id,
+          failure_type: "low_confidence",
+          failed_check: "confidence",
+          observed_problem: `Grounded, but confidence ${confidence.toFixed(2)} is below the ${CONFIDENCE_GATE} gate.`,
+          repair_action: "re-research toward a higher-authority / more current source to raise confidence",
+          max_attempts_remaining: 1
+        }
+      ]
+    };
+  }
+
   return {
     hypothesis_id: bundle.hypothesis_id,
-    verdict: checks.authority.pass && checks.predicate_math.pass && checks.currency.pass ? "pass" : "needs_review",
+    verdict: allChecksPass ? "pass" : "needs_review",
     checks,
-    confidence: computeConfidence(checks),
+    confidence,
     repair_tickets: []
   };
 }

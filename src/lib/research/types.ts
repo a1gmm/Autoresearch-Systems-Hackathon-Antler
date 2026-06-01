@@ -156,7 +156,7 @@ export type VerificationVerdict = {
 export type RepairTicket = {
   ticket_id: string;
   hypothesis_id: string;
-  failure_type: "grounding_failed" | "source_failed" | "missing_fact" | "invalid_json" | "conflict";
+  failure_type: "grounding_failed" | "source_failed" | "missing_fact" | "invalid_json" | "conflict" | "low_confidence";
   failed_check: string;
   observed_problem: string;
   repair_action: string;

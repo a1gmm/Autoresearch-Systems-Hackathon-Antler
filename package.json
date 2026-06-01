@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "eval": "tsx src/evals/golden.ts && npm run eval:grounding",
-    "eval:grounding": "python3 src/lib/research/modal/worker_core_adversarial_eval.py",
+    "eval:grounding": "python3 src/lib/research/modal/pytests/worker_core_adversarial_eval.py",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
