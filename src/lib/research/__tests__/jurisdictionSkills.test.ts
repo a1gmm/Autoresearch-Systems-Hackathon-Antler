@@ -17,15 +17,49 @@ describe("county/city jurisdiction skill tree", () => {
   });
 
   it("reports a gap (not a guess) for a county/city not yet researched", () => {
-    const r = resolveJurisdictionSkills({ county: "Fresno", city: "Clovis" });
+    const r = resolveJurisdictionSkills({ county: "Mendocino", city: "Fort Bragg" });
     expect(r.county).toBeNull();
     expect(r.city).toBeNull();
-    expect(r.gaps).toContain("county:fresno-county");
-    expect(r.gaps).toContain("city:fresno-county/city-of-clovis");
+    expect(r.gaps).toContain("county:mendocino-county");
+    expect(r.gaps).toContain("city:mendocino-county/city-of-fort-bragg");
   });
 
   it("normalizes names to folder ids", () => {
     expect(jurisdictionSkillId("Los Angeles")).toBe("los-angeles-county");
     expect(jurisdictionSkillId("Los Angeles", "Long Beach")).toBe("los-angeles-county/city-of-long-beach");
+  });
+
+  // Regression guard for the researched coverage: each county below has a real
+  // verified JURISDICTION.md, so resolution must find it (no county gap) and
+  // carry the captured gotcha. Guards against an accidental rename/deletion.
+  it.each([
+    ["Orange", undefined, "Anaheim"],
+    ["Riverside", undefined, "CAL FIRE"],
+    ["San Bernardino", undefined, "Victorville"],
+    ["Alameda", undefined, "decertified"],
+    ["Santa Clara", undefined, "FOUR CUPAs"],
+    ["Sacramento", undefined, "does NOT run its own CUPA"],
+    ["Fresno", undefined, "does NOT run its own CUPA"],
+    ["Ventura", undefined, "Participating Agencies"],
+    ["Kern", undefined, "Bakersfield"],
+    ["Contra Costa", undefined, "Industrial Safety Ordinance"],
+  ] as const)("resolves researched county %s with its verified gotcha", (county, city, marker) => {
+    const r = resolveJurisdictionSkills({ county, ...(city ? { city } : {}) });
+    expect(r.county, `${county} county skill missing`).not.toBeNull();
+    expect(r.county?.content).toContain(marker);
+    expect(r.gaps.some((g) => g.startsWith("county:"))).toBe(false);
+  });
+
+  it.each([
+    ["Orange", "Anaheim", "only full standalone CUPA"],
+    ["Alameda", "Berkeley", "Toxics Management Division"],
+    ["Alameda", "Oakland", "decertified"],
+    ["Santa Clara", "San José", "does **NOT** run its own CUPA"],
+    ["Kern", "Bakersfield", "its own CUPA"],
+  ] as const)("resolves researched city %s/%s with its verified gotcha", (county, city, marker) => {
+    const r = resolveJurisdictionSkills({ county, city });
+    expect(r.city, `${city} city skill missing`).not.toBeNull();
+    expect(r.city?.content).toContain(marker);
+    expect(r.gaps.some((g) => g.startsWith("city:"))).toBe(false);
   });
 });

@@ -48,10 +48,10 @@ describe("resolveJurisdiction", () => {
   });
 
   it("reports an unresearched county/city as honest gaps (never a guessed authority)", () => {
-    const r = resolveJurisdiction({ county: "Fresno", city: "Clovis" });
-    // Fresno is a real air district county, but its local skill folder is not researched yet.
-    expect(r.gaps).toContain("county:fresno-county");
-    expect(r.gaps).toContain("city:fresno-county/city-of-clovis");
+    const r = resolveJurisdiction({ county: "Mendocino", city: "Fort Bragg" });
+    // Mendocino is a real air district county, but its local skill folder is not researched yet.
+    expect(r.gaps).toContain("county:mendocino-county");
+    expect(r.gaps).toContain("city:mendocino-county/city-of-fort-bragg");
     expect(r.countySkill).toBeNull();
   });
 
