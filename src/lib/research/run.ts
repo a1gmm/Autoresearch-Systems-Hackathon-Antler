@@ -1,6 +1,7 @@
 import type { Determination, EvidenceBundle, ResearchRun, ResearchRunInput, VerificationVerdict } from "./types";
 import type { SdsReview } from "@/lib/sds/types";
 import { parseScope, applySdsHandoffToScope, createRunId, projectFacts } from "./scope";
+import { applyJurisdictionToScope } from "./jurisdictionResolve";
 import { planResearch } from "./planner";
 import { sdsActiveFamilies } from "./sdsFamilies";
 import { runLocalResearchPool } from "./workers";
@@ -59,7 +60,19 @@ export async function planRun(input: ResearchRunInput): Promise<PlannedRun> {
 
   // Fold SDS handoff facts into scope and let the planner open the coverage
   // families those facts flag (e.g. a VOC SDS opens air even with no equipment).
-  const scope_pack = applySdsHandoffToScope(base_scope_pack, sds_reviews);
+  const sds_scope_pack = applySdsHandoffToScope(base_scope_pack, sds_reviews);
+  // Resolve the local jurisdiction (air district, water board, county/city CUPA)
+  // from the facility's county/city: replace the conservative default stack with
+  // the real authorities, and turn any unresolved level into a fail-closed
+  // missing fact so the run never cites a guessed agency.
+  const scope_pack = applyJurisdictionToScope(sds_scope_pack);
+  const jurisdictionGaps = scope_pack.missing_facts.filter((m) => m.field.startsWith("jurisdiction."));
+  trace_events.push(
+    trace(run_id, "orchestrator", "jurisdiction", jurisdictionGaps.length > 0 ? "needs_review" : "done",
+      jurisdictionGaps.length > 0
+        ? `Resolved jurisdiction with ${jurisdictionGaps.length} unresolved level(s): ${jurisdictionGaps.map((g) => g.field.replace("jurisdiction.", "")).join(", ")}`
+        : `Resolved jurisdiction to ${scope_pack.facility.jurisdiction_stack.join(", ")}`),
+  );
   const plan = planResearch(scope_pack, sdsActiveFamilies(sds_reviews));
   trace_events.push(
     trace(run_id, "orchestrator", "coverage", "done",

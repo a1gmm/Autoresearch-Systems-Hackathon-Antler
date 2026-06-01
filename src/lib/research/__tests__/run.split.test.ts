@@ -12,4 +12,13 @@ describe("run.ts split", () => {
     expect(run.determinations.length).toBe(planned.plan.research_graph.length);
     expect(run.report_markdown).toContain("Applicability Matrix");
   });
+
+  it("planRun resolves jurisdiction and fails closed when the county is unknown", async () => {
+    // With no OPENAI key in test, parseScope yields an empty scope (county null),
+    // so jurisdiction resolution must surface a fail-closed missing fact and a trace.
+    const planned = await planRun({ project_description: "A facility stores solvents." });
+    const fields = planned.scope_pack.missing_facts.map((m) => m.field);
+    expect(fields).toContain("jurisdiction.location:county_unknown");
+    expect(planned.trace_events.some((e) => e.phase === "jurisdiction")).toBe(true);
+  });
 });
