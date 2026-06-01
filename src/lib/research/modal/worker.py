@@ -28,13 +28,22 @@ try:
     import modal
 
     app = modal.App("permitpilot-research")
-    # Slim image — sandbox payload is just `echo`, no deps needed.
-    sandbox_image = modal.Image.debian_slim()
+    # The research function fetches sources and calls OpenAI inside the container,
+    # so the image needs the openai SDK (urllib is stdlib). debian_slim keeps the
+    # base small; pip_install adds the one runtime dep.
+    sandbox_image = modal.Image.debian_slim().pip_install("openai>=1.0", "pypdf>=4.0")
+    # OPENAI_API_KEY reaches the container via a Modal Secret, never baked into the
+    # image. The secret must expose the key as OPENAI_API_KEY (what default_extract_fn
+    # reads via os.environ). Register with:
+    #   modal secret create permitpilot-openai OPENAI_API_KEY=sk-...
+    # Resolved lazily (from_name doesn't hit the network at import time).
+    openai_secret = modal.Secret.from_name("permitpilot-openai")
     _HAS_MODAL = True
 except ModuleNotFoundError:  # pragma: no cover - exercised only without modal installed
     modal = None  # type: ignore[assignment]
     app = None  # type: ignore[assignment]
     sandbox_image = None  # type: ignore[assignment]
+    openai_secret = None  # type: ignore[assignment]
     _HAS_MODAL = False
 
 
@@ -96,12 +105,74 @@ def _content_hash(text: str) -> str:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def extract_source_text(raw: bytes, url: str) -> str:
+    """Turn fetched bytes into grounding-quality text.
+
+    PDFs must not be utf-8 force-decoded — that yields U+FFFD mojibake the
+    verifier can never ground a verbatim quote against. Detect a PDF by magic
+    bytes (or .pdf url) and pull real text from its content streams; everything
+    else is decoded as utf-8 text.
+    """
+    is_pdf = raw[:5] == b"%PDF-" or url.lower().split("?")[0].endswith(".pdf")
+    if is_pdf:
+        return _extract_pdf_text(raw)
+    return raw.decode("utf-8", errors="replace")
+
+
+def _extract_pdf_text(raw: bytes) -> str:
+    """Extract text from PDF bytes. Prefer pypdf when present (handles compressed
+    streams, real layout); fall back to a stdlib content-stream scan so the
+    function still works offline / without the dependency."""
+    try:
+        from io import BytesIO
+
+        from pypdf import PdfReader  # type: ignore[import-not-found]
+
+        reader = PdfReader(BytesIO(raw))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        text = "\n".join(pages).strip()
+        if text:
+            return text
+    except Exception:  # noqa: BLE001 - any pypdf failure falls back to the stdlib scan
+        pass
+    return _extract_pdf_text_stdlib(raw)
+
+
+def _extract_pdf_text_stdlib(raw: bytes) -> str:
+    """Dependency-free PDF text scan: pull the strings drawn by Tj/TJ text
+    operators out of uncompressed content streams. Good enough to recover
+    verbatim phrases from simple regulation PDFs; not a full PDF renderer."""
+    import re
+    import zlib
+
+    chunks: list[bytes] = []
+    for match in re.finditer(rb"stream\r?\n(.*?)\r?\nendstream", raw, re.DOTALL):
+        body = match.group(1)
+        try:
+            body = zlib.decompress(body)
+        except Exception:  # noqa: BLE001 - stream may be uncompressed
+            pass
+        chunks.append(body)
+    if not chunks:
+        chunks.append(raw)
+
+    pieces: list[str] = []
+    for body in chunks:
+        # ( ... ) Tj  and  [ (..) (..) ] TJ  — capture the parenthesized strings.
+        for s in re.findall(rb"\(((?:[^()\\]|\\.)*)\)", body):
+            text = s.decode("latin-1", errors="replace")
+            text = text.replace("\\(", "(").replace("\\)", ")").replace("\\\\", "\\")
+            pieces.append(text)
+    return " ".join(pieces).strip()
+
+
 def default_fetch_fn(url: str) -> dict:
-    """Real source fetch over HTTP. Returns the page text for extraction."""
+    """Real source fetch over HTTP. Returns grounding-quality text for extraction
+    (PDF content is parsed, not byte-decoded)."""
     req = urllib.request.Request(url, headers={"User-Agent": "permitpilot-research/0.1"})
     with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - allowlisted sources upstream
-        text = resp.read().decode("utf-8", errors="replace")
-    return {"url": url, "source_name": url, "authority_rank": 1, "text": text}
+        raw = resp.read()
+    return {"url": url, "source_name": url, "authority_rank": 1, "text": extract_source_text(raw, url)}
 
 
 def default_extract_fn(question: str, source_text: str) -> dict:
@@ -290,8 +361,10 @@ def _build_evidence_bundle(hypothesis_id: str) -> dict:
 
 def _modal_function(**kwargs):
     """Apply @app.function only when modal is installed; otherwise a no-op so the
-    module (and its pure core) imports without modal for offline unit tests."""
+    module (and its pure core) imports without modal for offline unit tests.
+    Injects the OpenAI secret so OPENAI_API_KEY is present in the container env."""
     if _HAS_MODAL:
+        kwargs.setdefault("secrets", [openai_secret])
         return app.function(**kwargs)
     return lambda fn: fn
 
