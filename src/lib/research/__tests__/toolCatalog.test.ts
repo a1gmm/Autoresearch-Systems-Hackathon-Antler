@@ -57,6 +57,11 @@ describe("harness tool catalog", () => {
     expect(workerTools).not.toContain("build_applicability_matrix");
   });
 
+  it("scopes quarantine_injection to the orchestrator (planner) too", () => {
+    expect(isToolScopedToRole("quarantine_injection", "planner")).toBe(true);
+    expect(isToolScopedToRole("quarantine_injection", "researcher")).toBe(true);
+  });
+
   it("rejects tools outside a role scope", () => {
     expect(isToolScopedToRole("fetch_source", "researcher")).toBe(true);
     expect(isToolScopedToRole("fetch_source", "synthesizer")).toBe(false);
