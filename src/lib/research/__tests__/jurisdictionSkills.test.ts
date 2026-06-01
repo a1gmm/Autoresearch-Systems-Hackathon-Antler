@@ -58,10 +58,23 @@ describe("county/city jurisdiction skill tree", () => {
     ["Kern", "Bakersfield", "its own CUPA"],
     ["Ventura", "Oxnard", "own full CUPA"],
     ["Ventura", "Ventura", "Participating Agency"],
+    ["Ventura", "Fillmore", "its OWN municipal department"],
+    ["Ventura", "Santa Paula", "until **2018**"],
+    ["Ventura", "Port Hueneme", "Naval Base Ventura County"],
   ] as const)("resolves researched city %s/%s with its verified gotcha", (county, city, marker) => {
     const r = resolveJurisdictionSkills({ county, city });
     expect(r.city, `${city} city skill missing`).not.toBeNull();
     expect(r.city?.content).toContain(marker);
     expect(r.gaps.some((g) => g.startsWith("city:"))).toBe(false);
+  });
+
+  // All 10 incorporated Ventura County cities are now researched (no city gap).
+  it.each([
+    "Camarillo", "Fillmore", "Moorpark", "Ojai", "Oxnard",
+    "Port Hueneme", "Santa Paula", "Simi Valley", "Thousand Oaks", "Ventura",
+  ])("resolves Ventura County city %s with no gap", (city) => {
+    const r = resolveJurisdictionSkills({ county: "Ventura", city });
+    expect(r.city, `${city} skill missing`).not.toBeNull();
+    expect(r.gaps).toEqual([]);
   });
 });
