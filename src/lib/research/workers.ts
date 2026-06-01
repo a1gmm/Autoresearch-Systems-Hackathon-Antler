@@ -1,22 +1,33 @@
 import type { EvidenceBundle, ResearchHypothesis, ResearchTask } from "./types";
 import { sourceFixtures } from "./fixtures/sources";
 import type { ResearchPoolResult } from "./modal/researchPool";
+import { isFixtureMode } from "./config";
 
 export async function runLocalResearchPool(
   tasks: ResearchTask[],
   hypotheses: ResearchHypothesis[]
 ): Promise<ResearchPoolResult> {
-  if (process.env.USE_MODAL === "1") {
-    const { runModalResearchPool } = await import("./modal/researchPool");
-    const result = await runModalResearchPool(tasks, hypotheses);
-    if (result.degraded) {
-      // Honest fallback: still render the demo on fixtures, but surface the reason.
-      return { bundles: runFixturePool(tasks, hypotheses), degraded: result.degraded };
-    }
-    return { bundles: result.bundles };
+  // Fixture mode is an explicit opt-in for deterministic offline tests/evals.
+  if (isFixtureMode()) {
+    return { bundles: runFixturePool(tasks, hypotheses) };
   }
 
-  return { bundles: runFixturePool(tasks, hypotheses) };
+  // Production default: the real agentic worker. If the backend is unreachable
+  // or unconfigured we FAIL CLOSED — every hypothesis becomes needs_review with
+  // no source. We never silently substitute canned fixtures for a real answer;
+  // a guessed "applies" on missing evidence is the one thing this product must
+  // never do.
+  const { runModalResearchPool } = await import("./modal/researchPool");
+  const result = await runModalResearchPool(tasks, hypotheses);
+  if (result.degraded) {
+    return {
+      bundles: tasks.map((task) =>
+        failedBundle(task.hypothesis_id, `Live research unavailable: ${result.degraded!.reason}`)
+      ),
+      degraded: result.degraded,
+    };
+  }
+  return { bundles: result.bundles };
 }
 
 function runFixturePool(tasks: ResearchTask[], hypotheses: ResearchHypothesis[]): EvidenceBundle[] {

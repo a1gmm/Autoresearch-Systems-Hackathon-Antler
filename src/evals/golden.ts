@@ -11,6 +11,9 @@ function groundedWhereVerified(run: ResearchRun): boolean {
 }
 
 async function main() {
+  // Golden cases are deterministic offline evals: pin fixture mode so the
+  // research pool returns canned bundles instead of hitting the live backend.
+  process.env.RESEARCH_MODE ??= "fixture";
   if (!process.env.OPENAI_API_KEY) {
     console.log("SKIP evals: the dynamic planner needs OPENAI_API_KEY (parseScope is LLM-driven).");
     return;

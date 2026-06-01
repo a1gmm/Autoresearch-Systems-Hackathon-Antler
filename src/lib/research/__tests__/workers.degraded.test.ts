@@ -21,24 +21,28 @@ function plan() {
   return planResearch(scope);
 }
 
-describe("runLocalResearchPool degraded fallback", () => {
+describe("runLocalResearchPool — production fails closed, fixtures are opt-in", () => {
   afterEach(() => {
-    delete process.env.USE_MODAL;
+    delete process.env.RESEARCH_MODE;
     delete process.env.MODAL_RESEARCH_ENDPOINT;
     delete process.env.MODAL_RESEARCH_TOKEN;
   });
 
-  it("falls back to fixture bundles and reports degraded when Modal is unconfigured", async () => {
-    process.env.USE_MODAL = "1"; // endpoint env intentionally unset -> researchPool reports degraded
+  it("live mode with no backend FAILS CLOSED: one needs_review bundle per task, no fixtures", async () => {
+    process.env.RESEARCH_MODE = "live"; // endpoint env unset -> researchPool reports degraded
     const p = plan();
     const result = await runLocalResearchPool(p.research_tasks, p.research_graph);
     expect(result.degraded?.reason).toMatch(/not configured/i);
-    // fixture substitution: one bundle per task, not empty
     expect(result.bundles.length).toBe(p.research_tasks.length);
-    expect(result.bundles.length).toBeGreaterThan(0);
+    // No canned data: every fail-closed bundle is needs_review with no source.
+    for (const bundle of result.bundles) {
+      expect(bundle.researcher_conclusion).toBe("needs_review");
+      expect(bundle.sources).toEqual([]);
+    }
   });
 
-  it("returns fixture bundles with no degraded flag when USE_MODAL is off", async () => {
+  it("fixture mode (explicit opt-in) returns deterministic bundles with no degraded flag", async () => {
+    process.env.RESEARCH_MODE = "fixture";
     const p = plan();
     const result = await runLocalResearchPool(p.research_tasks, p.research_graph);
     expect(result.degraded).toBeUndefined();
