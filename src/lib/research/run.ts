@@ -171,6 +171,52 @@ function recallGapDetermination(program: ProgramRegistryEntry): Determination {
   } satisfies Determination;
 }
 
+// Re-dispatch weak results until they verify or the attempt budget runs out.
+// "Weak" = the verifier filed a repair ticket (ungrounded, or grounded-but-below
+// the confidence gate). Each retry re-runs ONLY that hypothesis through the real
+// worker pool and writes the attempt as an artifact (subagent memory).
+async function redispatchUntilConfident(
+  run_id: string,
+  scope_pack: PlannedRun["scope_pack"],
+  plan: PlannedRun["plan"],
+  initial: EvidenceBundle[],
+  trace_events: ReturnType<typeof trace>[],
+  maxAttempts = 2
+): Promise<EvidenceBundle[]> {
+  const store = getArtifactStore();
+  const byId = new Map(plan.research_graph.map((h) => [h.id, h]));
+  const out: EvidenceBundle[] = [];
+
+  for (let bundle of initial) {
+    void store.writeEvidence(run_id, bundle);
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+      const verdict = verifyEvidence(scope_pack, bundle);
+      if (verdict.repair_tickets.length === 0) break; // verified or fail-closed; nothing to improve
+      const hypothesis = byId.get(bundle.hypothesis_id);
+      const task = plan.research_tasks.find((t) => t.hypothesis_id === bundle.hypothesis_id);
+      if (!hypothesis || !task) break;
+
+      attempt += 1;
+      trace_events.push(trace(run_id, "orchestrator", "redispatch", "running",
+        `Re-researching ${bundle.hypothesis_id} (attempt ${attempt}): ${verdict.repair_tickets[0].observed_problem}`, bundle.hypothesis_id));
+      const retry = await runLocalResearchPool([task], [hypothesis]);
+      const next = retry.bundles[0];
+      if (!next) break;
+      // Keep the retry only if it now verifies; otherwise stop and keep the prior.
+      bundle = next;
+      void store.writeEvidence(run_id, bundle);
+      if (verifyEvidence(scope_pack, bundle).repair_tickets.length === 0) {
+        trace_events.push(trace(run_id, "orchestrator", "redispatch", "done",
+          `${bundle.hypothesis_id} verified after re-research`, bundle.hypothesis_id));
+        break;
+      }
+    }
+    out.push(bundle);
+  }
+  return out;
+}
+
 export async function runResearch(input: ResearchRunInput): Promise<ResearchRun> {
   const planned = await planRun(input);
   const { run_id } = planned;
@@ -196,7 +242,17 @@ export async function runResearch(input: ResearchRunInput): Promise<ResearchRun>
   } else {
     fanoutTrace.push(trace(run_id, "research_pool", "fanout", "done", "Research worker pool returned evidence bundles"));
   }
-  const result = finalizeRun(run_id, planned.scope_pack, planned.plan, poolResult.bundles, fanoutTrace, planned.sds_reviews);
+
+  // Live re-dispatch: the agent keeps working toward a defensible answer. Verify
+  // each bundle; any that fails grounding or lands below the confidence gate
+  // files a repair ticket — re-run that one hypothesis through the real pool and
+  // keep whichever attempt verifies. Bounded by the ticket's attempt budget so a
+  // genuinely un-groundable hypothesis converges to needs_review, not a loop.
+  const bundles = await redispatchUntilConfident(
+    run_id, planned.scope_pack, planned.plan, poolResult.bundles, fanoutTrace
+  );
+
+  const result = finalizeRun(run_id, planned.scope_pack, planned.plan, bundles, fanoutTrace, planned.sds_reviews);
   interaction.setProperties({
     status: result.status,
     hypotheses_count: planned.plan.research_graph.length,
