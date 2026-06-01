@@ -6,6 +6,7 @@ import { sdsActiveFamilies } from "./sdsFamilies";
 import { runLocalResearchPool } from "./workers";
 import { repairEvidence, verifyEvidence } from "./verifier";
 import { synthesize } from "./synthesis";
+import { orchestrateResearchPlan } from "./orchestrator";
 import { PROGRAM_REGISTRY, type ProgramRegistryEntry } from "./programRegistry";
 import { verifyDeterminationSet } from "./completeness";
 import { trace } from "./trace";
@@ -42,7 +43,15 @@ export async function planRun(input: ResearchRunInput): Promise<PlannedRun> {
   // Fold SDS handoff facts into scope and let the planner open the coverage
   // families those facts flag (e.g. a VOC SDS opens air even with no equipment).
   const scope_pack = applySdsHandoffToScope(base_scope_pack, sds_reviews);
-  const plan = planResearch(scope_pack, sdsActiveFamilies(sds_reviews));
+  const activeFamilies = sdsActiveFamilies(sds_reviews);
+  const useOrchestrator = process.env.USE_AGENTIC_ORCHESTRATOR === "1";
+  const plan = useOrchestrator
+    ? await orchestrateResearchPlan(scope_pack, { sdsActiveFamilies: activeFamilies })
+    : planResearch(scope_pack, activeFamilies);
+  trace_events.push(
+    trace(run_id, "orchestrator", "planning_mode", "done",
+      useOrchestrator ? "Agentic orchestrator proposed the research plan" : "Deterministic planner produced the research plan"),
+  );
   trace_events.push(
     trace(run_id, "orchestrator", "coverage", "done",
       `Inspected ${plan.coverage_family_statuses.length} coverage families and created ${plan.regulatory_angles.length} regulatory angles`),

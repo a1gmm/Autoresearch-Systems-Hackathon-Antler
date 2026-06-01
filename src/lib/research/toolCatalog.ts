@@ -163,7 +163,7 @@ export const harnessToolCatalog = [
     category: "retrieval_currency",
     description: "Flag instruction-like fetched content as untrusted data and prevent following embedded filing or form links.",
     writes: "audit_log",
-    scopedTo: ["researcher"],
+    scopedTo: ["researcher", "planner"],
     safetyCritical: true
   },
   {
