@@ -6,7 +6,7 @@ import type { ScopePack } from "../types";
 function complexScope(): ScopePack {
   return {
     run_id: "run_tools",
-    facility: { address: "Los Angeles County facility", jurisdiction_stack: ["SCAQMD"], naics: "323111", sic: null },
+    facility: { address: "Los Angeles County facility", jurisdiction_stack: ["SCAQMD"], county: null, city: null, naics: "323111", sic: null },
     project_change: {
       description: "demo",
       equipment: [{ kind: "coating_booth", description: "booth" }],

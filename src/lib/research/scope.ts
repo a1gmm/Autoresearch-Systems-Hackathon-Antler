@@ -23,6 +23,8 @@ const SUBMIT_SCOPE_TOOL = {
       type: "object",
       properties: {
         address: { type: ["string", "null"] },
+        county: { type: ["string", "null"], description: "California county the facility is in (e.g. 'Los Angeles'), without the word 'County'. Null if not determinable from the description." },
+        city: { type: ["string", "null"], description: "Incorporated city the facility is in (e.g. 'Vernon'). Null if unincorporated or not determinable." },
         naics: { type: ["string", "null"] },
         sic: { type: ["string", "null"] },
         equipment: {
@@ -64,6 +66,8 @@ const SUBMIT_SCOPE_TOOL = {
 
 type ScopeFacts = {
   address?: string | null;
+  county?: string | null;
+  city?: string | null;
   naics?: string | null;
   sic?: string | null;
   equipment?: Array<{ kind?: unknown; description?: unknown }>;
@@ -79,6 +83,8 @@ export function emptyScope(runId: string, description: string): ScopePack {
     facility: {
       address: "Unspecified Southern California facility",
       jurisdiction_stack: JURISDICTION_STACK,
+      county: null,
+      city: null,
       naics: null,
       sic: null,
     },
@@ -143,6 +149,8 @@ export function scopePackFromFacts(facts: ScopeFacts, runId: string, description
     facility: {
       address: typeof facts.address === "string" && facts.address ? facts.address : "Southern California facility",
       jurisdiction_stack: JURISDICTION_STACK,
+      county: typeof facts.county === "string" && facts.county ? facts.county : null,
+      city: typeof facts.city === "string" && facts.city ? facts.city : null,
       naics,
       sic,
     },

@@ -28,6 +28,22 @@ describe("scopePackFromFacts", () => {
     expect(missing).toContain("project_change.process_discharge");
   });
 
+  it("carries county and city through when the intake LLM extracts them", () => {
+    const scope = scopePackFromFacts(
+      { address: "5500 S Soto St, Vernon, CA 90058", county: "Los Angeles", city: "Vernon" },
+      "run_loc",
+      "desc",
+    );
+    expect(scope.facility.county).toBe("Los Angeles");
+    expect(scope.facility.city).toBe("Vernon");
+  });
+
+  it("leaves county/city null when intake did not extract a location", () => {
+    const scope = scopePackFromFacts({ address: "Somewhere in California" }, "run_noloc", "desc");
+    expect(scope.facility.county).toBeNull();
+    expect(scope.facility.city).toBeNull();
+  });
+
   it("drops malformed list entries and defaults unknowns to null", () => {
     const scope = scopePackFromFacts(
       { equipment: [{} as { kind: string }, { kind: "oven" }], chemicals: undefined },

@@ -7,7 +7,7 @@ describe("researcher budget", () => {
   it("gives each research task at least 4 model calls for the agentic loop", () => {
     const scope: ScopePack = {
       run_id: "test_run",
-      facility: { address: "X", jurisdiction_stack: [], naics: null, sic: null },
+      facility: { address: "X", jurisdiction_stack: [], county: null, city: null, naics: null, sic: null },
       project_change: {
         description: "test project",
         equipment: [{ kind: "coating_booth", description: "booth" }],

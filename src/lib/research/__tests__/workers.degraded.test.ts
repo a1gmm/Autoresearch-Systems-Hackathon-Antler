@@ -7,7 +7,7 @@ import type { ScopePack } from "../types";
 function plan() {
   const scope: ScopePack = {
     run_id: "run_test",
-    facility: { address: "X", jurisdiction_stack: [], naics: "323111", sic: null },
+    facility: { address: "X", jurisdiction_stack: [], county: null, city: null, naics: "323111", sic: null },
     project_change: {
       description: "test",
       equipment: [{ kind: "coating_booth", description: "booth" }],

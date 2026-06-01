@@ -4,7 +4,7 @@ import type { EvidenceBundle, RegulatoryAngle, ResearchHypothesis, ScopePack, Ve
 
 const scope: ScopePack = {
   run_id: "r",
-  facility: { address: "X", jurisdiction_stack: [], naics: null, sic: null },
+  facility: { address: "X", jurisdiction_stack: [], county: null, city: null, naics: null, sic: null },
   project_change: { description: "d", equipment: [], chemicals: [], waste_streams: [], disturbance_acres: null, process_discharge: null },
   missing_facts: [],
   assumptions: [],

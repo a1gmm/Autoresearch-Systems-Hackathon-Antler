@@ -38,6 +38,12 @@ export type ScopePack = {
   facility: {
     address: string;
     jurisdiction_stack: string[];
+    // County and (optional) incorporated city, extracted from the address by
+    // intake. Drive local-jurisdiction resolution (air district, water board,
+    // CUPA). Null when intake could not determine them — fail-closed, never
+    // guessed, so resolution reports an honest gap instead of a wrong authority.
+    county: string | null;
+    city: string | null;
     naics: string | null;
     sic: string | null;
   };
