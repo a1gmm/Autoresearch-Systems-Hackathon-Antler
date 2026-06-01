@@ -15,7 +15,7 @@ export async function enqueueRun(input: ResearchRunInput, deps: DurableDeps = re
   const planned = await deps.planRun(input);
   const task_specs = planned.plan.research_tasks.map((task) => {
     const h = planned.plan.research_graph.find((g) => g.id === task.hypothesis_id);
-    return { task_id: task.task_id, hypothesis_id: task.hypothesis_id, question: h?.question ?? task.hypothesis_id, allowed_tools: task.allowed_tools, blocked_tools: task.blocked_tools, budget: task.budget };
+    return { task_id: task.task_id, hypothesis_id: task.hypothesis_id, question: h?.question ?? task.hypothesis_id, allowed_tools: task.allowed_tools, blocked_tools: task.blocked_tools, budget: task.budget, ...(task.jurisdiction_context ? { jurisdiction_context: task.jurisdiction_context } : {}) };
   });
   await deps.store.createRun({
     run_id: planned.run_id, status: "queued", input, scope_pack: planned.scope_pack, plan: planned.plan,
