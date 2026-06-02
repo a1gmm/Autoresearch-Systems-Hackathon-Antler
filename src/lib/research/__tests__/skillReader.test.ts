@@ -5,7 +5,7 @@ describe("skillReader (TS read_skill)", () => {
   it("lists the on-disk family skill ids", () => {
     const ids = availableSkillIds();
     expect(ids).toContain("ca-hmbp");
-    expect(ids).toContain("scaqmd-air");
+    expect(ids).toContain("scaqmd-permit-to-construct");
   });
 
   it("reads a skill's SKILL.md text", () => {

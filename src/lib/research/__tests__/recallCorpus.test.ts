@@ -7,18 +7,18 @@ import type { ScopePack } from "../types";
 function scopeFrom(pc: Partial<ScopePack["project_change"]>): ScopePack {
   return {
     run_id: "corpus",
-    facility: { address: "x", jurisdiction_stack: ["SCAQMD"], naics: null, sic: null },
+    facility: { address: "x", jurisdiction_stack: ["SCAQMD"], county: null, city: null, naics: null, sic: null },
     project_change: { description: "", equipment: [], chemicals: [], waste_streams: [], disturbance_acres: null, process_discharge: false, ...pc },
     missing_facts: [], assumptions: [],
   };
 }
 
 // Recall = fraction of expected programs that some proposed hypothesis directly covers
-// (via the program's hypothesis_ids). 1.0 = nothing silently dropped.
+// (via the program's hypotheses). 1.0 = nothing silently dropped.
 function directRecall(proposedHypothesisIds: Set<string>, scope: ScopePack): number {
   const expected = expectedProgramsForScope(scope);
   if (expected.length === 0) return 1;
-  const covered = expected.filter((p) => p.hypothesis_ids.some((h) => proposedHypothesisIds.has(h)));
+  const covered = expected.filter((p) => p.hypotheses.some((h) => proposedHypothesisIds.has(h.id)));
   return covered.length / expected.length;
 }
 

@@ -6,7 +6,7 @@ import type { ScopePack } from "../types";
 function scope(): ScopePack {
   return {
     run_id: "orch-test",
-    facility: { address: "x", jurisdiction_stack: ["SCAQMD"], naics: null, sic: null },
+    facility: { address: "x", jurisdiction_stack: ["SCAQMD"], county: null, city: null, naics: null, sic: null },
     project_change: {
       description: "Adds a coating booth and stores 60 gallons of flammable solvent.",
       equipment: [{ kind: "coating_booth", description: "" }],

@@ -229,7 +229,7 @@ function mergeProposalsIntoPlan(baseline: OrchestratedPlan, proposals: FamilyPro
     coverage_family_statuses: [...baseline.coverage_family_statuses, ...statuses],
     regulatory_angles: [...baseline.regulatory_angles, ...angles],
     research_graph: [...baseline.research_graph, ...hypotheses],
-    research_tasks: [...baseline.research_tasks, ...hypotheses.map(taskForHypothesis)],
+    research_tasks: [...baseline.research_tasks, ...hypotheses.map((h) => taskForHypothesis(h))],
   };
 }
 
