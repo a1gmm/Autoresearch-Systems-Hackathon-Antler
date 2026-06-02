@@ -48,10 +48,11 @@ describe("resolveJurisdiction", () => {
   });
 
   it("reports an unresearched county/city as honest gaps (never a guessed authority)", () => {
-    const r = resolveJurisdiction({ county: "Mendocino", city: "Fort Bragg" });
-    // Mendocino is a real air district county, but its local skill folder is not researched yet.
-    expect(r.gaps).toContain("county:mendocino-county");
-    expect(r.gaps).toContain("city:mendocino-county/city-of-fort-bragg");
+    // A non-existent county/city: resolution must report gaps, never invent an authority.
+    // (Uses a fictional name so it stays a gap even as every real CA county is researched.)
+    const r = resolveJurisdiction({ county: "Nowhere", city: "Faketown" });
+    expect(r.gaps).toContain("county:nowhere-county");
+    expect(r.gaps).toContain("city:nowhere-county/city-of-faketown");
     expect(r.countySkill).toBeNull();
   });
 

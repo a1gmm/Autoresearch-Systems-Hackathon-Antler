@@ -17,11 +17,12 @@ describe("county/city jurisdiction skill tree", () => {
   });
 
   it("reports a gap (not a guess) for a county/city not yet researched", () => {
-    const r = resolveJurisdictionSkills({ county: "Mendocino", city: "Fort Bragg" });
+    // Fictional names so this stays a gap even as every real CA county gets researched.
+    const r = resolveJurisdictionSkills({ county: "Nowhere", city: "Faketown" });
     expect(r.county).toBeNull();
     expect(r.city).toBeNull();
-    expect(r.gaps).toContain("county:mendocino-county");
-    expect(r.gaps).toContain("city:mendocino-county/city-of-fort-bragg");
+    expect(r.gaps).toContain("county:nowhere-county");
+    expect(r.gaps).toContain("city:nowhere-county/city-of-faketown");
   });
 
   it("normalizes names to folder ids", () => {
