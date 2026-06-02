@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runResearch } from "@/lib/research/run";
-import { isStoreConfigured } from "@/lib/research/store/supabaseStore";
-import { enqueueRun } from "@/lib/research/durable/durableRun";
 import { toUiResearchRun, type PythonRunResult } from "@/lib/research/pythonRunAdapter";
 
-// Hold the serverless function open as long as the plan allows. Vercel REJECTS the
-// deploy if this exceeds the plan's ceiling (800 failed → the plan caps lower), so we
-// use 60s — the proven-good value the intake route already deploys with. The Modal
-// worker itself runs up to 600s (not subject to Vercel limits); a live run that needs
-// longer than the Vercel route allows is the durable Function.spawn+poll case (deferred).
+// The research route is now a Python runtime proxy. Synchronous Modal calls may hold
+// this function open briefly; long runs should use start_run + get_run polling.
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
@@ -37,14 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(shouldAdaptPythonRun(pythonRun) ? toUiResearchRun(pythonRun) : pythonRun);
     }
 
-    if (process.env.RESEARCH_RUNTIME === "durable" && isStoreConfigured()) {
-      const { run_id, status } = await enqueueRun(input);
-      return NextResponse.json({ run_id, status });
-    }
-
-    const run = await runResearch(input);
-
-    return NextResponse.json(run);
+    throw new Error("Configure PYTHON_RESEARCH_RUN_SYNC_ENDPOINT or PYTHON_RESEARCH_START_RUN_ENDPOINT to run research");
   } catch (error) {
     return NextResponse.json(
       {

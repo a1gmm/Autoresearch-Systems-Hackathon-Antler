@@ -1,5 +1,6 @@
-import type { HarnessToolId } from "./toolCatalog";
 import type { SdsHandoffRef, SdsReview } from "@/lib/sds/types";
+
+export type HarnessToolId = string;
 
 export type RunStatus =
   | "idle"

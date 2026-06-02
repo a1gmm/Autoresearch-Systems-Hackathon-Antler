@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDurableRun } from "@/lib/research/durable/durableRun";
 import { toUiResearchRun, type PythonRunResult } from "@/lib/research/pythonRunAdapter";
 
 export const maxDuration = 60;
@@ -16,8 +15,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json(shouldAdaptPythonRun(pythonRun) ? toUiResearchRun(pythonRun) : pythonRun);
     }
 
-    const run = await getDurableRun(id);
-    return NextResponse.json(run);
+    throw new Error("PYTHON_RESEARCH_GET_RUN_ENDPOINT must be configured to read research runs");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const status = /not found/i.test(message) ? 404 : 500;

@@ -1,26 +1,41 @@
-# Durable research runtime (Supabase + Modal)
+# Durable Research Runtime
 
-Opt-in long-run path. Default stays synchronous (no setup needed). Turn on with `RESEARCH_RUNTIME=durable`.
+Durable research now belongs to the Python runtime. Next.js starts work through
+the Python/Modal `start_run` endpoint and polls `get_run`; it does not use the
+retired TypeScript durable planner/finalizer.
 
-## Provision Supabase (project gcfhexotjfmowlbzcggd)
-1. Authenticate the Supabase MCP: `claude /mcp` -> supabase -> Authenticate (interactive terminal).
-2. Apply `supabase/migrations/0001_research_runtime.sql` (Supabase MCP `apply_migration`, or paste in the SQL editor).
+## Required Endpoints
 
-## Environment
-| Name | Where | Value |
-|------|-------|-------|
-| `RESEARCH_RUNTIME` | Vercel + local | `durable` |
-| `SUPABASE_URL` | Node (server) | project URL |
-| `SUPABASE_SERVICE_KEY` | Node (server) | service-role key (never `NEXT_PUBLIC_`) |
-| `NEXT_PUBLIC_SUPABASE_URL` | UI | project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | UI | anon key (read-only via RLS) |
-| `MODAL_START_RUN_ENDPOINT` | Node (server) | the deployed Modal `start_run` URL |
-| `MODAL_RESEARCH_TOKEN` | Node + Modal secret | shared bearer token |
+| Name | Where | Purpose |
+| --- | --- | --- |
+| `PYTHON_RESEARCH_START_RUN_ENDPOINT` | Next server | Creates a queued Python run and spawns background work |
+| `PYTHON_RESEARCH_GET_RUN_ENDPOINT` | Next server | Reads Python run state for UI polling |
+| `MODAL_RESEARCH_TOKEN` | Next + Modal | Optional shared bearer token |
 
-Modal secret `permitpilot-supabase` = `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`. Then `modal deploy src/lib/research/modal/worker.py` (publishes `start_run`), copy its URL into `MODAL_START_RUN_ENDPOINT`, and redeploy Vercel.
+If `PYTHON_RESEARCH_START_RUN_ENDPOINT` is set without
+`PYTHON_RESEARCH_GET_RUN_ENDPOINT`, `POST /api/research/run` fails fast. If
+`PYTHON_RESEARCH_GET_RUN_ENDPOINT` is missing, `GET /api/research/run/:id` fails
+fast. There is intentionally no TypeScript fallback.
 
 ## Flow
-`POST /api/research/run` -> `{run_id, status:"queued"}` immediately. The fan-out runs detached on Modal,
-writing each `EvidenceBundle` to `research_evidence`. `GET /api/research/run/:id` returns progress and,
-once all bundles are in, the finalized `ResearchRun`. The UI `useDurableRun(run_id)` hook polls + subscribes
-to Realtime. With `RESEARCH_RUNTIME` unset, everything behaves as the synchronous demo path.
+
+```text
+POST /api/research/run
+  -> Python start_run
+  -> { run_id, status: "queued" }
+  -> UI polls GET /api/research/run/:id
+  -> Python get_run
+  -> queued/running/.../done/needs_information/needs_review/failed
+```
+
+Python persistence currently uses `research_core.store.LocalRunStore` by
+default, with `RESEARCH_CORE_STORE_ROOT` for local durable JSON records. The
+Modal app is shaped so a Supabase-backed Python store can sit behind the same
+`start_run` and `get_run` endpoints without changing the Next.js shell.
+
+## Verification
+
+```bash
+npm run test -- app/api/research/run/__tests__/route.test.ts app/api/research/run/[id]/__tests__/route.test.ts src/lib/ui/__tests__/store.test.ts
+npm run py:test
+```

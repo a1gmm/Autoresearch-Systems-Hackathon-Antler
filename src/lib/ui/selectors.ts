@@ -94,13 +94,8 @@ export function getRepairHistory(run: ResearchRun, hypothesisId: string): Repair
 /**
  * Resolve a determination row back to its hypothesis id by index alignment.
  *
- * Contract: src/lib/research/synthesis.ts builds `determinations` via
- * `hypotheses.map(...)`, so `run.determinations[i]` corresponds to
- * `run.research_graph[i]`. This is the actual data contract, not a
- * fuzzy text match.
- *
- * Credit: pattern absorbed from BIBOYANG425's PR #1
- * (src/lib/researchSelectors.ts#hypothesisIdForDeterminationIndex).
+ * Contract: Python payloads are adapted into UI rows with determination order
+ * aligned to research_graph order whenever the graph is present.
  */
 export function hypothesisIdForDeterminationIndex(run: ResearchRun, index: number): string | null {
   return run.research_graph[index]?.id ?? null;
