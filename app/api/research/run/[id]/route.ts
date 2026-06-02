@@ -10,6 +10,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const endpoint = process.env.PYTHON_RESEARCH_GET_RUN_ENDPOINT;
     if (endpoint) {
       const pythonRun = await getPythonRun(endpoint, id);
+      if (pythonRun === null) {
+        return NextResponse.json({ run_id: id, status: "failed", error: `run ${id} was not found` }, { status: 404 });
+      }
       return NextResponse.json(shouldAdaptPythonRun(pythonRun) ? toUiResearchRun(pythonRun) : pythonRun);
     }
 
@@ -22,13 +25,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-async function getPythonRun(endpoint: string, runId: string): Promise<PythonRunResult> {
+async function getPythonRun(endpoint: string, runId: string): Promise<PythonRunResult | null> {
   const resp = await fetch(pythonRunUrl(endpoint, runId), {
     method: "GET",
     headers: pythonHeaders(),
   });
   if (!resp.ok) throw new Error(`Python research get_run HTTP ${resp.status}`);
-  return await resp.json() as PythonRunResult;
+  return await resp.json() as PythonRunResult | null;
 }
 
 function pythonRunUrl(endpoint: string, runId: string): string {
