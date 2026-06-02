@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { resolveJurisdictionSkills, jurisdictionSkillId } from "../jurisdictionSkills";
 
+const ALL_58_COUNTIES = [
+  "Alameda", "Alpine", "Amador", "Butte", "Calaveras", "Colusa", "Contra Costa", "Del Norte",
+  "El Dorado", "Fresno", "Glenn", "Humboldt", "Imperial", "Inyo", "Kern", "Kings", "Lake",
+  "Lassen", "Los Angeles", "Madera", "Marin", "Mariposa", "Mendocino", "Merced", "Modoc", "Mono",
+  "Monterey", "Napa", "Nevada", "Orange", "Placer", "Plumas", "Riverside", "Sacramento",
+  "San Benito", "San Bernardino", "San Diego", "San Francisco", "San Joaquin", "San Luis Obispo",
+  "San Mateo", "Santa Barbara", "Santa Clara", "Santa Cruz", "Shasta", "Sierra", "Siskiyou",
+  "Solano", "Sonoma", "Stanislaus", "Sutter", "Tehama", "Trinity", "Tulare", "Tuolumne",
+  "Ventura", "Yolo", "Yuba",
+];
+
 describe("county/city jurisdiction skill tree", () => {
   it("resolves county-level skill when only county is known", () => {
     const r = resolveJurisdictionSkills({ county: "Los Angeles" });
@@ -67,6 +78,14 @@ describe("county/city jurisdiction skill tree", () => {
     expect(r.city, `${city} city skill missing`).not.toBeNull();
     expect(r.city?.content).toContain(marker);
     expect(r.gaps.some((g) => g.startsWith("city:"))).toBe(false);
+  });
+
+  // Full statewide coverage: every one of the 58 CA counties now resolves to a
+  // real researched skill folder — no county-level gap anywhere in the state.
+  it.each(ALL_58_COUNTIES)("resolves CA county %s with a real skill (no county gap)", (county) => {
+    const r = resolveJurisdictionSkills({ county });
+    expect(r.county, `${county} county skill missing`).not.toBeNull();
+    expect(r.gaps.some((g) => g.startsWith("county:"))).toBe(false);
   });
 
   // All 10 incorporated Ventura County cities are now researched (no city gap).
