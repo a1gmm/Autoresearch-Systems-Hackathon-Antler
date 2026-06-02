@@ -6,6 +6,8 @@ import type {
   Determination,
   EvidenceBundle,
   RepairTicket,
+  InformationRequest,
+  Scenario,
 } from "@/lib/research/types";
 
 export type VerificationCounts = {
@@ -25,9 +27,38 @@ export function getVerificationCounts(run: ResearchRun): VerificationCounts {
   const failed_open = [...lastByHyp.values()].filter((v) => v.verdict === "fail").length;
 
   const repairs_ran = run.repair_tickets.length;
-  const blocked = run.coverage_family_statuses.filter((c) => c.status === "blocked_missing_fact").length;
+  const pythonBlocked = new Set((run.information_requests ?? []).flatMap((request) => request.blocks));
+  const blocked = run.coverage_family_statuses.filter((c) => c.status === "blocked_missing_fact").length + pythonBlocked.size;
 
   return { verified, needs_review, failed_open, repairs_ran, blocked };
+}
+
+export function getInformationRequests(run: ResearchRun): InformationRequest[] {
+  return run.information_requests ?? run.scope_pack?.missing_facts.map((fact) => ({
+    field: fact.field,
+    question: `Provide ${fact.field}`,
+    why_needed: fact.why_needed,
+    blocks: fact.blocks,
+  })) ?? [];
+}
+
+export function getScenarios(run: ResearchRun): Scenario[] {
+  return run.scenarios ?? [];
+}
+
+export function getDistrustReasons(run: ResearchRun): string[] {
+  return [
+    ...(run.distrust_reasons ?? []),
+    ...run.verification_verdicts.flatMap((verdict) => verdict.distrust_reasons ?? []),
+  ];
+}
+
+export function getTraceArtifactIds(run: ResearchRun): string[] {
+  return [...new Set(run.trace_events.flatMap((event) => [
+    event.artifact_id,
+    event.raindrop_artifact_id,
+    ...(event.artifact_ids ?? []),
+  ]).filter((artifactId): artifactId is string => Boolean(artifactId)))];
 }
 
 export type RepairAttempt = {
@@ -63,13 +94,8 @@ export function getRepairHistory(run: ResearchRun, hypothesisId: string): Repair
 /**
  * Resolve a determination row back to its hypothesis id by index alignment.
  *
- * Contract: src/lib/research/synthesis.ts builds `determinations` via
- * `hypotheses.map(...)`, so `run.determinations[i]` corresponds to
- * `run.research_graph[i]`. This is the actual data contract, not a
- * fuzzy text match.
- *
- * Credit: pattern absorbed from BIBOYANG425's PR #1
- * (src/lib/researchSelectors.ts#hypothesisIdForDeterminationIndex).
+ * Contract: Python payloads are adapted into UI rows with determination order
+ * aligned to research_graph order whenever the graph is present.
  */
 export function hypothesisIdForDeterminationIndex(run: ResearchRun, index: number): string | null {
   return run.research_graph[index]?.id ?? null;

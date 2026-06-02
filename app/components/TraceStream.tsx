@@ -7,6 +7,7 @@ const STATUS_COLOR: Record<string, string> = {
   running: "text-cyan-300",
   failed: "text-red-400",
   needs_review: "text-amber-400",
+  needs_information: "text-cyan-300",
   queued: "text-slate-500",
 };
 
@@ -41,7 +42,14 @@ export function TraceStream() {
             >
               {e.phase}
             </span>
-            <span className="text-slate-300">{e.message}</span>
+            <span className="text-slate-300">
+              {e.message}
+              {(e.artifact_id || e.raindrop_artifact_id) && (
+                <span className="ml-1.5 text-slate-500 font-mono">
+                  [{e.raindrop_artifact_id ?? e.artifact_id}]
+                </span>
+              )}
+            </span>
           </motion.div>
         ))}
       </AnimatePresence>

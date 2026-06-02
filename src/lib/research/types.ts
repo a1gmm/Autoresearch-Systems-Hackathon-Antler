@@ -1,11 +1,19 @@
-import type { HarnessToolId } from "./toolCatalog";
 import type { SdsHandoffRef, SdsReview } from "@/lib/sds/types";
+
+export type HarnessToolId = string;
 
 export type RunStatus =
   | "idle"
   | "queued"
+  | "scoping"
   | "running"
+  | "planning"
+  | "researching"
+  | "verifying"
+  | "repairing"
+  | "synthesizing"
   | "partial"
+  | "needs_information"
   | "needs_review"
   | "done"
   | "failed";
@@ -161,6 +169,7 @@ export type VerificationVerdict = {
   checks: Record<string, { pass: boolean; reason: string }>;
   confidence: number;
   repair_tickets: RepairTicket[];
+  distrust_reasons?: string[];
 };
 
 export type RepairTicket = {
@@ -200,9 +209,34 @@ export type TraceEvent = {
   ts: string;
   actor: string;
   phase: string;
-  status: "queued" | "running" | "done" | "failed" | "needs_review";
+  status: "queued" | "running" | "done" | "failed" | "needs_review" | "needs_information";
   message: string;
   artifact_id?: string;
+  artifact_ids?: string[];
+  raindrop_artifact_id?: string;
+  payload?: Record<string, unknown>;
+};
+
+export type InformationRequest = {
+  field: string;
+  question: string;
+  why_needed: string;
+  blocks: string[];
+};
+
+export type ScenarioAssumption = {
+  field: string;
+  value: unknown;
+  unit?: string | null;
+  provenance?: "provided_exact" | "provided_estimate" | "agent_suggested_user_accepted" | "agent_inferred" | "missing" | string;
+};
+
+export type Scenario = {
+  id: string;
+  label: "low" | "expected" | "high" | string;
+  assumptions: ScenarioAssumption[];
+  rationale: string;
+  affects: string[];
 };
 
 export type MemoryUpdate = {
@@ -233,6 +267,9 @@ export type ResearchRun = {
   determinations: Determination[];
   trace_events: TraceEvent[];
   report_markdown: string;
+  information_requests?: InformationRequest[];
+  scenarios?: Scenario[];
+  distrust_reasons?: string[];
   sds_reviews?: SdsReview[];
 };
 

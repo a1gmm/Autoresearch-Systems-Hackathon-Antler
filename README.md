@@ -1,91 +1,99 @@
-# PermitPilot — EHS Permit Research Swarm
+# PermitPilot - Python EHS Research Runtime
 
-An AI-native Environmental, Health & Safety (EHS) research system. Given a free-text
-facility or project change, it produces a **defensible regulatory applicability
-matrix**: every "this permit applies" row is backed by a current, verbatim-quoted
-primary source, and anything that can't be grounded **fails closed to human review**
-rather than guessing.
+PermitPilot is an Environmental, Health & Safety research system that turns a
+project description into a defensible regulatory applicability report. The
+research runtime now lives in Python under `src/research_core/`; the Next.js app
+is an API/UI shell that proxies to Python/Modal endpoints and renders Python run
+records.
 
-Scope today: **California** (SCAQMD air, CA stormwater IGP/CGP, CA HMBP, hazardous
-waste generator status, wastewater pretreatment).
+Scope today: California EHS research with jurisdiction resolution, registry
+planning, discovery candidates, sandboxed source/document/browser tools,
+verification and repair, missing-fact scenarios, synthesis, and Raindrop
+Workshop tracing.
 
-## How it works
+## Runtime Shape
 
-```
-intake (LLM, OpenAI) -> ScopePack (typed facts + missing_facts)
-        |
-        v
-planResearch  - derives the hypothesis task list from the PROGRAM REGISTRY
-        |        (single source of truth); each triggered program -> research tasks.
-        |        No hardcoded family list, no fixed angle pool.
-        v
-research pool - one agentic worker per hypothesis (real fetch over an allowlist +
-        |        LLM extraction, grounded against the fetched source). Fails closed
-        |        when the backend is unavailable; never substitutes canned results.
-        v
-verifier      - ID-agnostic mechanical checks: currency, authority, grounding
-        |        (claim quote must be a verbatim span of the source), predicate.
-        |        Confidence < 0.9 or a grounding failure -> re-dispatch the researcher
-        |        (bounded retry) until it verifies or converges to needs_review.
-        v
-completeness  - re-derives the EXPECTED program set from the registry x scope and
-        |        flags any program never investigated (the recall floor).
-        v
-synthesis     - applicability matrix; a row is "verified" only at confidence >= 0.9.
+```text
+Next.js UI/API shell
+  -> POST /api/research/run
+     -> PYTHON_RESEARCH_RUN_SYNC_ENDPOINT or PYTHON_RESEARCH_START_RUN_ENDPOINT
+  -> GET /api/research/run/:id
+     -> PYTHON_RESEARCH_GET_RUN_ENDPOINT
+  -> Python src/research_core/modal_app.py
+     -> orchestrator -> planner/discovery -> agents/tools -> verifier/repair -> synthesis/store
 ```
 
-Subagent memory is **artifact-driven**: each research result is written to an
-`ArtifactStore`, so retries and resumed runs accumulate evidence instead of
-starting cold.
+The removed TypeScript research runtime is no longer a fallback. If the Python
+endpoints are not configured, the API returns a clear configuration error.
 
-## Key modules (`src/lib/research/`)
+## Key Modules
 
-| File | Role |
+| Path | Role |
 | --- | --- |
-| `scope.ts` | LLM intake -> typed `ScopePack` (fail-closed `emptyScope`) |
-| `programRegistry.ts` | Single source of truth: one entry per permit program, with triggers, hypotheses, and authority URL |
-| `planner.ts` | Registry-driven hypothesis task list |
-| `workers.ts` / `modal/` | Real agentic research worker (fetch + ground + extract) |
-| `verifier.ts` | ID-agnostic mechanical verification + repair tickets |
-| `confidence.ts` | `computeConfidence` (cap-don't-average) + the 0.9 synthesis gate |
-| `completeness.ts` | Recall floor — catches wholly-missed programs |
-| `artifactStore.ts` | Artifact-driven subagent memory |
-| `synthesis.ts` | Applicability matrix + determinations |
-| `toolCatalog.ts` | Role-scoped agent tools (incl. VOC/chemical analysis) |
-| `skills/<id>/SKILL.md` | Per-program orientation docs (read by researchers; never citable evidence) |
+| `src/research_core/models.py` | Pydantic runtime contract |
+| `src/research_core/planner.py` | Registry-driven planning |
+| `src/research_core/agents.py` | OpenAI Agents SDK agent definitions |
+| `src/research_core/tools.py` | Sandboxed regulatory web/document/file tools |
+| `src/research_core/verifier.py` | Verification, repair tickets, distrust reasons |
+| `src/research_core/scenarios.py` | Missing-fact estimates and suggestions |
+| `src/research_core/orchestrator.py` | End-to-end run lifecycle |
+| `src/research_core/modal_app.py` | Modal endpoints and durable worker functions |
+| `src/lib/research/types.ts` | UI-facing ResearchRun contract |
+| `src/lib/research/pythonRunAdapter.ts` | Python payload to UI shape adapter |
+| `src/lib/research/skills/**` | Markdown skill assets read by the Python runtime |
 
-## Design invariants
+## Environment
 
-- **Nothing for show.** No fixture/canned research path; tests drive the real
-  pipeline via an injected transport.
-- **Verifier owns truth, mechanically.** No per-hypothesis-ID rubber-stamping; a
-  determination is only "verified" when its quote is a verbatim span of a current,
-  high-authority source and confidence >= 0.9.
-- **Fail closed.** Missing facts, unreachable sources, and low confidence become
-  `needs_review` — never a guessed "applies".
-- **Registry is the source of truth.** Skills and the recall floor are projections
-  of it; adding a program to the registry adds it to the plan.
+Use one POST path:
 
-## Running locally
+| Name | Purpose |
+| --- | --- |
+| `PYTHON_RESEARCH_RUN_SYNC_ENDPOINT` | Modal/FastAPI sync endpoint for demo/local runs |
+| `PYTHON_RESEARCH_START_RUN_ENDPOINT` | Modal async start endpoint for durable runs |
+| `PYTHON_RESEARCH_GET_RUN_ENDPOINT` | Modal get_run endpoint; required for async starts and GET polling |
+| `MODAL_RESEARCH_TOKEN` | Optional shared bearer token sent as `Authorization` and `x-research-token` |
+| `OPENAI_API_KEY` | Intake and live Python Agents SDK calls |
+| `SUPABASE_URL` | Durable Python run store URL for Modal/production |
+| `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` | Service key used by Python workers for run/evidence writes |
+| `RESEARCH_CORE_DEPS_MODE` | Optional override; Modal defaults to `live`, tests can use `fake` |
+| `RESEARCH_CORE_STORE_ROOT` | Optional local durable JSON store root for Python tests/dev |
+| `RESEARCH_CORE_SEARCH_ENDPOINT` | Optional sandbox-approved web search endpoint for live regulatory tools |
+
+## Running Locally
 
 ```bash
 npm install
-npm run dev          # Next dev server
-npm run test         # vitest
-npm run typecheck    # tsc --noEmit
-npm run eval         # golden cases + adversarial grounding eval (CI-gated)
+python3 -m venv .venv
+PATH=.venv/bin:$PATH python3 -m pip install -r requirements-dev.txt
+npm run dev
+npm run test
+PATH=.venv/bin:$PATH npm run py:test
+npm run typecheck
+PATH=.venv/bin:$PATH npm run eval
 ```
 
-Environment:
-- `OPENAI_API_KEY` — intake + scope extraction (omit -> fail-closed `emptyScope`).
-- `MODAL_RESEARCH_ENDPOINT` / `MODAL_RESEARCH_TOKEN` — the live research worker
-  (omit -> research fails closed to `needs_review`; the pipeline still runs).
-- `RAINDROP_LOCAL_DEBUGGER` — optional trace debugging (silent when unset).
+For local browser-tool runs, install Playwright's Chromium binary once:
 
-## Repository hygiene
+```bash
+PATH=.venv/bin:$PATH python3 -m playwright install chromium
+```
 
-- Never commit API keys, `.env` files, or customer data.
-- Treat final determinations as **human-review research support — not legal advice
-  or autonomous filing.**
+Deploy/smoke Modal with:
 
-Planning/design history lives in [`docs/archive/`](./docs/archive/).
+```bash
+modal deploy src/research_core/modal_app.py
+./scripts/test-modal.sh
+```
+
+## Invariants
+
+- Python owns planning, fanout, verification/repair, synthesis, durable worker
+  execution, and tracing.
+- Next.js never fabricates research results and no longer falls back to the old
+  TypeScript runtime.
+- Missing facts produce information requests and, when the user does not know,
+  low/expected/high scenarios with provenance.
+- `needs_review` appears only when the verifier still does not trust the work
+  after bounded repair/information attempts, and the response explains why.
+- Treat final determinations as human-review research support, not legal advice
+  or autonomous filing.

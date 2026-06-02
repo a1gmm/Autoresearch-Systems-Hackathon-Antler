@@ -167,6 +167,18 @@ export function SynthesisDetail({
                     </div>
                   ))}
                 </div>
+                {verdict.distrust_reasons && verdict.distrust_reasons.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-dashed border-slate-700/50">
+                    <div className="text-[10px] text-amber-300/80 uppercase font-semibold mb-1">
+                      Distrust reasons
+                    </div>
+                    {verdict.distrust_reasons.map((reason) => (
+                      <div key={reason} className="text-[11px] text-slate-400">
+                        {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             )}
 

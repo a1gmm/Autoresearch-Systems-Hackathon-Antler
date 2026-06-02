@@ -3,9 +3,17 @@ import { useStore } from "@/lib/ui/store";
 import { Activity, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 
+function statusTone(status: string) {
+  if (status === "done") return { dot: "bg-teal-400 glow-verified", text: "text-teal-400" };
+  if (status === "failed") return { dot: "bg-red-400", text: "text-red-400" };
+  if (status === "needs_information") return { dot: "bg-cyan-400 animate-pulse", text: "text-cyan-300" };
+  return { dot: "bg-amber-400 animate-pulse", text: "text-amber-400" };
+}
+
 export function Header() {
   const run = useStore((s) => s.run);
   const reset = useStore((s) => s.reset);
+  const tone = run ? statusTone(run.status) : null;
   return (
     <motion.header
       className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60 bg-slate-900/80 backdrop-blur-md"
@@ -47,11 +55,9 @@ export function Header() {
             transition={{ duration: 0.3, delay: 0.1 }}
           >
             <span
-              className={`inline-block w-1.5 h-1.5 rounded-full ${
-                run.status === "done" ? "bg-teal-400 glow-verified" : "bg-amber-400 animate-pulse"
-              }`}
+              className={`inline-block w-1.5 h-1.5 rounded-full ${tone?.dot}`}
             />
-            <b className={run.status === "done" ? "text-teal-400" : "text-amber-400"}>
+            <b className={tone?.text}>
               {run.status}
             </b>
           </motion.span>

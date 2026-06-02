@@ -77,9 +77,7 @@ describe("getRepairHistory", () => {
 });
 
 describe("hypothesisIdForDeterminationIndex", () => {
-  // Contract: src/lib/research/synthesis.ts builds determinations via
-  // hypotheses.map(...), so determinations[i] is 1:1 with research_graph[i].
-  // Credit: pattern borrowed from BIBOYANG425's PR #1 / src/lib/researchSelectors.ts.
+    // Contract: adapted Python determinations stay index-aligned with research_graph.
   it("returns the hypothesis id at the same index", () => {
     const hyps = [
       { id: "hyp_air", angle_id: "a", family: "air", question: "?", required_facts: [], expected_source_type: "regulation", success_criteria: [], dependencies: [] },

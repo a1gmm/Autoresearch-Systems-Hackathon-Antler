@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runResearch } from "@/lib/research/run";
-import { isStoreConfigured } from "@/lib/research/store/supabaseStore";
-import { enqueueRun } from "@/lib/research/durable/durableRun";
+import { toUiResearchRun, type PythonRunResult } from "@/lib/research/pythonRunAdapter";
 
-// Hold the serverless function open as long as the plan allows. Vercel REJECTS the
-// deploy if this exceeds the plan's ceiling (800 failed → the plan caps lower), so we
-// use 60s — the proven-good value the intake route already deploys with. The Modal
-// worker itself runs up to 600s (not subject to Vercel limits); a live run that needs
-// longer than the Vercel route allows is the durable Function.spawn+poll case (deferred).
+// The research route is now a Python runtime proxy. Synchronous Modal calls may hold
+// this function open briefly; long runs should use start_run + get_run polling.
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
@@ -16,21 +11,27 @@ export async function POST(request: NextRequest) {
       project_description?: string;
       demo_documents?: Array<{ name: string; type: string; text: string }>;
     };
+    const input = {
+      project_description: body.project_description ?? "",
+      demo_documents: body.demo_documents ?? [],
+    };
 
-    if (process.env.RESEARCH_RUNTIME === "durable" && isStoreConfigured()) {
-      const { run_id, status } = await enqueueRun({
-        project_description: body.project_description ?? "",
-        demo_documents: body.demo_documents ?? [],
-      });
-      return NextResponse.json({ run_id, status });
+    const syncEndpoint = process.env.PYTHON_RESEARCH_RUN_SYNC_ENDPOINT;
+    if (syncEndpoint) {
+      const pythonRun = await postPythonRun(syncEndpoint, input);
+      return NextResponse.json(toUiResearchRun(pythonRun));
     }
 
-    const run = await runResearch({
-      project_description: body.project_description ?? "",
-      demo_documents: body.demo_documents ?? []
-    });
+    const startEndpoint = process.env.PYTHON_RESEARCH_START_RUN_ENDPOINT;
+    if (startEndpoint) {
+      if (!process.env.PYTHON_RESEARCH_GET_RUN_ENDPOINT) {
+        throw new Error("PYTHON_RESEARCH_GET_RUN_ENDPOINT must be configured when PYTHON_RESEARCH_START_RUN_ENDPOINT is set");
+      }
+      const pythonRun = await postPythonRun(startEndpoint, input);
+      return NextResponse.json(shouldAdaptPythonRun(pythonRun) ? toUiResearchRun(pythonRun) : pythonRun);
+    }
 
-    return NextResponse.json(run);
+    throw new Error("Configure PYTHON_RESEARCH_RUN_SYNC_ENDPOINT or PYTHON_RESEARCH_START_RUN_ENDPOINT to run research");
   } catch (error) {
     return NextResponse.json(
       {
@@ -41,4 +42,36 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function postPythonRun(endpoint: string, input: { project_description: string; demo_documents: Array<{ name: string; type: string; text: string }> }): Promise<PythonRunResult> {
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: pythonHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!resp.ok) throw new Error(`Python research endpoint HTTP ${resp.status}`);
+  return await resp.json() as PythonRunResult;
+}
+
+function pythonHeaders(): HeadersInit {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const token = process.env.MODAL_RESEARCH_TOKEN;
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+    headers["x-research-token"] = token;
+  }
+  return headers;
+}
+
+function shouldAdaptPythonRun(payload: PythonRunResult): boolean {
+  return Boolean(
+    payload.result ||
+      payload.determinations ||
+      payload.information_requests ||
+      payload.scenarios ||
+      payload.report_markdown ||
+      payload.verdicts ||
+      payload.evidence,
+  );
 }

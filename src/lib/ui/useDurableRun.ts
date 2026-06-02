@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import type { ResearchRun } from "@/lib/research/types";
+import { toUiResearchRun } from "@/lib/research/pythonRunAdapter";
 
 // Minimal durable-run consumer: poll GET /:id, and (if Supabase Realtime is configured)
 // re-fetch immediately when an evidence/run row changes. Not the full streaming rewrite.
@@ -23,7 +24,7 @@ export function useDurableRun(runId: string | null, pollMs = 3000) {
       const data = await resp.json();
       statusRef.current = data.status;
       setStatus(data.status);
-      if (data.determinations) setRun(data as ResearchRun);
+      if (data.determinations || data.information_requests || data.scenarios || data.result) setRun(toUiResearchRun(data));
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -37,11 +38,15 @@ export function useDurableRun(runId: string | null, pollMs = 3000) {
       : null;
 
     void refetch();
-    const timer = setInterval(() => { if (!stopped.current && statusRef.current !== "done") void refetch(); }, pollMs);
+    const timer = setInterval(() => { if (!stopped.current && !isTerminalStatus(statusRef.current)) void refetch(); }, pollMs);
 
     return () => { stopped.current = true; clearInterval(timer); if (sb && channel) void sb.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
   return { run, status };
+}
+
+function isTerminalStatus(status: string) {
+  return status === "done" || status === "needs_review" || status === "needs_information" || status === "failed";
 }
