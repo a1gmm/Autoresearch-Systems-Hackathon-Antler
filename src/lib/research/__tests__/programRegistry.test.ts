@@ -5,7 +5,7 @@ import type { ScopePack } from "../types";
 
 const maximalScope: ScopePack = {
   run_id: "t",
-  facility: { address: "x", jurisdiction_stack: ["SCAQMD"], naics: "332999", sic: "3499" },
+  facility: { address: "x", jurisdiction_stack: ["SCAQMD"], county: null, city: null, naics: "332999", sic: "3499" },
   project_change: {
     description: "test",
     equipment: [{ kind: "coating_booth", description: "" }],

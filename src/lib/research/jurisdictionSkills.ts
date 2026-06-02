@@ -14,11 +14,15 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "skills", "jurisdictions");
 
+// Strip diacritics so "San José" and "San Jose" both map to the same folder id.
+function deaccent(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
 function slugCounty(county: string): string {
-  return county.trim().toLowerCase().replace(/\s+/g, "-").replace(/-county$/, "") + "-county";
+  return deaccent(county).trim().toLowerCase().replace(/\s+/g, "-").replace(/-county$/, "") + "-county";
 }
 function slugCity(city: string): string {
-  return "city-of-" + city.trim().toLowerCase().replace(/\s+/g, "-");
+  return "city-of-" + deaccent(city).trim().toLowerCase().replace(/\s+/g, "-");
 }
 
 /** The folder id for a county (and optional city) — the path under jurisdictions/. */

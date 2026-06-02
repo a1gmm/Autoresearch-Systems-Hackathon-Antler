@@ -5,7 +5,7 @@ import type { ScopePack } from "../types";
 function scopeWith(overrides: Partial<ScopePack["project_change"]> = {}): ScopePack {
   return {
     run_id: "t",
-    facility: { address: "x", jurisdiction_stack: ["SCAQMD"], naics: null, sic: null },
+    facility: { address: "x", jurisdiction_stack: ["SCAQMD"], county: null, city: null, naics: null, sic: null },
     project_change: {
       description: "test",
       equipment: [{ kind: "coating_booth", description: "" }],

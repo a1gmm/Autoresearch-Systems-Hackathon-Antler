@@ -190,6 +190,7 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
     pointers = source_pointers if source_pointers is not None else SOURCE_POINTERS
     hid = task_spec.get("hypothesis_id", "")
     question = task_spec.get("question") or hid
+    jurisdiction_context = (task_spec.get("jurisdiction_context") or "").strip()
     allowed = set(task_spec.get("allowed_tools", []))
     blocked = set(task_spec.get("blocked_tools", []))
     budget = task_spec.get("budget", {}) or {}
@@ -201,9 +202,18 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
         return failed_bundle(hid, f"No source pointer for {hid}")
 
     tools = exposed_tool_schemas(list(allowed))
+    user_content = f"Hypothesis {hid}. Question: {question}"
+    if jurisdiction_context:
+        # Orient the subagent on the resolved controlling authorities (and any
+        # UNRESOLVED levels it must not assume). It still must fetch and quote a
+        # primary source; this only tells it WHOSE rules apply for this location.
+        user_content += (
+            "\n\nLocal jurisdiction context (orientation only — still fetch and quote the "
+            "primary source):\n" + jurisdiction_context
+        )
     messages = [
         {"role": "system", "content": RESEARCH_SKILL_PROMPT},
-        {"role": "user", "content": f"Hypothesis {hid}. Question: {question}"},
+        {"role": "user", "content": user_content},
     ]
 
     fetched_text = ""

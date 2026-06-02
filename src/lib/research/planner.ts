@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { blockedToolIdsForRole, researchWorkerToolIds } from "./toolCatalog";
 import { PROGRAM_REGISTRY, type ProgramRegistryEntry } from "./programRegistry";
+import { jurisdictionContextFor } from "./jurisdictionResolve";
 
 // The planner generates a hypothesis TASK LIST from the program registry — the
 // single source of truth — instead of a hardcoded family array or a fixed pool
@@ -42,7 +43,10 @@ export function planResearch(scope: ScopePack, sdsActiveFamilies: ReadonlySet<Co
   const research_graph: ResearchHypothesis[] = activePrograms.flatMap((program) =>
     program.hypotheses.map((h) => hypothesisFromRegistry(program, h, familyStatusBy.get(program.family)))
   );
-  const research_tasks = research_graph.map(taskForHypothesis);
+  // Resolve the local jurisdiction once and hand every research task the same
+  // orienting context (controlling authorities + local skill bodies + gaps).
+  const jurisdiction_context = jurisdictionContextFor(scope.facility);
+  const research_tasks = research_graph.map((h) => taskForHypothesis(h, jurisdiction_context));
 
   return { coverage_family_statuses, regulatory_angles, research_graph, research_tasks };
 }
@@ -186,7 +190,7 @@ function hypothesisFromRegistry(
   };
 }
 
-function taskForHypothesis(hypothesis: ResearchHypothesis): ResearchTask {
+function taskForHypothesis(hypothesis: ResearchHypothesis, jurisdiction_context?: string): ResearchTask {
   return {
     task_id: `T-${hypothesis.id.slice(2)}`,
     hypothesis_id: hypothesis.id,
@@ -197,6 +201,7 @@ function taskForHypothesis(hypothesis: ResearchHypothesis): ResearchTask {
       max_sources: 3,
       max_runtime_seconds: 30,
       max_model_calls: 4
-    }
+    },
+    ...(jurisdiction_context ? { jurisdiction_context } : {})
   };
 }

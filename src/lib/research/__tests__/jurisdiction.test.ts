@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAirDistrict, AIR_DISTRICTS, REGIONAL_WATER_BOARDS } from "../jurisdictionRegistry";
+import { resolveAirDistrict, resolveWaterBoard, AIR_DISTRICTS, REGIONAL_WATER_BOARDS } from "../jurisdictionRegistry";
 
 describe("jurisdiction registry", () => {
   it("has all 35 California air districts", () => {
@@ -41,3 +41,48 @@ describe("jurisdiction registry", () => {
     expect(r.districts).toEqual([]);
   });
 });
+
+describe("regional water board resolution", () => {
+  it("resolves a single-region county directly", () => {
+    const r = resolveWaterBoard("Orange");
+    expect(r.boards.map((b) => b.id)).toEqual(["region-8-santa-ana"]);
+    expect(r.needsGeometry).toBe(false);
+  });
+
+  it("flags Riverside as a three-region split needing geometry", () => {
+    const r = resolveWaterBoard("Riverside");
+    const ids = r.boards.map((b) => b.id);
+    expect(ids).toContain("region-7-colorado-river-basin");
+    expect(ids).toContain("region-8-santa-ana");
+    expect(ids).toContain("region-9-san-diego");
+    expect(r.needsGeometry).toBe(true);
+  });
+
+  it("maps San Diego to regions 9 and 7 (per the State Board fact sheet), not region 8", () => {
+    const ids = resolveWaterBoard("San Diego").boards.map((b) => b.id);
+    expect(ids).toContain("region-9-san-diego");
+    expect(ids).toContain("region-7-colorado-river-basin");
+    expect(ids).not.toContain("region-8-santa-ana");
+  });
+
+  it("returns empty (not a guess) for an unknown county", () => {
+    expect(resolveWaterBoard("Nowhere").boards).toEqual([]);
+  });
+
+  it("covers all 58 counties", () => {
+    // every CA county resolves to at least one region (no silent gaps)
+    const missing = COUNTY_NAMES.filter((c) => resolveWaterBoard(c).boards.length === 0);
+    expect(missing).toEqual([]);
+  });
+});
+
+const COUNTY_NAMES = [
+  "Alameda", "Alpine", "Amador", "Butte", "Calaveras", "Colusa", "Contra Costa", "Del Norte",
+  "El Dorado", "Fresno", "Glenn", "Humboldt", "Imperial", "Inyo", "Kern", "Kings", "Lake",
+  "Lassen", "Los Angeles", "Madera", "Marin", "Mariposa", "Mendocino", "Merced", "Modoc", "Mono",
+  "Monterey", "Napa", "Nevada", "Orange", "Placer", "Plumas", "Riverside", "Sacramento",
+  "San Benito", "San Bernardino", "San Diego", "San Francisco", "San Joaquin", "San Luis Obispo",
+  "San Mateo", "Santa Barbara", "Santa Clara", "Santa Cruz", "Shasta", "Sierra", "Siskiyou",
+  "Solano", "Sonoma", "Stanislaus", "Sutter", "Tehama", "Trinity", "Tulare", "Tuolumne",
+  "Ventura", "Yolo", "Yuba",
+];

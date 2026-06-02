@@ -84,3 +84,47 @@ export function resolveAirDistrict(county: string): AirDistrictResolution {
   const districts = AIR_DISTRICTS.filter((d) => d.counties.some((c) => c.toLowerCase() === norm));
   return { county, districts, needsGeometry: districts.length > 1 };
 }
+
+// County -> Regional Water Quality Control Board region number(s).
+// Source: State Water Resources Control Board "The Nine Regional Water Quality
+// Control Boards in California" fact sheet (waterboards.ca.gov). Region lines are
+// HYDROLOGIC (watershed), not county lines, so many counties span multiple
+// regions; those are listed with every region the fact sheet names. The legally
+// controlling boundary is the GIS layer — multi-region counties therefore need
+// sub-county geometry to pin a single board (needsGeometry below).
+export const COUNTY_WATER_REGIONS: Readonly<Record<string, number[]>> = {
+  Alameda: [2], Alpine: [6], Amador: [5], Butte: [5], Calaveras: [5], Colusa: [5],
+  "Contra Costa": [2, 5], "Del Norte": [1], "El Dorado": [5, 6], Fresno: [5], Glenn: [1, 5],
+  Humboldt: [1], Imperial: [7, 9], Inyo: [6], Kern: [3, 5, 6], Kings: [5], Lake: [1, 5],
+  Lassen: [5, 6], "Los Angeles": [4, 6], Madera: [5], Marin: [1, 2], Mariposa: [5],
+  Mendocino: [1], Merced: [5], Modoc: [1, 5, 6], Mono: [6], Monterey: [3], Napa: [2, 5],
+  Nevada: [5, 6], Orange: [8], Placer: [5, 6], Plumas: [5], Riverside: [7, 8, 9],
+  Sacramento: [5], "San Benito": [3, 5], "San Bernardino": [6, 7, 8], "San Diego": [7, 9],
+  "San Francisco": [2], "San Joaquin": [5], "San Luis Obispo": [3, 5], "San Mateo": [2, 3],
+  "Santa Barbara": [3, 4], "Santa Clara": [2, 3], "Santa Cruz": [3], Shasta: [5], Sierra: [5, 6],
+  Siskiyou: [1, 5], Solano: [2, 5], Sonoma: [1, 2], Stanislaus: [5], Sutter: [5], Tehama: [5],
+  Trinity: [1], Tulare: [5], Tuolumne: [5], Ventura: [3, 4], Yolo: [5], Yuba: [5],
+};
+
+const BOARD_BY_REGION = new Map<number, RegionalWaterBoard>(
+  REGIONAL_WATER_BOARDS.map((b) => [Number(b.id.split("-")[1]), b]),
+);
+
+export type WaterBoardResolution = {
+  county: string;
+  boards: RegionalWaterBoard[];
+  // True when the county spans more than one region — a single board can't be
+  // chosen on the county name alone (needs sub-county watershed geometry).
+  needsGeometry: boolean;
+};
+
+// Resolve the regional water board(s) for a county. Returns every board whose
+// region covers the county; needsGeometry is true when more than one does.
+// Unknown county -> empty (never a guess).
+export function resolveWaterBoard(county: string): WaterBoardResolution {
+  const norm = county.trim().replace(/\s+county$/i, "");
+  const key = Object.keys(COUNTY_WATER_REGIONS).find((c) => c.toLowerCase() === norm.toLowerCase());
+  const regions = key ? COUNTY_WATER_REGIONS[key] : [];
+  const boards = regions.map((n) => BOARD_BY_REGION.get(n)).filter((b): b is RegionalWaterBoard => !!b);
+  return { county, boards, needsGeometry: boards.length > 1 };
+}

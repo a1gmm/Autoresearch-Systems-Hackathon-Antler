@@ -55,6 +55,21 @@ describe("runModalResearchPool (http)", () => {
     expect(sentSpec.blocked_tools).toContain("get_form");
   });
 
+  it("forwards the resolved jurisdiction context to the worker", async () => {
+    process.env.MODAL_RESEARCH_ENDPOINT = "https://x.modal.run/research";
+    process.env.MODAL_RESEARCH_TOKEN = "secret";
+    const fake = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      return okResponse(body.task_spec.hypothesis_id);
+    });
+    __setFetchForTests(fake as unknown as typeof fetch);
+
+    const t = { ...task("H-AIR-201"), jurisdiction_context: "Resolved authorities: South Coast AQMD" };
+    await runModalResearchPool([t], [hyp("H-AIR-201")]);
+    const sentSpec = JSON.parse(String((fake.mock.calls[0][1] as RequestInit).body)).task_spec;
+    expect(sentSpec.jurisdiction_context).toContain("South Coast AQMD");
+  });
+
   it("flags degraded (no requests) when env is unset", async () => {
     const fake = vi.fn();
     __setFetchForTests(fake as unknown as typeof fetch);

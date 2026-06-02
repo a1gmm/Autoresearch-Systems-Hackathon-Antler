@@ -6,7 +6,7 @@ import type { ScopePack } from "../types";
 function scope(over: Partial<ScopePack["project_change"]> = {}, facility: Partial<ScopePack["facility"]> = {}): ScopePack {
   return {
     run_id: "r",
-    facility: { address: "X", jurisdiction_stack: [], naics: null, sic: null, ...facility },
+    facility: { address: "X", jurisdiction_stack: [], county: null, city: null, naics: null, sic: null, ...facility },
     project_change: { description: "d", equipment: [], chemicals: [], waste_streams: [], disturbance_acres: null, process_discharge: null, ...over },
     missing_facts: [],
     assumptions: [],

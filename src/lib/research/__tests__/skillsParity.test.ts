@@ -19,6 +19,8 @@ function maximalScope(): ScopePack {
     facility: {
       address: "1 Test Way, Los Angeles, CA",
       jurisdiction_stack: ["CA", "SCAQMD"],
+      county: "Los Angeles",
+      city: "Los Angeles",
       naics: "333912",
       sic: "3471",
     },

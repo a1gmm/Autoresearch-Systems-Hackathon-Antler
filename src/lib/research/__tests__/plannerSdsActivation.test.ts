@@ -6,7 +6,7 @@ import type { CoverageFamily, ScopePack } from "../types";
 // would normally be out_of_scope or blocked.
 const bareScope: ScopePack = {
   run_id: "run_test",
-  facility: { address: "site", jurisdiction_stack: [], naics: null, sic: null },
+  facility: { address: "site", jurisdiction_stack: [], county: null, city: null, naics: null, sic: null },
   project_change: {
     description: "bare",
     equipment: [],

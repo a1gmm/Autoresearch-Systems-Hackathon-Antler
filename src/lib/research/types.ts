@@ -38,6 +38,12 @@ export type ScopePack = {
   facility: {
     address: string;
     jurisdiction_stack: string[];
+    // County and (optional) incorporated city, extracted from the address by
+    // intake. Drive local-jurisdiction resolution (air district, water board,
+    // CUPA). Null when intake could not determine them — fail-closed, never
+    // guessed, so resolution reports an honest gap instead of a wrong authority.
+    county: string | null;
+    city: string | null;
     naics: string | null;
     sic: string | null;
   };
@@ -94,6 +100,10 @@ export type ResearchTask = {
     max_runtime_seconds: number;
     max_model_calls: number;
   };
+  // Resolved local-jurisdiction orientation for the research subagent: the
+  // controlling authorities (air district, water board, CUPA / fire / building)
+  // and any UNRESOLVED levels it must not assume. Absent when no county is known.
+  jurisdiction_context?: string;
 };
 
 export type SourceFixture = {

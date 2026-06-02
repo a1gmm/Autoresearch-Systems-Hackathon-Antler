@@ -30,6 +30,23 @@ describe("durableRun", () => {
     expect(d.startModalRun).toHaveBeenCalledOnce();
   });
 
+  it("forwards a task's jurisdiction_context into the Modal task_spec", async () => {
+    const spawn = vi.fn(async () => {});
+    const d = deps({
+      planRun: (async () => ({
+        run_id: "run_j", scope_pack: { facility: { jurisdiction_stack: ["South Coast AQMD"] } },
+        plan: {
+          research_tasks: [{ task_id: "T1", hypothesis_id: "H-AIR-201", allowed_tools: [], blocked_tools: [], budget: {}, jurisdiction_context: "Resolved: South Coast AQMD" }],
+          research_graph: [{ id: "H-AIR-201", question: "q" }], coverage_family_statuses: [], regulatory_angles: [],
+        }, sds_reviews: [], trace_events: [],
+      })) as any,
+      startModalRun: spawn,
+    });
+    await enqueueRun({ project_description: "x" }, d);
+    const specs = (spawn.mock.calls[0] as any[])[1] as any[];
+    expect(specs[0].jurisdiction_context).toBe("Resolved: South Coast AQMD");
+  });
+
   it("enqueueRun marks the run failed if Modal spawn throws", async () => {
     const d = deps({ startModalRun: vi.fn(async () => { throw new Error("boom"); }) });
     await expect(enqueueRun({ project_description: "x" }, d)).rejects.toThrow(/boom/);

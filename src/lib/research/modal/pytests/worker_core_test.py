@@ -115,6 +115,21 @@ def test_exposed_tool_schemas_filters_to_allowed():
     assert names == {"fetch_source", "extract_threshold"}
 
 
+def test_agent_injects_jurisdiction_context_into_prompt():
+    seen = {}
+
+    def llm_fn(messages, tools):
+        seen["messages"] = messages
+        return {"content": "done", "tool_calls": []}
+
+    spec = _spec()
+    spec["jurisdiction_context"] = "Resolved authorities: South Coast AQMD\nUNRESOLVED: water_geometry:Los Angeles"
+    run_research_agent(spec, llm_fn=llm_fn, fetch_fn=lambda url: ("h", "t"), extract_fn=None, now_iso="t")
+    user_msg = next(m for m in seen["messages"] if m["role"] == "user")
+    assert "South Coast AQMD" in user_msg["content"]
+    assert "water_geometry:Los Angeles" in user_msg["content"]
+
+
 def test_agent_happy_path_fetch_then_submit():
     llm = _scripted_llm(
         {"tool_calls": [_tc("c1", "fetch_source", {"url": SOURCE_POINTERS["H-HAZMAT-HMBP"]["url"]})]},
