@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
+from research_core.agents import run_repair_agent, run_researcher_agent
 from research_core.discovery import merge_discovery_proposals_into_plan
 from research_core.jurisdiction_resolve import apply_jurisdiction_to_scope
 from research_core.models import (
@@ -25,12 +28,19 @@ from research_core.models import (
 from research_core.planner import Plan, ResearchTask, plan_research
 from research_core.raindrop import WorkshopTracer, workshop
 from research_core.scenarios import information_gap_options, scenarios_for_missing_fact
-from research_core.store import LocalRunStore, get_default_store
+from research_core.store import get_default_store
 from research_core.synthesis import synthesize_result
+from research_core.tools import DEFAULT_ALLOWED_HOSTS, SandboxPolicy
 from research_core.verifier import VerificationVerdict, repair_evidence, verify_evidence
 
 
 DepsMode = Literal["fake", "offline", "live"]
+ARTIFACT_ROOT_ENV = "RESEARCH_CORE_ARTIFACT_ROOT"
+ALLOWED_HOSTS_ENV = "RESEARCH_CORE_ALLOWED_HOSTS"
+ALLOW_NETWORK_ENV = "RESEARCH_CORE_ALLOW_NETWORK"
+ALLOW_BROWSER_ENV = "RESEARCH_CORE_ALLOW_BROWSER"
+SEARCH_ENDPOINT_ENV = "RESEARCH_CORE_SEARCH_ENDPOINT"
+AGENT_MODEL_ENV = "RESEARCH_CORE_AGENT_MODEL"
 
 
 class ResearchRunResult(BaseModel):
@@ -48,6 +58,8 @@ class ResearchDeps:
     mode: DepsMode = "offline"
     discovery_proposals: list[dict[str, Any]] = field(default_factory=list)
     max_repair_attempts: int = 1
+    agent_model: str | None = None
+    artifact_root: str | Path | None = None
 
     def discover(self, scope: ScopePack, plan: Plan) -> list[dict[str, Any]]:
         return list(self.discovery_proposals)
@@ -55,19 +67,58 @@ class ResearchDeps:
     def research(self, task: ResearchTask, scope: ScopePack) -> dict[str, Any]:
         if self.mode in {"fake", "offline"}:
             return _fake_research_bundle(task, scope)
-        raise RuntimeError("live research deps are not configured for Python runtime")
+        try:
+            output = run_researcher_agent(
+                task,
+                scope,
+                _sandbox_policy(scope, self.artifact_root),
+                model=self.agent_model or _agent_model_from_env(),
+            )
+        except Exception as exc:
+            return _agent_error_bundle(
+                hypothesis_id=task.hypothesis_id,
+                task_id=task.task_id,
+                code="live_agent_failed",
+                message=str(exc),
+                exception_type=exc.__class__.__name__,
+            )
+        return _bundle_from_agent_output(
+            hypothesis_id=task.hypothesis_id,
+            task_id=task.task_id,
+            output=output,
+        )
 
     def repair(self, ticket: Any, previous_bundle: dict[str, Any], scope: ScopePack) -> dict[str, Any]:
         if self.mode in {"fake", "offline"}:
             return repair_evidence(ticket)
-        raise RuntimeError("live repair deps are not configured for Python runtime")
+        try:
+            output = run_repair_agent(
+                ticket,
+                previous_bundle,
+                scope,
+                _sandbox_policy(scope, self.artifact_root),
+                model=self.agent_model or _agent_model_from_env(),
+            )
+        except Exception as exc:
+            return _agent_error_bundle(
+                hypothesis_id=str(getattr(ticket, "hypothesis_id", "unknown")),
+                task_id=str(getattr(ticket, "ticket_id", "repair")),
+                code="live_repair_agent_failed",
+                message=str(exc),
+                exception_type=exc.__class__.__name__,
+            )
+        return _bundle_from_agent_output(
+            hypothesis_id=str(getattr(ticket, "hypothesis_id", "unknown")),
+            task_id=str(getattr(ticket, "ticket_id", "repair")),
+            output=output,
+        )
 
 
 def run_research_sync(
     input_payload: dict[str, Any],
     *,
     deps: str | ResearchDeps = "offline",
-    store: LocalRunStore | None = None,
+    store: Any | None = None,
     tracer: WorkshopTracer | None = None,
     run_id: str | None = None,
 ) -> ResearchRunResult:
@@ -206,7 +257,7 @@ def resume_research_sync(
     run_id: str,
     *,
     deps: str | ResearchDeps = "offline",
-    store: LocalRunStore | None = None,
+    store: Any | None = None,
     tracer: WorkshopTracer | None = None,
 ) -> ResearchRunResult:
     active_store = store or get_default_store()
@@ -265,6 +316,62 @@ def _coerce_deps(deps: str | ResearchDeps) -> ResearchDeps:
     if deps in {"fake", "offline"}:
         return ResearchDeps(mode=deps)
     return ResearchDeps(mode="live")
+
+
+def _sandbox_policy(scope: ScopePack, artifact_root: str | Path | None) -> SandboxPolicy:
+    root = artifact_root
+    if root is None:
+        root = _env(ARTIFACT_ROOT_ENV)
+    if root is None:
+        root = (
+            Path("/tmp/permitpilot-research-artifacts")
+            if _running_on_modal()
+            else Path.cwd() / ".research-artifacts"
+        )
+    return SandboxPolicy(
+        run_id=scope.run_id,
+        artifact_root=Path(root),
+        allowed_hosts=_allowed_hosts_from_env(),
+        allow_network=_bool_env(ALLOW_NETWORK_ENV, default=True),
+        allow_browser=_bool_env(ALLOW_BROWSER_ENV, default=True),
+        search_endpoint=_empty_to_none(_env(SEARCH_ENDPOINT_ENV)),
+    )
+
+
+def _running_on_modal() -> bool:
+    return bool(_env("MODAL_TASK_ID") or _env("MODAL_ENVIRONMENT"))
+
+
+def _allowed_hosts_from_env() -> tuple[str, ...]:
+    raw = _env(ALLOWED_HOSTS_ENV)
+    if not raw:
+        return DEFAULT_ALLOWED_HOSTS
+    hosts = tuple(item.strip().lower() for item in raw.split(",") if item.strip())
+    return hosts or DEFAULT_ALLOWED_HOSTS
+
+
+def _agent_model_from_env() -> str | None:
+    return _empty_to_none(_env(AGENT_MODEL_ENV))
+
+
+def _bool_env(name: str, *, default: bool) -> bool:
+    value = _env(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _env(name: str) -> str | None:
+    import os
+
+    return os.environ.get(name)
+
+
+def _empty_to_none(value: str | None) -> str | None:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
 
 
 def _trace_endpoint(input_payload: dict[str, Any]) -> str | None:
@@ -503,6 +610,133 @@ def _task_blocked_by_scope_gap(task: ResearchTask, scope: ScopePack) -> bool:
     return False
 
 
+def _bundle_from_agent_output(
+    *,
+    hypothesis_id: str,
+    task_id: str,
+    output: dict[str, Any],
+) -> dict[str, Any]:
+    if output.get("ok") is False:
+        error = output.get("error") if isinstance(output.get("error"), dict) else {}
+        return _agent_error_bundle(
+            hypothesis_id=hypothesis_id,
+            task_id=task_id,
+            code=str(error.get("code") or "agent_output_unavailable"),
+            message=str(error.get("message") or "Agent returned an unavailable result."),
+            output=output,
+        )
+
+    if _looks_like_evidence_bundle(output):
+        bundle = dict(output)
+        bundle.setdefault("hypothesis_id", hypothesis_id)
+        bundle.setdefault("task_id", task_id)
+        bundle.setdefault("uncertainties", [])
+        return bundle
+
+    finding = output.get("finding") if isinstance(output.get("finding"), dict) else None
+    if finding is None:
+        return _agent_error_bundle(
+            hypothesis_id=hypothesis_id,
+            task_id=task_id,
+            code="invalid_agent_output",
+            message="Agent output did not include an evidence bundle or submitted finding.",
+            output=output,
+        )
+
+    metadata = finding.get("metadata") if isinstance(finding.get("metadata"), dict) else {}
+    rich_sources = metadata.get("sources")
+    sources = (
+        rich_sources
+        if isinstance(rich_sources, list) and all(isinstance(item, dict) for item in rich_sources)
+        else _sources_from_finding(finding)
+    )
+    conclusion = str(
+        metadata.get("researcher_conclusion")
+        or metadata.get("conclusion")
+        or ("applies" if float(finding.get("confidence") or 0) >= 0.9 else "needs_review")
+    )
+    claims = metadata.get("extracted_claims")
+    if not isinstance(claims, list):
+        first_source_url = str(sources[0].get("url")) if sources else ""
+        quote = str(finding.get("summary") or finding.get("title") or "")
+        claims = [
+            {
+                "field": "applicability",
+                "value": conclusion,
+                "source_url": first_source_url,
+                "quote": quote,
+                "confidence": float(finding.get("confidence") or 0),
+            }
+        ]
+    return {
+        "hypothesis_id": hypothesis_id,
+        "task_id": task_id,
+        "sources": sources,
+        "extracted_claims": claims,
+        "researcher_conclusion": conclusion,
+        "uncertainties": [
+            str(item)
+            for item in metadata.get("uncertainties", [])
+            if isinstance(item, str)
+        ],
+        "agent_output": output,
+    }
+
+
+def _looks_like_evidence_bundle(output: dict[str, Any]) -> bool:
+    return all(key in output for key in ("sources", "extracted_claims", "researcher_conclusion"))
+
+
+def _sources_from_finding(finding: dict[str, Any]) -> list[dict[str, Any]]:
+    urls = finding.get("sources")
+    if not isinstance(urls, list):
+        return []
+    summary = str(finding.get("summary") or finding.get("title") or "")
+    return [
+        {
+            "url": str(url),
+            "source_name": _source_name(str(url)),
+            "authority_rank": 1,
+            "fetched_at": None,
+            "effective_date": None,
+            "currency_status": "unconfirmed",
+            "quote": summary,
+        }
+        for url in urls
+        if isinstance(url, str)
+    ]
+
+
+def _source_name(url: str) -> str:
+    host = urlparse(url).hostname
+    return host or "submitted source"
+
+
+def _agent_error_bundle(
+    *,
+    hypothesis_id: str,
+    task_id: str,
+    code: str,
+    message: str,
+    exception_type: str | None = None,
+    output: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    error: dict[str, Any] = {"code": code, "message": message}
+    if exception_type:
+        error["exception_type"] = exception_type
+    if output is not None:
+        error["output"] = output
+    return {
+        "hypothesis_id": hypothesis_id,
+        "task_id": task_id,
+        "sources": [],
+        "extracted_claims": [],
+        "researcher_conclusion": "needs_review",
+        "uncertainties": [message],
+        "agent_error": error,
+    }
+
+
 def _clear_retry_counts(verdict: VerificationVerdict) -> VerificationVerdict:
     tickets = [
         ticket.model_copy(update={"max_attempts_remaining": 0})
@@ -527,7 +761,7 @@ def _repair_verdict(
     scope: ScopePack,
     deps: ResearchDeps,
     evidence: list[dict[str, Any]],
-    store: LocalRunStore,
+    store: Any,
     tracer: WorkshopTracer,
     run_id: str,
 ) -> VerificationVerdict:

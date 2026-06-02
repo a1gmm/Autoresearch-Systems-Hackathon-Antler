@@ -11,6 +11,8 @@ retired TypeScript durable planner/finalizer.
 | `PYTHON_RESEARCH_START_RUN_ENDPOINT` | Next server | Creates a queued Python run and spawns background work |
 | `PYTHON_RESEARCH_GET_RUN_ENDPOINT` | Next server | Reads Python run state for UI polling |
 | `MODAL_RESEARCH_TOKEN` | Next + Modal | Optional shared bearer token |
+| `SUPABASE_URL` | Modal/Python | Supabase project URL for durable run records |
+| `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` | Modal/Python | Service key for Python worker writes |
 
 If `PYTHON_RESEARCH_START_RUN_ENDPOINT` is set without
 `PYTHON_RESEARCH_GET_RUN_ENDPOINT`, `POST /api/research/run` fails fast. If
@@ -28,14 +30,22 @@ POST /api/research/run
   -> queued/running/.../done/needs_information/needs_review/failed
 ```
 
-Python persistence currently uses `research_core.store.LocalRunStore` by
-default, with `RESEARCH_CORE_STORE_ROOT` for local durable JSON records. The
-Modal app is shaped so a Supabase-backed Python store can sit behind the same
-`start_run` and `get_run` endpoints without changing the Next.js shell.
+Python persistence uses `research_core.store.SupabaseRunStore` when
+`SUPABASE_URL` and a service key are present. That is the production durable path
+for Modal: `start_run` writes a queued run, background `research_run` updates the
+same Supabase row/evidence records, and `get_run` can read the run from any
+worker instance. `RESEARCH_CORE_STORE_ROOT` remains a local/dev JSON store; the
+in-memory store is only a test fallback.
+
+The Supabase migration keeps compatibility columns (`scope_pack`, `plan`,
+`trace_events`, `determinations`, `report_markdown`) and also stores the full
+Python record (`artifacts`, `verdicts`, `result`, `events`, `status_reason`).
+Evidence rows use `(run_id, evidence_id)` so repair bundles for the same
+hypothesis remain durable instead of overwriting the original research bundle.
 
 ## Verification
 
 ```bash
-npm run test -- app/api/research/run/__tests__/route.test.ts app/api/research/run/[id]/__tests__/route.test.ts src/lib/ui/__tests__/store.test.ts
-npm run py:test
+PATH=.venv/bin:$PATH npm run test -- app/api/research/run/__tests__/route.test.ts app/api/research/run/[id]/__tests__/route.test.ts
+PATH=.venv/bin:$PATH npm run py:test
 ```

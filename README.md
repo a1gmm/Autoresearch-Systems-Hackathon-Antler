@@ -53,17 +53,29 @@ Use one POST path:
 | `PYTHON_RESEARCH_GET_RUN_ENDPOINT` | Modal get_run endpoint; required for async starts and GET polling |
 | `MODAL_RESEARCH_TOKEN` | Optional shared bearer token sent as `Authorization` and `x-research-token` |
 | `OPENAI_API_KEY` | Intake and live Python Agents SDK calls |
+| `SUPABASE_URL` | Durable Python run store URL for Modal/production |
+| `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` | Service key used by Python workers for run/evidence writes |
+| `RESEARCH_CORE_DEPS_MODE` | Optional override; Modal defaults to `live`, tests can use `fake` |
 | `RESEARCH_CORE_STORE_ROOT` | Optional local durable JSON store root for Python tests/dev |
+| `RESEARCH_CORE_SEARCH_ENDPOINT` | Optional sandbox-approved web search endpoint for live regulatory tools |
 
 ## Running Locally
 
 ```bash
 npm install
+python3 -m venv .venv
+PATH=.venv/bin:$PATH python3 -m pip install -r requirements-dev.txt
 npm run dev
 npm run test
-npm run py:test
+PATH=.venv/bin:$PATH npm run py:test
 npm run typecheck
-npm run eval
+PATH=.venv/bin:$PATH npm run eval
+```
+
+For local browser-tool runs, install Playwright's Chromium binary once:
+
+```bash
+PATH=.venv/bin:$PATH python3 -m playwright install chromium
 ```
 
 Deploy/smoke Modal with:

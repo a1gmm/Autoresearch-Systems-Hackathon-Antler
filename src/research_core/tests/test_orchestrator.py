@@ -5,6 +5,8 @@ from types import ModuleType
 import pytest
 
 from research_core.orchestrator import ResearchDeps, run_research_sync, resume_research_sync
+from research_core.orchestrator import scope_from_input
+from research_core.planner import ResearchTask, ResearchTaskBudget
 from research_core.store import LocalRunStore, store_from_env
 
 
@@ -198,12 +200,104 @@ def test_file_store_rejects_duplicate_run_id(tmp_path):
 
 def test_store_from_env_uses_durable_root(monkeypatch, tmp_path):
     monkeypatch.setenv("RESEARCH_CORE_STORE_ROOT", str(tmp_path))
+    monkeypatch.delenv("RESEARCH_CORE_STORE_BACKEND", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
 
     store = store_from_env()
     record = store.create_run({"project_description": "x"}, run_id="run_env")
 
     assert record["run_id"] == "run_env"
     assert LocalRunStore(tmp_path).get_run("run_env")["input"]["project_description"] == "x"
+
+
+def test_live_deps_call_researcher_agent_with_sandbox_policy(monkeypatch, tmp_path):
+    task = ResearchTask(
+        task_id="task-live",
+        hypothesis_id="H-LIVE",
+        assigned_agent="air_researcher",
+        allowed_tools=["web_fetch", "submit_finding"],
+        blocked_tools=[],
+        budget=ResearchTaskBudget(max_sources=3, max_runtime_seconds=30, max_model_calls=2),
+    )
+    scope = scope_from_input(
+        {"project_description": "install a coating booth"},
+        "run_live",
+    )
+    captured = {}
+
+    def fake_researcher_agent(task_arg, context, policy, **kwargs):
+        captured["task_id"] = task_arg.task_id
+        captured["run_id"] = policy.run_id
+        captured["artifact_root"] = policy.artifact_root
+        captured["allow_network"] = policy.allow_network
+        return {
+            "hypothesis_id": task_arg.hypothesis_id,
+            "sources": [
+                {
+                    "url": "https://www.epa.gov/rules",
+                    "source_name": "EPA",
+                    "authority_rank": 1,
+                    "fetched_at": "2026-01-01T00:00:00Z",
+                    "effective_date": "2026-01-01",
+                    "currency_status": "current",
+                    "quote": "Coating booth permit applicability is confirmed.",
+                }
+            ],
+            "extracted_claims": [
+                {
+                    "field": "applicability",
+                    "value": "applies",
+                    "source_url": "https://www.epa.gov/rules",
+                    "quote": "Coating booth permit applicability is confirmed.",
+                    "confidence": 0.95,
+                }
+            ],
+            "researcher_conclusion": "applies",
+            "uncertainties": [],
+        }
+
+    monkeypatch.setenv("RESEARCH_CORE_ARTIFACT_ROOT", str(tmp_path))
+    monkeypatch.setattr("research_core.orchestrator.run_researcher_agent", fake_researcher_agent)
+
+    bundle = ResearchDeps(mode="live").research(task, scope)
+
+    assert captured == {
+        "task_id": "task-live",
+        "run_id": "run_live",
+        "artifact_root": tmp_path,
+        "allow_network": True,
+    }
+    assert bundle["hypothesis_id"] == "H-LIVE"
+    assert bundle["researcher_conclusion"] == "applies"
+
+
+def test_live_deps_fail_closed_when_agent_output_is_unavailable(monkeypatch):
+    task = ResearchTask(
+        task_id="task-live",
+        hypothesis_id="H-LIVE",
+        assigned_agent="air_researcher",
+        allowed_tools=[],
+        blocked_tools=[],
+        budget=ResearchTaskBudget(max_sources=1, max_runtime_seconds=10, max_model_calls=1),
+    )
+    scope = scope_from_input({"project_description": "demo"}, "run_live")
+
+    def fake_researcher_agent(*args, **kwargs):
+        return {
+            "ok": False,
+            "status": "unavailable",
+            "error": {"code": "agents_sdk_unavailable", "message": "SDK missing"},
+        }
+
+    monkeypatch.setattr("research_core.orchestrator.run_researcher_agent", fake_researcher_agent)
+
+    bundle = ResearchDeps(mode="live").research(task, scope)
+
+    assert bundle["sources"] == []
+    assert bundle["researcher_conclusion"] == "needs_review"
+    assert bundle["agent_error"]["code"] == "agents_sdk_unavailable"
 
 
 def test_modal_app_registers_expected_functions_when_modal_is_available(monkeypatch):
@@ -229,6 +323,44 @@ def test_modal_app_registers_expected_functions_when_modal_is_available(monkeypa
     assert app.functions["run_sync"].endpoint is True
     assert app.functions["resume_run"].endpoint is True
     assert app.functions["get_run"].endpoint is True
+
+
+def test_modal_run_sync_defaults_to_live_deps(monkeypatch):
+    modal_app_module = importlib.import_module("research_core.modal_app")
+    captured = {}
+
+    class FakeResult:
+        def model_dump(self, **kwargs):
+            return {"run_id": "run_modal", "status": "done"}
+
+    def fake_run_research_sync(input_payload, *, deps, store):
+        captured["deps_mode"] = deps.mode
+        captured["store"] = store
+        return FakeResult()
+
+    fake_store = object()
+    monkeypatch.delenv("RESEARCH_CORE_DEPS_MODE", raising=False)
+    monkeypatch.setattr(modal_app_module, "run_research_sync", fake_run_research_sync)
+    monkeypatch.setattr(modal_app_module, "store_from_env", lambda: fake_store)
+
+    response = modal_app_module.run_sync({"project_description": "demo"})
+
+    assert response == {"run_id": "run_modal", "status": "done"}
+    assert captured == {"deps_mode": "live", "store": fake_store}
+
+
+def test_modal_function_options_include_runtime_image_and_supabase_secret():
+    fake_modal = _fake_modal_module()
+    fake_modal.Image = FakeModalImage
+    fake_modal.Secret = FakeModalSecret
+
+    modal_app_module = importlib.import_module("research_core.modal_app")
+
+    options = modal_app_module._modal_function_options(fake_modal)
+
+    assert "openai-agents" in options["image"].packages
+    assert "supabase" in options["image"].packages
+    assert "permitpilot-supabase" in [secret.name for secret in options["secrets"]]
 
 
 def test_modal_start_run_spawns_background_research_run(monkeypatch):
@@ -320,6 +452,35 @@ class FakeModalApp:
             return modal_function
 
         return decorator
+
+
+class FakeModalImage:
+    def __init__(self):
+        self.packages = ()
+        self.local_dirs = []
+
+    @classmethod
+    def debian_slim(cls, **kwargs):
+        image = cls()
+        image.python_version = kwargs.get("python_version")
+        return image
+
+    def pip_install(self, *packages):
+        self.packages = packages
+        return self
+
+    def add_local_dir(self, local_path, *, remote_path):
+        self.local_dirs.append((local_path, remote_path))
+        return self
+
+
+class FakeModalSecret:
+    def __init__(self, name):
+        self.name = name
+
+    @classmethod
+    def from_name(cls, name):
+        return cls(name)
 
 
 class CountingRepairDeps(ResearchDeps):
