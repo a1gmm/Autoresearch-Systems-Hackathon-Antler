@@ -34,6 +34,14 @@ const submitsFireCode: OrchestratorLlmFn = async (messages) => {
 
 const proposesNothing: OrchestratorLlmFn = async () => ({ content: null, tool_calls: [] });
 
+// Never submits — keeps calling read_skill. The Agents-SDK Runner's maxTurns must
+// bound it and we fall back to the deterministic baseline (fail-closed, no hang).
+let neverSubmitsCalls = 0;
+const neverSubmits: OrchestratorLlmFn = async () => ({
+  content: null,
+  tool_calls: [{ id: `c${neverSubmitsCalls++}`, name: "read_skill", arguments: { skill_id: "scaqmd-permit-to-construct" } }],
+});
+
 describe("orchestrateResearchPlan", () => {
   it("adds an open-ended family beyond the deterministic 5 as a needs_review discovery candidate", async () => {
     const baseline = planResearch(scope());
@@ -48,6 +56,12 @@ describe("orchestrateResearchPlan", () => {
   it("falls back to the deterministic planner when the LLM proposes nothing", async () => {
     const baseline = planResearch(scope());
     const plan = await orchestrateResearchPlan(scope(), { llmFn: proposesNothing });
+    expect(plan.research_graph.map((h) => h.id).sort()).toEqual(baseline.research_graph.map((h) => h.id).sort());
+  });
+
+  it("fails closed to the baseline when the agent never submits (maxTurns bound)", async () => {
+    const baseline = planResearch(scope());
+    const plan = await orchestrateResearchPlan(scope(), { llmFn: neverSubmits, maxModelCalls: 3 });
     expect(plan.research_graph.map((h) => h.id).sort()).toEqual(baseline.research_graph.map((h) => h.id).sort());
   });
 
