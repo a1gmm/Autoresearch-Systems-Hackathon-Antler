@@ -33,6 +33,18 @@ const COVERAGE_FAMILIES: CoverageFamily[] = [
   "osha",
 ];
 
+const COVERAGE_FAMILY_ALIASES: Array<[CoverageFamily, string[]]> = [
+  ["air", ["air", "scaqmd", "aqmd", "rule-201", "rule-219", "rule-222", "title-v", "emissions", "permit-to-construct"]],
+  ["stormwater", ["stormwater", "industrial-general-permit", "construction-general-permit", "stormwater-construction", "igp", "cgp"]],
+  ["hazmat", ["hazmat", "hmbp", "ca-hmbp", "cupa", "hazardous-material", "hazardous-materials", "apsa", "spcc", "ca-apsa-spcc", "calarp", "ca-calarp-program", "ust", "ca-ust-program"]],
+  ["waste", ["waste", "hazwaste", "hazardous-waste", "title22", "title-22", "epa-hazwaste-generator", "ca-title22-hazwaste", "universal-waste", "ca-universal-waste", "medical-waste", "ca-medical-waste"]],
+  ["wastewater", ["wastewater", "pretreatment", "epa-pretreatment", "wdr", "npdes", "ca-wdr-npdes", "process-discharge"]],
+  ["land_use", ["land-use", "land_use", "zoning", "planning"]],
+  ["fire_code", ["fire-code", "fire_code", "fire", "cal-fire-code"]],
+  ["ceqa", ["ceqa"]],
+  ["osha", ["osha", "worker-safety", "workplace-safety"]],
+];
+
 const DEFAULT_SCOPE_PACK: ScopePack = {
   run_id: "",
   facility: {
@@ -69,7 +81,7 @@ export function toUiResearchRun(pythonRun: PythonRunResult): ResearchRun {
     ...(arrayValue(result?.repair_tickets) ?? []),
     ...verdicts.flatMap((verdict) => verdict.repair_tickets),
   ]);
-  const determinations = coerceDeterminations(
+  const explicitDeterminations = coerceDeterminations(
     arrayValue(pythonRun.determinations) ??
       arrayValue(result?.determinations) ??
       arrayValue(objectValue(result?.report)?.determinations),
@@ -87,6 +99,9 @@ export function toUiResearchRun(pythonRun: PythonRunResult): ResearchRun {
       arrayValue(pythonRun.evidence) ??
       arrayValue(result?.evidence),
   );
+  const determinations = explicitDeterminations.length > 0
+    ? explicitDeterminations
+    : coerceDeterminationsFromSingularResult(objectValue(result?.determination), verdicts, evidence);
   const coverageStatuses = coerceCoverageStatuses(
     arrayValue(pythonRun.coverage_family_statuses) ??
       arrayValue(objectValue(result?.report)?.coverage),
@@ -293,6 +308,51 @@ function coerceDeterminations(values: unknown[] | undefined): Determination[] {
   });
 }
 
+function coerceDeterminationsFromSingularResult(
+  determination: JsonObject | undefined,
+  verdicts: VerificationVerdict[],
+  evidence: EvidenceBundle[],
+): Determination[] {
+  if (!determination) return [];
+  const trusted = new Set(stringArray(determination.trusted_hypotheses) ?? []);
+  const needsReview = new Set(stringArray(determination.needs_review_hypotheses) ?? []);
+  const hypothesisIds = [...new Set([...trusted, ...needsReview])];
+  if (hypothesisIds.length === 0) return [];
+
+  const verdictByHypothesis = new Map(verdicts.map((verdict) => [verdict.hypothesis_id, verdict]));
+  const evidenceByHypothesis = new Map(evidence.map((bundle) => [bundle.hypothesis_id, bundle]));
+  const reasons = stringArray(determination.reasons) ?? [];
+
+  return hypothesisIds.map((hypothesisId) => {
+    const verdict = verdictByHypothesis.get(hypothesisId);
+    const bundle = evidenceByHypothesis.get(hypothesisId);
+    const source = bundle?.sources[0];
+    const extractedClaim = bundle?.extracted_claims[0];
+    const reviewFlag = needsReview.has(hypothesisId) || verdict?.verdict === "fail" || verdict?.verdict === "needs_review";
+
+    return {
+      requirement: hypothesisId,
+      applies: appliesFromResearcherConclusion(bundle?.researcher_conclusion, reviewFlag),
+      trigger: extractedClaim?.field || "Python runtime synthesis",
+      project_fact: extractedClaim ? `${extractedClaim.field}: ${extractedClaim.value}` : reasons.join("; "),
+      citation: source?.source_name ?? "",
+      quote: source?.quote ?? "",
+      source_url: source?.url ?? "",
+      confidence: verdict?.confidence ?? 0,
+      verified: trusted.has(hypothesisId) || verdict?.verdict === "pass",
+      review_flag: reviewFlag,
+      permit_filing: bundle?.permit_filing,
+    };
+  });
+}
+
+function appliesFromResearcherConclusion(conclusion: EvidenceBundle["researcher_conclusion"] | undefined, reviewFlag: boolean): Determination["applies"] {
+  if (reviewFlag) return "needs_review";
+  if (conclusion === "applies") return "yes";
+  if (conclusion === "does_not_apply") return "no";
+  return "needs_review";
+}
+
 function coerceCoverageStatuses(values: unknown[] | undefined, requests: InformationRequest[]): CoverageFamilyStatus[] {
   const statuses = (values ?? []).flatMap((value, index): CoverageFamilyStatus[] => {
     const obj = objectValue(value) ?? {};
@@ -456,9 +516,15 @@ function collectDistrustReasons(result: JsonObject | undefined, verdicts: Verifi
 }
 
 function coerceCoverageFamily(value: unknown): CoverageFamily | null {
-  const text = stringValue(value)?.toLowerCase();
+  const text = stringValue(value)?.toLowerCase().replaceAll("_", "-");
   if (!text) return null;
-  return COVERAGE_FAMILIES.find((family) => text === family || text.includes(family) || text.includes(family.replace("_", "-"))) ?? null;
+  const exact = COVERAGE_FAMILIES.find((family) => text === family || text === family.replace("_", "-"));
+  if (exact) return exact;
+  const alias = COVERAGE_FAMILY_ALIASES.find(([, aliases]) => aliases.some((candidate) => text === candidate || text.includes(candidate)))?.[0];
+  if (alias) return alias;
+  return [...COVERAGE_FAMILIES]
+    .sort((left, right) => right.length - left.length)
+    .find((family) => text.includes(family) || text.includes(family.replace("_", "-"))) ?? null;
 }
 
 function coerceArray<T>(value: unknown): T[] {
