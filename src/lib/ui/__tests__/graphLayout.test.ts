@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ResearchRun } from "@/lib/research/types";
+import { toUiResearchRun } from "@/lib/research/pythonRunAdapter";
 import { buildGraph } from "../graphLayout";
 
 const minimalRun: ResearchRun = {
@@ -58,5 +59,36 @@ describe("buildGraph", () => {
       expect(typeof n.position.x).toBe("number");
       expect(typeof n.position.y).toBe("number");
     }
+  });
+
+  it("builds graph nodes from normalized Python plan trace events", () => {
+    const run = toUiResearchRun({
+      run_id: "run_python_graph",
+      status: "done",
+      artifacts: {
+        plan: {
+          coverage_family_statuses: [
+            { id: "cf-hazmat", family: "hazmat", status: "active", reason: "", project_facts_considered: [], missing_facts: [] },
+          ],
+          regulatory_angles: [
+            { id: "angle-hmbp", family: "hazmat", label: "HMBP", reason: "", triggering_facts: [], status: "active" },
+          ],
+          research_graph: [
+            { id: "H-HAZMAT-HMBP", angle_id: "angle-hmbp", family: "hazmat", question: "Does HMBP apply?", required_facts: [], expected_source_type: "agency_guidance", success_criteria: [], dependencies: [] },
+          ],
+          research_tasks: [
+            { task_id: "T-HMBP", hypothesis_id: "H-HAZMAT-HMBP", assigned_agent: "hazmat_researcher", allowed_tools: [], blocked_tools: [], budget: { max_sources: 1, max_runtime_seconds: 1, max_model_calls: 1 } },
+          ],
+        },
+      },
+      trace_events: [
+        { scope: "plan:complete", payload: {}, created_at: "2026-06-02T10:00:00.000Z" },
+      ],
+      result: { determination: { status: "verified", trusted_hypotheses: [], needs_review_hypotheses: [], reasons: [] } },
+    });
+    const replayed = new Set(run.trace_events.map((event) => event.id));
+    const { nodes } = buildGraph(run, replayed);
+
+    expect(nodes.map((node) => node.type).sort()).toEqual(["angle", "coverage", "hypothesis", "task"]);
   });
 });

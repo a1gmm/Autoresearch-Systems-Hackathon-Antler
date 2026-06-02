@@ -70,7 +70,7 @@ export const useStore = create<Store>((set, get) => {
       if (token !== activeStartToken) return;
 
       const terminal = isTerminalRunStatus(run.status);
-      set({ run, isRunning: !terminal });
+      set({ run, isRunning: !terminal, runError: null });
       if (terminal) {
         clearActivePoll();
       } else {
@@ -78,8 +78,8 @@ export const useStore = create<Store>((set, get) => {
       }
     } catch (e) {
       if (token !== activeStartToken) return;
-      clearActivePoll();
-      set({ isRunning: false, runError: e instanceof Error ? e.message : String(e) });
+      set({ isRunning: true, runError: e instanceof Error ? e.message : String(e) });
+      schedulePoll(runId, token);
     }
   }
 

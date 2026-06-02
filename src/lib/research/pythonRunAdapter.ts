@@ -326,13 +326,14 @@ function coerceDeterminationsFromSingularResult(
   const verdictByHypothesis = new Map(verdicts.map((verdict) => [verdict.hypothesis_id, verdict]));
   const evidenceByHypothesis = new Map(evidence.map((bundle) => [bundle.hypothesis_id, bundle]));
   const reasons = stringArray(determination.reasons) ?? [];
+  const globalReview = stringValue(determination.status) === "needs_review" && needsReview.size === 0;
 
   return hypothesisIds.map((hypothesisId) => {
     const verdict = verdictByHypothesis.get(hypothesisId);
     const bundle = evidenceByHypothesis.get(hypothesisId);
     const source = bundle?.sources[0];
     const extractedClaim = bundle?.extracted_claims[0];
-    const reviewFlag = needsReview.has(hypothesisId) || verdict?.verdict === "fail" || verdict?.verdict === "needs_review";
+    const reviewFlag = globalReview || needsReview.has(hypothesisId) || verdict?.verdict === "fail" || verdict?.verdict === "needs_review";
 
     return {
       requirement: hypothesisId,
@@ -343,7 +344,7 @@ function coerceDeterminationsFromSingularResult(
       quote: source?.quote ?? "",
       source_url: source?.url ?? "",
       confidence: verdict?.confidence ?? 0,
-      verified: trusted.has(hypothesisId) || verdict?.verdict === "pass",
+      verified: !globalReview && (trusted.has(hypothesisId) || verdict?.verdict === "pass"),
       review_flag: reviewFlag,
       permit_filing: bundle?.permit_filing,
     };
@@ -450,13 +451,14 @@ function coerceResearcherConclusion(value: string | undefined): EvidenceBundle["
 }
 
 function coerceTraceEvents(values: unknown[] | undefined, runId: string): TraceEvent[] {
-  return (values ?? []).map((value, index) => {
+  return (values ?? []).flatMap((value, index) => {
     const obj = objectValue(value) ?? {};
     const payload = objectValue(obj.payload) ?? {};
     const scope = stringValue(obj.scope);
     const [scopeActor, scopePhase] = scope?.split(":") ?? [];
-    const phase = stringValue(obj.phase) ?? scopePhase ?? scopeActor ?? "event";
-    const status = coerceTraceStatus(stringValue(obj.status) ?? stringValue(payload.status) ?? scopePhase ?? stringValue(obj.type));
+    const defaultPhase = stringValue(obj.phase) ?? scopePhase ?? scopeActor ?? "event";
+    const defaultStatus = coerceTraceStatus(stringValue(obj.status) ?? stringValue(payload.status) ?? scopePhase ?? stringValue(obj.type));
+    const variants = traceVariants(scopeActor, scopePhase, payload, defaultPhase, defaultStatus);
     const artifactIds = [
       stringValue(obj.artifact_id),
       stringValue(payload.artifact_id),
@@ -464,20 +466,84 @@ function coerceTraceEvents(values: unknown[] | undefined, runId: string): TraceE
       stringValue(payload.task_id),
       stringValue(payload.raindrop_artifact_id),
     ].filter((item): item is string => Boolean(item));
-    return {
-      id: stringValue(obj.id) ?? `${runId}-trace-${index + 1}`,
+    const baseId = stringValue(obj.id) ?? `${runId}-trace-${index + 1}`;
+    return variants.map((variant) => ({
+      id: variants.length === 1 ? baseId : `${baseId}-${variant.id_suffix}`,
       run_id: stringValue(obj.run_id) ?? runId,
       ts: stringValue(obj.ts) ?? stringValue(obj.created_at) ?? new Date(0).toISOString(),
-      actor: stringValue(obj.actor) ?? actorForScope(scopeActor),
-      phase,
-      status,
-      message: stringValue(obj.message) ?? traceMessage(scope, payload, status),
+      actor: stringValue(obj.actor) ?? variant.actor,
+      phase: variant.phase,
+      status: variant.status,
+      message: stringValue(obj.message) ?? traceMessage(scope, payload, variant.status),
       artifact_id: artifactIds[0],
       artifact_ids: artifactIds.length > 0 ? artifactIds : undefined,
       raindrop_artifact_id: stringValue(obj.raindrop_artifact_id) ?? stringValue(payload.raindrop_artifact_id),
       payload,
-    };
+    }));
   });
+}
+
+type TraceVariant = {
+  actor: string;
+  phase: string;
+  status: TraceEvent["status"];
+  id_suffix: string;
+};
+
+function traceVariants(
+  scopeActor: string | undefined,
+  scopePhase: string | undefined,
+  payload: JsonObject,
+  defaultPhase: string,
+  defaultStatus: TraceEvent["status"],
+): TraceVariant[] {
+  if (scopeActor === "scope") {
+    return [{
+      actor: "scope_agent",
+      phase: "scope",
+      status: scopePhase === "start" ? "running" : "done",
+      id_suffix: "scope",
+    }];
+  }
+  if (scopeActor === "plan" && scopePhase === "complete") {
+    return [
+      { actor: "orchestrator", phase: "coverage", status: "done", id_suffix: "coverage" },
+      { actor: "orchestrator", phase: "task_graph", status: "done", id_suffix: "task-graph" },
+    ];
+  }
+  if (scopeActor === "research" && scopePhase === "bundle") {
+    return [{ actor: "research_pool", phase: "fanout", status: "done", id_suffix: "fanout" }];
+  }
+  if (scopeActor === "verify" && scopePhase === "verdict") {
+    return [{
+      actor: "verifier",
+      phase: "verification",
+      status: coerceOutcomeTraceStatus(stringValue(payload.verdict) ?? stringValue(payload.status)),
+      id_suffix: "verification",
+    }];
+  }
+  if (scopeActor === "repair" && scopePhase === "attempt") {
+    return [{
+      actor: "verifier",
+      phase: "repair_verification",
+      status: coerceOutcomeTraceStatus(stringValue(payload.repaired_verdict) ?? stringValue(payload.status)),
+      id_suffix: "repair-verification",
+    }];
+  }
+  if (scopeActor === "run" && (scopePhase === "status" || scopePhase === "complete")) {
+    return [{
+      actor: "synthesis_agent",
+      phase: "matrix",
+      status: coerceOutcomeTraceStatus(stringValue(payload.status)),
+      id_suffix: "matrix",
+    }];
+  }
+  return [{
+    actor: actorForScope(scopeActor),
+    phase: defaultPhase,
+    status: defaultStatus,
+    id_suffix: defaultPhase,
+  }];
 }
 
 function coerceTraceStatus(value: string | undefined): TraceEvent["status"] {
@@ -485,6 +551,12 @@ function coerceTraceStatus(value: string | undefined): TraceEvent["status"] {
   if (value === "start") return "running";
   if (value === "complete" || value === "bundle" || value === "verdict" || value === "finish") return "done";
   return "running";
+}
+
+function coerceOutcomeTraceStatus(value: string | undefined): TraceEvent["status"] {
+  if (value === "pass" || value === "verified" || value === "done") return "done";
+  if (value === "fail" || value === "failed") return "failed";
+  return coerceTraceStatus(value);
 }
 
 function actorForScope(scopeActor: string | undefined): string {
@@ -524,11 +596,21 @@ function coerceCoverageFamily(value: unknown): CoverageFamily | null {
   if (!text) return null;
   const exact = COVERAGE_FAMILIES.find((family) => text === family || text === family.replace("_", "-"));
   if (exact) return exact;
-  const alias = COVERAGE_FAMILY_ALIASES.find(([, aliases]) => aliases.some((candidate) => text === candidate || text.includes(candidate)))?.[0];
+  const alias = COVERAGE_FAMILY_ALIASES.find(([, aliases]) => aliases.some((candidate) => matchesCoverageToken(text, candidate)))?.[0];
   if (alias) return alias;
   return [...COVERAGE_FAMILIES]
     .sort((left, right) => right.length - left.length)
-    .find((family) => text.includes(family) || text.includes(family.replace("_", "-"))) ?? null;
+    .find((family) => matchesCoverageToken(text, family.replace("_", "-"))) ?? null;
+}
+
+function matchesCoverageToken(text: string, rawCandidate: string): boolean {
+  const candidate = rawCandidate.toLowerCase().replaceAll("_", "-");
+  if (text === candidate) return true;
+  return new RegExp(`(^|[^a-z0-9])${escapeRegex(candidate)}($|[^a-z0-9])`).test(text);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function coerceArray<T>(value: unknown): T[] {

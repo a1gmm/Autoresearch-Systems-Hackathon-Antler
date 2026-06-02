@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
 
     const startEndpoint = process.env.PYTHON_RESEARCH_START_RUN_ENDPOINT;
     if (startEndpoint) {
+      if (!process.env.PYTHON_RESEARCH_GET_RUN_ENDPOINT) {
+        throw new Error("PYTHON_RESEARCH_GET_RUN_ENDPOINT must be configured when PYTHON_RESEARCH_START_RUN_ENDPOINT is set");
+      }
       const pythonRun = await postPythonRun(startEndpoint, input);
       return NextResponse.json(shouldAdaptPythonRun(pythonRun) ? toUiResearchRun(pythonRun) : pythonRun);
     }

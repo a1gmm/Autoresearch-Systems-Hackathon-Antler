@@ -191,6 +191,86 @@ describe("pythonRunAdapter", () => {
     ]);
   });
 
+  it("does not create blocked coverage from substring alias collisions", () => {
+    const run = toUiResearchRun({
+      run_id: "run_bad_alias",
+      status: "needs_information",
+      information_requests: [
+        { field: "repair.notes", question: "What changed?", why_needed: "malformed block", blocks: ["repair", "wildfire"] },
+      ],
+      result: { determination: { status: "needs_information", trusted_hypotheses: [], needs_review_hypotheses: [], reasons: [] } },
+    });
+
+    expect(run.coverage_family_statuses).toEqual([]);
+  });
+
+  it("keeps trusted rows in review when the overall Python synthesis needs recall-floor review", () => {
+    const run = toUiResearchRun({
+      run_id: "run_recall_review",
+      status: "needs_review",
+      result: {
+        determination: {
+          status: "needs_review",
+          trusted_hypotheses: ["H-AIR-201"],
+          needs_review_hypotheses: [],
+          reasons: ["Recall floor was not met."],
+        },
+        evidence: [
+          {
+            hypothesis_id: "H-AIR-201",
+            sources: [],
+            extracted_claims: [],
+            researcher_conclusion: "applies",
+            uncertainties: [],
+          },
+        ],
+        verdicts: [
+          {
+            hypothesis_id: "H-AIR-201",
+            verdict: "pass",
+            checks: {},
+            confidence: 0.91,
+            repair_tickets: [],
+          },
+        ],
+      },
+    });
+
+    expect(run.determinations).toEqual([
+      expect.objectContaining({
+        requirement: "H-AIR-201",
+        applies: "needs_review",
+        verified: false,
+        review_flag: true,
+      }),
+    ]);
+  });
+
+  it("normalizes Python Raindrop trace scopes into graph-driving UI phases", () => {
+    const run = toUiResearchRun({
+      run_id: "run_trace",
+      status: "done",
+      trace_events: [
+        { scope: "plan:complete", payload: { tasks: 2 }, created_at: "2026-06-02T10:00:00.000Z" },
+        { scope: "research:bundle", payload: { hypothesis_id: "H-AIR-201" }, created_at: "2026-06-02T10:01:00.000Z" },
+        { scope: "verify:verdict", payload: { hypothesis_id: "H-AIR-201", verdict: "pass" }, created_at: "2026-06-02T10:02:00.000Z" },
+        { scope: "run:status", payload: { status: "done" }, created_at: "2026-06-02T10:03:00.000Z" },
+      ],
+      result: { determination: { status: "verified", trusted_hypotheses: [], needs_review_hypotheses: [], reasons: [] } },
+    });
+
+    expect(run.trace_events.map((event) => [event.actor, event.phase, event.status])).toEqual([
+      ["orchestrator", "coverage", "done"],
+      ["orchestrator", "task_graph", "done"],
+      ["research_pool", "fanout", "done"],
+      ["verifier", "verification", "done"],
+      ["synthesis_agent", "matrix", "done"],
+    ]);
+    expect(run.trace_events[2]).toEqual(expect.objectContaining({
+      artifact_id: "H-AIR-201",
+    }));
+  });
+
   it("maps Python get_run store records with nested artifacts", () => {
     const run = toUiResearchRun({
       run_id: "run_store",
