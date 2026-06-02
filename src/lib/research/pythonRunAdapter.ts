@@ -69,7 +69,9 @@ const DEFAULT_SCOPE_PACK: ScopePack = {
 
 export function toUiResearchRun(pythonRun: PythonRunResult): ResearchRun {
   const result = objectValue(pythonRun.result);
-  const scope = objectValue(pythonRun.scope_pack) ?? objectValue(result?.scope);
+  const artifacts = objectValue(pythonRun.artifacts);
+  const plan = objectValue(pythonRun.plan) ?? objectValue(result?.plan) ?? objectValue(artifacts?.plan);
+  const scope = objectValue(pythonRun.scope_pack) ?? objectValue(result?.scope) ?? objectValue(artifacts?.scope);
   const runId = stringValue(pythonRun.run_id) ?? stringValue(result?.run_id) ?? "run_unknown";
   const verdicts = coerceVerdicts(
     arrayValue(pythonRun.verification_verdicts) ??
@@ -104,11 +106,12 @@ export function toUiResearchRun(pythonRun: PythonRunResult): ResearchRun {
     : coerceDeterminationsFromSingularResult(objectValue(result?.determination), verdicts, evidence);
   const coverageStatuses = coerceCoverageStatuses(
     arrayValue(pythonRun.coverage_family_statuses) ??
-      arrayValue(objectValue(result?.report)?.coverage),
+      arrayValue(objectValue(result?.report)?.coverage) ??
+      arrayValue(plan?.coverage_family_statuses),
     informationRequests,
   );
   const researchGraph = coerceResearchGraph(
-    arrayValue(pythonRun.research_graph) ?? arrayValue(result?.research_graph),
+    arrayValue(pythonRun.research_graph) ?? arrayValue(result?.research_graph) ?? arrayValue(plan?.research_graph),
     determinations,
     evidence,
     coverageStatuses,
@@ -121,9 +124,9 @@ export function toUiResearchRun(pythonRun: PythonRunResult): ResearchRun {
     jurisdiction_stack: stringArray(pythonRun.jurisdiction_stack) ?? stringArray(objectValue(scope)?.facility && objectValue(objectValue(scope)?.facility)?.jurisdiction_stack) ?? [],
     scope_pack: coerceScopePack(scope, runId),
     coverage_family_statuses: coverageStatuses,
-    regulatory_angles: coerceArray<RegulatoryAngle>(arrayValue(pythonRun.regulatory_angles) ?? arrayValue(result?.regulatory_angles)),
+    regulatory_angles: coerceArray<RegulatoryAngle>(arrayValue(pythonRun.regulatory_angles) ?? arrayValue(result?.regulatory_angles) ?? arrayValue(plan?.regulatory_angles)),
     research_graph: researchGraph,
-    research_tasks: coerceArray<ResearchTask>(arrayValue(pythonRun.research_tasks) ?? arrayValue(result?.research_tasks)),
+    research_tasks: coerceArray<ResearchTask>(arrayValue(pythonRun.research_tasks) ?? arrayValue(result?.research_tasks) ?? arrayValue(plan?.research_tasks)),
     evidence_bundles: evidence,
     verification_verdicts: verdicts,
     repair_tickets: repairTickets,
@@ -132,6 +135,7 @@ export function toUiResearchRun(pythonRun: PythonRunResult): ResearchRun {
     trace_events: coerceTraceEvents(
       arrayValue(pythonRun.trace_events) ??
         arrayValue(result?.trace_events) ??
+        arrayValue(artifacts?.trace_events) ??
         arrayValue(pythonRun.raindrop_events),
       runId,
     ),

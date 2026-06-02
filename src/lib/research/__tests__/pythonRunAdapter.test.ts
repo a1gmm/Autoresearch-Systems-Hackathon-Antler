@@ -190,4 +190,103 @@ describe("pythonRunAdapter", () => {
       }),
     ]);
   });
+
+  it("maps Python get_run store records with nested artifacts", () => {
+    const run = toUiResearchRun({
+      run_id: "run_store",
+      status: "done",
+      evidence: [
+        {
+          hypothesis_id: "H-HAZMAT-HMBP",
+          sources: [
+            {
+              url: "https://example.test/hmbp",
+              source_name: "CUPA HMBP guidance",
+              authority_rank: 1,
+              fetched_at: "2026-06-02",
+              content_hash: "hash-hmbp",
+              effective_date: null,
+              quote: "55 gallons triggers reporting.",
+            },
+          ],
+          extracted_claims: [{ field: "chemicals.quantity", value: "60 gallons", source_url: "https://example.test/hmbp", quote: "55 gallons triggers reporting.", confidence: 0.9 }],
+          researcher_conclusion: "applies",
+          uncertainties: [],
+        },
+      ],
+      verdicts: [
+        {
+          hypothesis_id: "H-HAZMAT-HMBP",
+          verdict: "pass",
+          checks: { grounding: { pass: true, reason: "quote supports threshold" } },
+          confidence: 0.91,
+          repair_tickets: [],
+          distrust_reasons: [],
+        },
+      ],
+      result: {
+        determination: {
+          status: "verified",
+          trusted_hypotheses: ["H-HAZMAT-HMBP"],
+          needs_review_hypotheses: [],
+          reasons: ["All researched hypotheses passed verification."],
+        },
+        report: { summary: "1 hypotheses passed verification.", evidence_count: 1, scenario_count: 0 },
+      },
+      artifacts: {
+        scope: {
+          run_id: "run_store",
+          facility: { address: "1 Main St", jurisdiction_stack: ["CUPA"], county: "Los Angeles", city: "Vernon", naics: null, sic: null },
+          project_change: { description: "stores solvent", equipment: [], chemicals: [], waste_streams: [], disturbance_acres: null, process_discharge: null },
+          missing_facts: [],
+          assumptions: [],
+        },
+        plan: {
+          coverage_family_statuses: [
+            { id: "cf-hazmat", family: "hazmat", status: "active", reason: "hazardous materials stored", project_facts_considered: ["chemicals"], missing_facts: [] },
+          ],
+          regulatory_angles: [
+            { id: "angle-hmbp", family: "hazmat", label: "HMBP threshold", reason: "quantity threshold", triggering_facts: ["chemicals.quantity"], status: "active" },
+          ],
+          research_graph: [
+            { id: "H-HAZMAT-HMBP", angle_id: "angle-hmbp", family: "hazmat", question: "Does HMBP apply?", required_facts: ["chemicals.quantity"], expected_source_type: "agency_guidance", success_criteria: [], dependencies: [] },
+          ],
+          research_tasks: [
+            { task_id: "T-HMBP", hypothesis_id: "H-HAZMAT-HMBP", assigned_agent: "researcher", allowed_tools: [], blocked_tools: [], budget: { max_sources: 2, max_runtime_seconds: 60, max_model_calls: 1 } },
+          ],
+        },
+        trace_events: [
+          {
+            type: "event",
+            run_id: "run_store",
+            scope: "research:bundle",
+            payload: { hypothesis_id: "H-HAZMAT-HMBP", raindrop_artifact_id: "rd_bundle" },
+            created_at: "2026-06-02T13:00:00.000Z",
+          },
+        ],
+      },
+    });
+
+    expect(run.scope_pack.facility.jurisdiction_stack).toEqual(["CUPA"]);
+    expect(run.coverage_family_statuses).toEqual([
+      expect.objectContaining({ id: "cf-hazmat", family: "hazmat", status: "active" }),
+    ]);
+    expect(run.regulatory_angles).toHaveLength(1);
+    expect(run.research_graph).toEqual([
+      expect.objectContaining({ id: "H-HAZMAT-HMBP", family: "hazmat" }),
+    ]);
+    expect(run.research_tasks).toEqual([
+      expect.objectContaining({ task_id: "T-HMBP", hypothesis_id: "H-HAZMAT-HMBP" }),
+    ]);
+    expect(run.trace_events[0]).toEqual(expect.objectContaining({
+      artifact_id: "H-HAZMAT-HMBP",
+      raindrop_artifact_id: "rd_bundle",
+    }));
+    expect(run.determinations[0]).toEqual(expect.objectContaining({
+      requirement: "H-HAZMAT-HMBP",
+      verified: true,
+      review_flag: false,
+      source_url: "https://example.test/hmbp",
+    }));
+  });
 });
