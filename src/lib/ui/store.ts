@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ResearchRun, ResearchRunInput, CoverageFamily } from "@/lib/research/types";
+import { toUiResearchRun } from "@/lib/research/pythonRunAdapter";
 
 export type ReplaySpeed = 1 | 2;
 
@@ -52,7 +53,7 @@ export const useStore = create<Store>((set, get) => ({
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(`Run failed: HTTP ${res.status}`);
-      const run = (await res.json()) as ResearchRun;
+      const run = toUiResearchRun(await res.json());
       set({ run, isRunning: false });
     } catch (e) {
       set({ isRunning: false, runError: e instanceof Error ? e.message : String(e) });

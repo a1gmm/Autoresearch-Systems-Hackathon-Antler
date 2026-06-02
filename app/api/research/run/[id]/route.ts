@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDurableRun } from "@/lib/research/durable/durableRun";
+import { toUiResearchRun, type PythonRunResult } from "@/lib/research/pythonRunAdapter";
 
 export const maxDuration = 60;
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
+    const endpoint = process.env.PYTHON_RESEARCH_GET_RUN_ENDPOINT;
+    if (endpoint) {
+      const pythonRun = await getPythonRun(endpoint, id);
+      return NextResponse.json(shouldAdaptPythonRun(pythonRun) ? toUiResearchRun(pythonRun) : pythonRun);
+    }
+
     const run = await getDurableRun(id);
     return NextResponse.json(run);
   } catch (error) {
@@ -13,4 +20,41 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const status = /not found/i.test(message) ? 404 : 500;
     return NextResponse.json({ run_id: id, status: "failed", error: message }, { status });
   }
+}
+
+async function getPythonRun(endpoint: string, runId: string): Promise<PythonRunResult> {
+  const resp = await fetch(pythonRunUrl(endpoint, runId), {
+    method: "GET",
+    headers: pythonHeaders(),
+  });
+  if (!resp.ok) throw new Error(`Python research get_run HTTP ${resp.status}`);
+  return await resp.json() as PythonRunResult;
+}
+
+function pythonRunUrl(endpoint: string, runId: string): string {
+  if (endpoint.includes("{id}")) return endpoint.replaceAll("{id}", encodeURIComponent(runId));
+  const separator = endpoint.includes("?") ? "&" : "?";
+  return `${endpoint}${separator}run_id=${encodeURIComponent(runId)}`;
+}
+
+function pythonHeaders(): HeadersInit {
+  const headers: Record<string, string> = {};
+  const token = process.env.MODAL_RESEARCH_TOKEN;
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+    headers["x-research-token"] = token;
+  }
+  return headers;
+}
+
+function shouldAdaptPythonRun(payload: PythonRunResult): boolean {
+  return Boolean(
+    payload.result ||
+      payload.determinations ||
+      payload.information_requests ||
+      payload.scenarios ||
+      payload.report_markdown ||
+      payload.verdicts ||
+      payload.evidence,
+  );
 }
