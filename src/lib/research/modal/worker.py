@@ -31,7 +31,19 @@ app = modal.App("permitpilot-research")
 
 image = (
     modal.Image.debian_slim()
-    .pip_install("httpx", "pymupdf", "beautifulsoup4", "openai", "fastapi[standard]", "supabase")
+    .pip_install(
+        "httpx",
+        "pymupdf",
+        "beautifulsoup4",
+        "openai",
+        "fastapi[standard]",
+        "supabase",
+        "openai-agents",
+        "pydantic",
+        "python-docx",
+        "openpyxl",
+        "playwright",
+    )
     .add_local_dir("src/lib/research/skills", remote_path="/root/skills")
     .add_local_python_source("worker_core")
 )
