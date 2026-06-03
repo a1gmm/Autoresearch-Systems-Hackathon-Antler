@@ -100,6 +100,7 @@ export type ResearchTask = {
     max_sources: number;
     max_runtime_seconds: number;
     max_model_calls: number;
+    max_searches?: number;
   };
   // Resolved local-jurisdiction orientation for the research subagent: the
   // controlling authorities (air district, water board, CUPA / fire / building)

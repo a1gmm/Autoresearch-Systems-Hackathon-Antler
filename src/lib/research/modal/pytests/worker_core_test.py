@@ -209,6 +209,32 @@ def test_read_skill_falls_back_to_mapped_skill_when_agent_guesses_wrong_id():
     assert "Real SCAQMD skill content" in skill_msgs[-1]["content"]  # mapped skill loaded despite wrong guess
 
 
+def test_web_search_is_capped_so_it_cannot_starve_fetching():
+    # The agent must not be able to burn its whole turn budget searching. After
+    # max_searches, web_search is refused and the agent is told to fetch what it has.
+    seen_errors = []
+    state = {"n": 0}
+    def llm_fn(messages, tools):
+        # Inspect the last tool result for the cap error.
+        for m in reversed(messages):
+            if m.get("role") == "tool" and m.get("name") == "web_search":
+                try:
+                    import json as _j
+                    err = _j.loads(m["content"]).get("error", "")
+                    if "max_searches" in err:
+                        seen_errors.append(err)
+                except Exception:
+                    pass
+                break
+        state["n"] += 1
+        return {"tool_calls": [_tc(f"c{state['n']}", "web_search", {"query": f"q{state['n']}"})]}
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-DISCOVER-4"
+    spec["budget"] = {"max_model_calls": 8, "max_sources": 5, "max_searches": 2}
+    run_research_agent(spec, llm_fn=llm_fn, fetch_fn=lambda u: ("h", "t"), extract_fn=None,
+                       now_iso="t", search_fn=lambda q: [{"title": "t", "url": "https://www.aqmd.gov/x", "snippet": ""}])
+    assert seen_errors, "web_search was never capped despite exceeding max_searches"
+
+
 def test_fetch_error_is_returned_to_model_not_raised():
     # A discovered URL may 404. The fetch error must come back as a tool result so the
     # agent can recover (try another source) — it must NOT crash the run.

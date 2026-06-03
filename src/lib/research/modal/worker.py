@@ -108,7 +108,19 @@ def _fetch_fn(url: str) -> tuple[str, str]:
     else:
         from bs4 import BeautifulSoup
 
-        text = BeautifulSoup(data, "html.parser").get_text(" ", strip=True)
+        # Live gov rules/guidance are HTML. Strip nav/chrome and prefer the main
+        # content region so the agent reads the actual requirement text, not menus
+        # and footers (which otherwise dominate get_text and crowd out the rule).
+        soup = BeautifulSoup(data, "html.parser")
+        for tag in soup(["script", "style", "noscript", "nav", "header", "footer", "aside", "form", "svg", "button"]):
+            tag.decompose()
+        main = soup.find("main") or soup.find("article") or soup.find(attrs={"role": "main"})
+        text = main.get_text("\n", strip=True) if main else ""
+        # Fall back to the whole (de-chromed) page if the main region is thin/missing —
+        # don't return a near-empty blob just because there's no <main>.
+        if len(text) < 400:
+            text = (soup.body or soup).get_text("\n", strip=True)
+        text = re.sub(r"\n{3,}", "\n\n", text)
     return content_hash, text[:MAX_TEXT_CHARS]
 
 

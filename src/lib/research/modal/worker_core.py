@@ -211,6 +211,10 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
     budget = task_spec.get("budget", {}) or {}
     max_calls = _int_or(budget.get("max_model_calls"), 4)
     max_sources = _int_or(budget.get("max_sources"), 3)
+    # Cap discovery searches separately so the agent can't burn its whole turn budget
+    # searching and never get to fetch + read + ground.
+    max_searches = _int_or(budget.get("max_searches"), 3)
+    searches_used = 0
 
     # Optional curated seed; may be None (then the agent must discover via web_search).
     pointer = pointers.get(hid)
@@ -237,6 +241,17 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
     sources_used = 0
 
     for _ in range(max_calls):
+        # Offer tools dynamically and HARD-enforce the search cap: once the search
+        # budget is spent, REMOVE web_search so the agent can't keep hunting — it must
+        # extract from what it already fetched. (A soft error wasn't enough; reasoning
+        # models ignore it and burn the whole turn budget searching.) Likewise drop
+        # fetch_source when the source budget is spent.
+        available = list(allowed)
+        if "web_search" in available and searches_used >= max_searches:
+            available.remove("web_search")
+        if "fetch_source" in available and sources_used >= max_sources:
+            available.remove("fetch_source")
+        tools = exposed_tool_schemas(available)
         resp = llm_fn(messages, tools)
         calls = resp.get("tool_calls") or []
         # Record the assistant turn before any tool results (OpenAI ordering rule).
@@ -271,7 +286,9 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
 
             if name == "web_search":
                 query = (args.get("query") or "").strip()
-                if not query:
+                if searches_used >= max_searches:
+                    payload = {"error": "max_searches reached — stop searching and fetch_source the most authoritative result you already found"}
+                elif not query:
                     payload = {"error": "web_search requires a non-empty query"}
                 elif search_fn is None:
                     payload = {"error": "web search is unavailable"}
@@ -282,11 +299,13 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
                         results = []
                         payload = {"error": f"web_search failed: {exc}"}
                     else:
-                        # search_fn returns only allowlisted-host results; surface them so
-                        # the agent can choose which official source to fetch_source next.
-                        payload = {"results": results} if results else {
+                        searches_used += 1
+                        # search_fn returns allowlisted results first, then other official
+                        # .gov; surface them so the agent can fetch_source the best one.
+                        payload = {"results": results, "searches_left": max_searches - searches_used} if results else {
                             "results": [],
-                            "note": "No allowlisted authority matched; refine the query.",
+                            "note": "No official source matched; refine the query (rule number, program, authority).",
+                            "searches_left": max_searches - searches_used,
                         }
             elif name == "get_source_pointers":
                 # A curated seed if one exists; otherwise instruct discovery (no gate).
