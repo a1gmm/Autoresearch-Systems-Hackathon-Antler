@@ -82,6 +82,16 @@ class ProjectChange(BaseModel):
     process_discharge: bool | None
 
 
+class ProvidedDocument(BaseModel):
+    """A facility-provided document (SDS, technical data sheet, permit, equipment spec)
+    uploaded at intake. Text is extracted client-side and rides along in scope so each
+    research subagent can analyze the real composition/usage data, not a stand-in."""
+
+    name: str
+    type: str = "other"
+    text: str = ""
+
+
 class MissingFact(BaseModel):
     field: str
     why_needed: str
@@ -102,6 +112,7 @@ class ScopePack(BaseModel):
     project_change: ProjectChange
     missing_facts: list[MissingFact]
     assumptions: list[Assumption]
+    provided_documents: list[ProvidedDocument] = Field(default_factory=list)
 
 
 class InformationRequest(BaseModel):

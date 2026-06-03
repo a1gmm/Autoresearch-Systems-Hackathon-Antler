@@ -21,6 +21,7 @@ from research_core.models import (
     InformationRequest,
     MissingFact,
     ProjectChange,
+    ProvidedDocument,
     RunStatus,
     Scenario,
     ScopePack,
@@ -290,6 +291,7 @@ def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
     chemicals = _chemicals_from_input(input_payload, description)
     equipment = _equipment_from_description(description)
     waste_streams = _waste_from_input(input_payload, description)
+    provided_documents = _documents_from_input(input_payload)
     process_discharge = input_payload.get("process_discharge", False)
     if "wastewater" in description.lower() or "discharge" in description.lower():
         process_discharge = True
@@ -314,6 +316,7 @@ def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
         ),
         missing_facts=[],
         assumptions=[],
+        provided_documents=provided_documents,
     )
     return scope.model_copy(
         update={
@@ -321,6 +324,27 @@ def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
             "assumptions": _assumptions(input_payload),
         }
     )
+
+
+def _documents_from_input(input_payload: dict[str, Any]) -> list[ProvidedDocument]:
+    """Ingest intake-uploaded documents (SDS/TDS/permits) so each research subagent gets
+    the real facility data in its context. Accepts both the production `documents` key and
+    the legacy `demo_documents` alias; drops non-dict junk fail-closed."""
+    raw = input_payload.get("documents")
+    if not raw:
+        raw = input_payload.get("demo_documents") or []
+    documents: list[ProvidedDocument] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        documents.append(
+            ProvidedDocument(
+                name=str(item.get("name") or "document").strip() or "document",
+                type=str(item.get("type") or "other"),
+                text=str(item.get("text") or ""),
+            )
+        )
+    return documents
 
 
 def _coerce_deps(deps: str | ResearchDeps) -> ResearchDeps:
