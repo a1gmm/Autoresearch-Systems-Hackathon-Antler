@@ -241,13 +241,15 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
     sources_used = 0
 
     for _ in range(max_calls):
-        # Offer tools dynamically and HARD-enforce the search cap: once the search
-        # budget is spent, REMOVE web_search so the agent can't keep hunting — it must
-        # extract from what it already fetched. (A soft error wasn't enough; reasoning
-        # models ignore it and burn the whole turn budget searching.) Likewise drop
-        # fetch_source when the source budget is spent.
+        # Offer tools dynamically. Two rules keep the agent on-task:
+        #  - A curated seed IS the authoritative source: when this hypothesis has a
+        #    pointer, do NOT offer web_search at all — the agent must fetch + extract
+        #    from the seed, not wander the web (which regressed mapped hypotheses).
+        #    Discovery is strictly the fallback for hypotheses with NO seed.
+        #  - Hard-enforce the search cap and source cap by removing the exhausted tool
+        #    (a soft error wasn't enough; reasoning models ignore it and burn the budget).
         available = list(allowed)
-        if "web_search" in available and searches_used >= max_searches:
+        if "web_search" in available and (pointer is not None or searches_used >= max_searches):
             available.remove("web_search")
         if "fetch_source" in available and sources_used >= max_sources:
             available.remove("fetch_source")
