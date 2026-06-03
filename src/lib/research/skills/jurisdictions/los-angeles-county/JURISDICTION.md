@@ -25,3 +25,31 @@ name: Los Angeles County (unincorporated)
 ## Notes
 
 - CUPA is specifically the Fire Dept's HHMD; Public Works and Ag Commissioner are Participating Agencies (e.g. UST).
+
+## EHS Local Rules by Family
+
+### Air (SCAQMD)
+- South Coast Air Quality Management District (SCAQMD) — all air permits, entire LA County
+- https://www.aqmd.gov | (909) 396-2000
+
+### Hazardous Materials / CUPA
+- **LA County Fire Department, HHMD** is the CUPA for unincorporated LA County areas
+- (323) 881-2300 | CERS: https://cers.calepa.ca.gov
+
+### Wastewater
+- Los Angeles County Sanitation Districts (LACSD) for sewer service in most unincorporated areas
+- Industrial Waste Section: (562) 699-7411 | https://www.lacsd.org/services/wastewater-services/industrial-waste
+
+### Stormwater
+- LA County Flood Control District / Public Works for MS4 permit compliance
+- Industrial facilities: State IGP + local requirements
+
+### Fire Code
+- LA County Fire Department (unincorporated areas)
+- Fire Prevention Division: (323) 890-4243
+
+### Zoning
+- LA County Department of Regional Planning
+- Zoning Code: Title 22 (Planning and Zoning)
+- Industrial zones: M-1 (Restricted Heavy Industrial), M-2 (Unlimited Industrial)
+- Planning: (213) 974-6411 | https://planning.lacounty.gov
