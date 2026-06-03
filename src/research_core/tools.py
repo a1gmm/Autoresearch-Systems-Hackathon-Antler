@@ -23,6 +23,27 @@ REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 MAX_REDIRECT_HOPS = 5
 
 
+def _extract_main_text(html: str) -> str:
+    """Extract the main readable content from an HTML page: strip nav/chrome, prefer
+    <main>/<article>, fall back to the full de-chromed page. Live gov rules/guidance
+    are HTML, so handing the agent the raw page (tags, scripts, menus) buries the
+    requirement text. Graceful no-op (returns input) if BeautifulSoup is unavailable."""
+    try:
+        import re
+
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return html
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript", "nav", "header", "footer", "aside", "form", "svg", "button"]):
+        tag.decompose()
+    main = soup.find("main") or soup.find("article") or soup.find(attrs={"role": "main"})
+    text = main.get_text("\n", strip=True) if main else ""
+    if len(text) < 400:
+        text = (soup.body or soup).get_text("\n", strip=True)
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
 @dataclass(frozen=True)
 class SandboxPolicy:
     run_id: str
@@ -202,7 +223,12 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
                 final_url=final_url,
             )
         content_type = response.headers.get("content-type")
-        text = response.text if response.is_success else ""
+        raw = response.text if response.is_success else ""
+        # Extract readable main content for HTML so the agent reads the rule, not the
+        # nav/chrome. Non-HTML (PDF text, JSON, plain) passes through unchanged.
+        ctype = (content_type or "").lower()
+        is_html = "html" in ctype or (raw[:512].lstrip().lower().startswith(("<!doctype html", "<html")))
+        text = _extract_main_text(raw) if (is_html and raw) else raw
         return _success(
             "fetched" if response.is_success else "http_error",
             url=url,

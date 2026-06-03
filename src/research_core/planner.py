@@ -404,9 +404,12 @@ def task_for_hypothesis(
         allowed_tools=research_worker_tool_ids(),
         blocked_tools=blocked_tool_ids_for_role("researcher"),
         budget=ResearchTaskBudget(
-            max_sources=3,
-            max_runtime_seconds=30,
-            max_model_calls=4,
+            # Headroom for the real flow: read_skill -> web_search -> web_fetch/browser
+            # -> read + corroborate -> submit_finding, with room to recover from a bad
+            # fetch. 4 turns was too tight (couldn't even reach submit after orienting).
+            max_sources=5,
+            max_runtime_seconds=120,
+            max_model_calls=10,
         ),
         jurisdiction_context=jurisdiction_context,
     )

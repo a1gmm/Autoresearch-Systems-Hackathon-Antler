@@ -455,3 +455,17 @@ def test_submit_finding_rejects_protocol_relative_allowed_source(tmp_path: Path)
     assert result["ok"] is False
     assert result["status"] == "error"
     assert result["error"]["code"] == "source_url_invalid"
+
+
+def test_web_fetch_extracts_main_content_from_html():
+    from research_core.tools import _extract_main_text
+    html = (
+        "<html><head><script>junk()</script><style>x{}</style></head>"
+        "<body><nav>MENU HOME ABOUT CONTACT</nav>"
+        "<main><h1>Rule 201</h1><p>A permit to construct is required before installation of emitting equipment.</p></main>"
+        "<footer>copyright 2026</footer></body></html>"
+    )
+    text = _extract_main_text(html)
+    assert "A permit to construct is required" in text
+    assert "MENU HOME ABOUT" not in text   # nav chrome stripped
+    assert "junk()" not in text            # script stripped
