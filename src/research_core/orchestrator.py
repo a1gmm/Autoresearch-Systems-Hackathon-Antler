@@ -44,6 +44,11 @@ ALLOW_BROWSER_ENV = "RESEARCH_CORE_ALLOW_BROWSER"
 SEARCH_ENDPOINT_ENV = "RESEARCH_CORE_SEARCH_ENDPOINT"
 AGENT_MODEL_ENV = "RESEARCH_CORE_AGENT_MODEL"
 DEFAULT_AGENT_MODEL = "gpt-5.5"
+# Repair is the quality-critical re-research step. Keep it on a strong model even when the
+# worker (researcher) runs cheap, so a tiered "cheap worker / strong repair" setup just
+# needs RESEARCH_CORE_AGENT_MODEL=<cheap> while repair stays strong by default.
+REPAIR_MODEL_ENV = "RESEARCH_CORE_REPAIR_MODEL"
+DEFAULT_REPAIR_MODEL = "gpt-5.5"
 
 
 class ResearchRunResult(BaseModel):
@@ -62,6 +67,7 @@ class ResearchDeps:
     discovery_proposals: list[dict[str, Any]] = field(default_factory=list)
     max_repair_attempts: int = 1
     agent_model: str | None = None
+    repair_model: str | None = None
     artifact_root: str | Path | None = None
 
     def discover(self, scope: ScopePack, plan: Plan) -> list[dict[str, Any]]:
@@ -100,7 +106,7 @@ class ResearchDeps:
                 previous_bundle,
                 scope,
                 _sandbox_policy(scope, self.artifact_root),
-                model=self.agent_model or _agent_model_from_env(),
+                model=self.repair_model or _repair_model_from_env(),
             )
         except Exception as exc:
             return _agent_error_bundle(
@@ -390,6 +396,12 @@ def _allowed_hosts_from_env() -> tuple[str, ...]:
 def _agent_model_from_env() -> str | None:
     # Default the research agents to gpt-5.5; RESEARCH_CORE_AGENT_MODEL overrides.
     return _empty_to_none(_env(AGENT_MODEL_ENV)) or DEFAULT_AGENT_MODEL
+
+
+def _repair_model_from_env() -> str | None:
+    # RESEARCH_CORE_REPAIR_MODEL overrides; defaults to a strong model so repair stays
+    # high-quality even when the worker is cheap.
+    return _empty_to_none(_env(REPAIR_MODEL_ENV)) or DEFAULT_REPAIR_MODEL
 
 
 RESEARCH_CONCURRENCY_ENV = "RESEARCH_CORE_MAX_CONCURRENCY"
