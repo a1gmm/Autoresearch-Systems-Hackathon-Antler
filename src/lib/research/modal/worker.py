@@ -33,6 +33,7 @@ from worker_core import (
     evidence_row,
     failed_bundle,
     host_allowed,
+    host_credible,
     run_research_agent,
 )
 
@@ -224,17 +225,25 @@ def _web_search_fn(query: str) -> list[dict]:
     if resp is None:
         return []
 
-    results: list[dict] = []
+    # Allowlist-first, then other official .gov as fallback: prefer curated authorities,
+    # but if none surface, still return other government sources so a discoverable rule is
+    # never unreachable. Non-government hosts are dropped (not the open web).
+    tier1: list[dict] = []
+    tier2: list[dict] = []
     seen: set[str] = set()
     for item in (getattr(resp, "output", None) or []):
         for content in (getattr(item, "content", None) or []):
             for ann in (getattr(content, "annotations", None) or []):
                 url = getattr(ann, "url", None)
                 title = getattr(ann, "title", "") or ""
-                if url and url not in seen and host_allowed(url):
-                    seen.add(url)
-                    results.append({"title": title, "url": url, "snippet": ""})
-    return results
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                if host_allowed(url):
+                    tier1.append({"title": title, "url": url, "snippet": "", "authority": "allowlisted"})
+                elif host_credible(url):
+                    tier2.append({"title": title, "url": url, "snippet": "", "authority": "other_gov"})
+    return tier1 + tier2
 
 
 def _run(task_spec: dict) -> dict:

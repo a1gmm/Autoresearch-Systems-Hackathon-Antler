@@ -84,8 +84,18 @@ ALLOWED_HOSTS = {
 
 
 def host_allowed(url: str) -> bool:
+    """Tier 1: a curated allowlist authority (highest trust)."""
     host = (urlparse(url).hostname or "").lower()
     return host in ALLOWED_HOSTS
+
+
+def host_credible(url: str) -> bool:
+    """Tier 2: fetchable fallback when the curated allowlist yields nothing —
+    any US government domain (.gov, incl. *.ca.gov / county / city .gov). NOT the open
+    web: non-government hosts stay out. Allowlist-first; this only broadens to other
+    official sources so a discoverable rule is never unreachable."""
+    host = (urlparse(url).hostname or "").lower()
+    return host in ALLOWED_HOSTS or host.endswith(".gov")
 
 
 def evidence_row(run_id: str, bundle: dict) -> dict:
@@ -288,18 +298,29 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
             elif name == "get_triggers":
                 payload = EXTRACTION_HINTS.get(hid, {})
             elif name == "read_skill":
-                requested = (args.get("skill_id") or "").strip() or SKILL_FOR_HYPOTHESIS.get(hid, "")
-                if not requested:
+                # The agent's skill_id is a HINT. Models routinely guess non-existent ids
+                # (e.g. "SCAQMD.Rule201"), so if the hint misses, fall back to the
+                # hypothesis's canonical mapped skill — otherwise curated guidance is
+                # never actually loaded and the skill library goes unused.
+                requested = (args.get("skill_id") or "").strip()
+                mapped = SKILL_FOR_HYPOTHESIS.get(hid, "")
+                candidates = [c for c in (requested, mapped) if c]
+                if not candidates:
                     payload = {"error": f"no skill mapped for {hid}"}
                 elif read_skill_fn is None:
                     payload = {"error": "skill library unavailable"}
                 else:
-                    try:
-                        content = read_skill_fn(requested)
-                    except Exception:  # noqa: BLE001 — never throw out of the loop
-                        content = ""
-                    payload = ({"skill_id": requested, "content": content} if content
-                               else {"error": f"skill '{requested}' not found"})
+                    loaded, content = "", ""
+                    for cand in candidates:
+                        try:
+                            content = read_skill_fn(cand)
+                        except Exception:  # noqa: BLE001 — never throw out of the loop
+                            content = ""
+                        if content:
+                            loaded = cand
+                            break
+                    payload = ({"skill_id": loaded, "content": content} if content
+                               else {"error": f"no skill found for {hid} (tried {candidates})"})
             elif name == "fetch_source":
                 if sources_used >= max_sources:
                     payload = {"error": "max_sources budget exceeded"}
@@ -309,19 +330,26 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
                     url = (args.get("url") or "").strip() or (pointer["url"] if pointer else "")
                     if not url:
                         payload = {"error": "no url to fetch; use web_search to find an official source first"}
-                    elif not host_allowed(url):
-                        payload = {"error": f"host not allowlisted: {url}"}
+                    elif not host_credible(url):
+                        payload = {"error": f"host not an official source (allowlist or .gov required): {url}"}
                     else:
-                        content_hash, fetched_text = fetch_fn(url)
-                        sources_used += 1
-                        # Record the source actually fetched so extract_threshold cites it.
-                        if pointer and url == pointer["url"]:
-                            last_source = dict(pointer)
+                        try:
+                            content_hash, fetched_text = fetch_fn(url)
+                        except Exception as exc:  # noqa: BLE001 — a dead/404 url must not crash the run
+                            # Return the error so the agent can recover (search again / try
+                            # another result). A failed fetch does NOT consume the source budget.
+                            payload = {"error": f"could not fetch {url}: {exc}"}
                         else:
-                            host = (urlparse(url).hostname or "").lower()
-                            last_source = {"url": url, "source_name": host or url,
-                                           "authority_rank": 1 if host.endswith(".gov") else 2}
-                        payload = {"content_hash": content_hash, "text": fetched_text}
+                            sources_used += 1
+                            # Record the source actually fetched so extract_threshold cites it.
+                            if pointer and url == pointer["url"]:
+                                last_source = dict(pointer)
+                            else:
+                                host = (urlparse(url).hostname or "").lower()
+                                # Curated allowlist authority = rank 1; other official .gov = rank 2.
+                                last_source = {"url": url, "source_name": host or url,
+                                               "authority_rank": 1 if host_allowed(url) else 2}
+                            payload = {"content_hash": content_hash, "text": fetched_text}
             elif name == "prove_currency":
                 payload = ({"status": "no_source", "detail": "fetch a source first"}
                            if not fetched_text

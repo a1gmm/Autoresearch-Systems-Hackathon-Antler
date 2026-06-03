@@ -158,6 +158,79 @@ def test_agent_researches_without_a_pointer_via_web_search():
     assert bundle["sources"][0]["url"] == discovered  # cites the DISCOVERED source, not a pre-mapped one
 
 
+def test_tiered_sources_allowlist_first_then_other_gov():
+    from worker_core import host_allowed, host_credible
+    # Tier 1: curated allowlist authority.
+    assert host_allowed("https://www.aqmd.gov/x") and host_credible("https://www.aqmd.gov/x")
+    # Tier 2: other official .gov NOT in the strict allowlist -> credible fallback, not allowlisted.
+    assert host_credible("https://www.cityofvernon.org/x") is False  # non-gov stays out
+    assert host_credible("https://www.sandiegocounty.gov/x") and not host_allowed("https://www.sandiegocounty.gov/x")
+
+    # A credible-but-not-allowlisted .gov source is fetchable, cited at lower authority_rank.
+    gov = "https://www.sandiegocounty.gov/deh/rule.pdf"
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "fetch_source", {"url": gov})]},
+        {"tool_calls": [_tc("c2", "extract_threshold", {
+            "field": "permit_required", "threshold_value": 1,
+            "verbatim_quote": "a permit is required", "applies": "applies", "confidence": 0.8})]},
+    )
+    fetch_fn = lambda url: ("h", "Per county code, a permit is required.")
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-DISCOVER-3"
+    bundle = run_research_agent(spec, llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t")
+    assert bundle["researcher_conclusion"] == "applies"
+    assert bundle["sources"][0]["url"] == gov
+    assert bundle["sources"][0]["authority_rank"] == 2  # fallback tier
+
+
+def test_read_skill_falls_back_to_mapped_skill_when_agent_guesses_wrong_id():
+    # The agent often guesses a non-existent skill_id. read_skill must fall back to the
+    # hypothesis's canonical mapped skill so curated guidance is actually loaded, not "not found".
+    from worker_core import SKILL_FOR_HYPOTHESIS
+    assert SKILL_FOR_HYPOTHESIS.get("H-AIR-201")  # H-AIR-201 has a real mapped skill
+    real_id = SKILL_FOR_HYPOTHESIS["H-AIR-201"]
+
+    def reader(sid):
+        return "# Real SCAQMD skill content" if sid == real_id else ""
+
+    captured = {}
+    state = {"n": 0}
+    def llm_fn(messages, tools):
+        i = state["n"]; state["n"] += 1
+        if i == 0:
+            return {"tool_calls": [_tc("c1", "read_skill", {"skill_id": "SCAQMD.Rule201.GUESS"})]}
+        captured["messages"] = messages
+        return {"content": "done", "tool_calls": []}
+
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-AIR-201"
+    run_research_agent(spec, llm_fn=llm_fn, fetch_fn=lambda u: ("h", "t"), extract_fn=None,
+                       now_iso="t", read_skill_fn=reader)
+    skill_msgs = [m for m in captured["messages"] if m.get("role") == "tool" and m.get("name") == "read_skill"]
+    assert skill_msgs, "no read_skill tool result"
+    assert "Real SCAQMD skill content" in skill_msgs[-1]["content"]  # mapped skill loaded despite wrong guess
+
+
+def test_fetch_error_is_returned_to_model_not_raised():
+    # A discovered URL may 404. The fetch error must come back as a tool result so the
+    # agent can recover (try another source) — it must NOT crash the run.
+    bad = "https://www.aqmd.gov/dead.pdf"
+    good = "https://www.aqmd.gov/rule.pdf"
+    def fetch_fn(url):
+        if url == bad:
+            raise RuntimeError("404 Not Found")
+        return ("sha256:x", "A permit to construct is required.")
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "fetch_source", {"url": bad})]},       # 404 -> error back, keep going
+        {"tool_calls": [_tc("c2", "fetch_source", {"url": good})]},      # recover with another source
+        {"tool_calls": [_tc("c3", "extract_threshold", {
+            "field": "permit_required", "threshold_value": 1,
+            "verbatim_quote": "A permit to construct is required", "applies": "applies", "confidence": 0.9})]},
+    )
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-DISCOVER-2"
+    bundle = run_research_agent(spec, llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t")
+    assert bundle["researcher_conclusion"] == "applies"
+    assert bundle["sources"][0]["url"] == good
+
+
 def test_agent_happy_path_fetch_then_submit():
     llm = _scripted_llm(
         {"tool_calls": [_tc("c1", "fetch_source", {"url": SOURCE_POINTERS["H-HAZMAT-HMBP"]["url"]})]},
