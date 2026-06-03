@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ast
 import inspect
 import json
 from dataclasses import dataclass, field
@@ -394,6 +395,10 @@ def _coerce_run_result(result: Any) -> dict[str, Any]:
         output = _dump_payload(final_output)
         if isinstance(output, dict):
             return output
+        if isinstance(output, str):
+            parsed_output = _parse_structured_output(output)
+            if isinstance(parsed_output, dict):
+                return parsed_output
         return {"ok": True, "output": output}
     return {"ok": True, "output": _dump_payload(result)}
 
@@ -408,6 +413,20 @@ def _dump_payload(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
     return value
+
+
+def _parse_structured_output(value: str) -> Any:
+    stripped = value.strip()
+    if not stripped:
+        return value
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+    try:
+        return ast.literal_eval(stripped)
+    except (SyntaxError, ValueError):
+        return value
 
 
 def _metadata_from_json(metadata_json: str | None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:

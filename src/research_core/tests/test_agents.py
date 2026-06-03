@@ -40,7 +40,8 @@ def test_researcher_agent_exposes_sandbox_tools_and_terminal_submit():
     assert agent.terminal_tool_names == ("submit_finding",)
 
 
-def test_researcher_tools_bind_policy_as_first_argument(tmp_path: Path):
+def test_researcher_tools_bind_policy_as_first_argument(tmp_path: Path, monkeypatch):
+    _force_agent_shims(monkeypatch)
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path, allow_network=False)
     tools = {tool.name: tool for tool in build_researcher_agent(policy=policy).tools}
 
@@ -51,7 +52,8 @@ def test_researcher_tools_bind_policy_as_first_argument(tmp_path: Path):
     assert result["error"]["code"] == "network_disabled"
 
 
-def test_submit_finding_tool_accepts_json_metadata(tmp_path: Path):
+def test_submit_finding_tool_accepts_json_metadata(tmp_path: Path, monkeypatch):
+    _force_agent_shims(monkeypatch)
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
     tools = {tool.name: tool for tool in build_researcher_agent(policy=policy).tools}
 
@@ -67,7 +69,11 @@ def test_submit_finding_tool_accepts_json_metadata(tmp_path: Path):
     assert result["finding"]["metadata"] == {"task_id": "task-1", "pages": [1, 2]}
 
 
-def test_submit_finding_tool_returns_structured_error_for_invalid_metadata_json(tmp_path: Path):
+def test_submit_finding_tool_returns_structured_error_for_invalid_metadata_json(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _force_agent_shims(monkeypatch)
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
     tools = {tool.name: tool for tool in build_researcher_agent(policy=policy).tools}
 
@@ -253,3 +259,55 @@ def test_default_runner_receives_sdk_safe_input_shape(tmp_path: Path, monkeypatc
     payload = json.loads(captured["input"].removeprefix("PermitPilot agent input JSON:\n"))
     assert payload["task"]["task_id"] == "task-1"
     assert payload["context"] == {"facility": "demo"}
+
+
+def test_default_runner_parses_stringified_terminal_tool_dict(tmp_path: Path, monkeypatch):
+    fake_agents = ModuleType("agents")
+
+    class FakeTool:
+        def __init__(self, function):
+            self.function = function
+            self.name = function.__name__
+
+    class FakeAgent:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class FakeRunResult:
+        final_output = (
+            "{'ok': True, 'status': 'submitted', "
+            "'finding': {'title': 'Needs review'}}"
+        )
+
+    class FakeRunner:
+        @staticmethod
+        def run_sync(agent, input, max_turns):
+            return FakeRunResult()
+
+    fake_agents.Agent = FakeAgent
+    fake_agents.Runner = FakeRunner
+    fake_agents.function_tool = FakeTool
+    monkeypatch.setitem(sys.modules, "agents", fake_agents)
+
+    task = ResearchTask(
+        task_id="task-1",
+        hypothesis_id="hyp-1",
+        assigned_agent="researcher",
+        allowed_tools=["submit_finding"],
+        blocked_tools=[],
+        budget=ResearchTaskBudget(max_sources=1, max_runtime_seconds=30, max_model_calls=2),
+    )
+    policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
+
+    result = run_researcher_agent(task, {"facility": "demo"}, policy)
+
+    assert result == {
+        "ok": True,
+        "status": "submitted",
+        "finding": {"title": "Needs review"},
+    }
+
+
+def _force_agent_shims(monkeypatch):
+    monkeypatch.setattr("research_core.agents._sdk_agent_class", lambda: None)
+    monkeypatch.setattr("research_core.agents._sdk_function_tool", lambda: None)
