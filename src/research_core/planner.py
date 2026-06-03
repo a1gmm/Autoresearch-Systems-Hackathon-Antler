@@ -368,6 +368,56 @@ def coverage_status_for(
             missing_facts=[],
         )
 
+    if family == "osha":
+        active = has_chemicals or sds_flagged
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "A chemical process may involve a highly hazardous or flammable material "
+                "above the Cal/OSHA Process Safety Management threshold."
+                if active
+                else "No chemical process indicated that could trigger Process Safety Management."
+            ),
+            project_facts_considered=[f"chemicals={has_chemicals}", *( ["sds:psm_relevance"] if sds_flagged else [])],
+            missing_facts=[],
+        )
+
+    if family == "ceqa":
+        has_equipment = len(scope.project_change.equipment) > 0
+        active = has_equipment or has_chemicals or disturbance is not None
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "A discretionary approval for this project change may require CEQA review "
+                "unless a statutory or categorical exemption applies."
+                if active
+                else "No discretionary project change indicated that would trigger CEQA."
+            ),
+            project_facts_considered=[*equipment_kinds, f"chemicals={has_chemicals}", f"acres={disturbance}"],
+            missing_facts=[],
+        )
+
+    if family == "land_use":
+        has_equipment = len(scope.project_change.equipment) > 0
+        active = has_equipment or disturbance is not None
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "Establishing or changing the use/equipment may require a zoning clearance, "
+                "conditional use permit, or variance from the local planning authority."
+                if active
+                else "No use/occupancy change indicated that would require zoning review."
+            ),
+            project_facts_considered=[*equipment_kinds, f"acres={disturbance}"],
+            missing_facts=[],
+        )
+
     return CoverageFamilyStatus(
         id=id,
         family=family,
