@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -74,6 +76,26 @@ def _run_sync(payload: dict[str, Any]) -> dict[str, Any]:
     return result.model_dump(mode="json")
 
 
+def _start_run(payload: dict[str, Any]) -> dict[str, Any]:
+    """Async path: create the run, execute it on a background thread (so a long live run
+    never blocks/timeouts the HTTP request), and return the run_id immediately. The UI then
+    polls /get_run, which returns the store record as it fills in (status, evidence, verdicts,
+    result, trace_events) -- so the graph animates progress instead of a frozen sync wait."""
+    record = _STORE.create_run(payload)
+    run_id = str(record["run_id"])
+
+    def _background() -> None:
+        try:
+            run_research_sync(
+                payload, deps=ResearchDeps(mode=_deps_mode()), store=_STORE, run_id=run_id
+            )
+        except Exception:  # noqa: BLE001 — status is already marked failed in the store
+            print(f"[local_server] run {run_id} failed:\n{traceback.format_exc()}", flush=True)
+
+    threading.Thread(target=_background, name=f"research-{run_id}", daemon=True).start()
+    return {"run_id": run_id, "status": record.get("status", "queued")}
+
+
 class _Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, body: dict[str, Any]) -> None:
         data = json.dumps(body).encode()
@@ -99,7 +121,8 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802 — http.server API
-        if urlparse(self.path).path not in {"/run_sync", "/run", "/start_run"}:
+        path = urlparse(self.path).path
+        if path not in {"/run_sync", "/run", "/start_run"}:
             self._send(404, {"error": "not found"})
             return
         try:
@@ -112,7 +135,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(400, {"error": f"invalid request body: {exc}"})
             return
         try:
-            self._send(200, _run_sync(payload))
+            # /start_run returns immediately (background); /run_sync blocks until done.
+            self._send(200, _start_run(payload) if path == "/start_run" else _run_sync(payload))
         except Exception as exc:  # noqa: BLE001 — surface as the run-failed contract
             self._send(
                 500,
