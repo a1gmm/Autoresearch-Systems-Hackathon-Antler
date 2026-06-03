@@ -59,6 +59,50 @@ def _normalize_host(host: str | None) -> str:
     return (host or "").strip().rstrip(".").lower()
 
 
+def host_fetchable(url: str) -> bool:
+    """The sandbox NETWORK boundary (a safety gate, not a content allowlist):
+    allow any public http(s) host so the subagent can do broad, durable research,
+    but block SSRF-dangerous targets (localhost, private/loopback/link-local nets,
+    cloud metadata). Authority of a source is judged downstream by the verifier
+    (authority_rank), not by restricting which official sites may be read."""
+    if not isinstance(url, str):
+        return False
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = _normalize_host(parsed.hostname)
+    if not host:
+        return False
+    if host == "localhost" or host.endswith((".localhost", ".internal", ".local")):
+        return False
+    try:
+        import ipaddress
+
+        ip = ipaddress.ip_address(host)
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    except ValueError:
+        pass  # a hostname, not a raw IP -> allowed
+    return True
+
+
+def source_authority_rank(url: str, allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS) -> int:
+    """Authority tier for a fetched source, consumed by the verifier's authority
+    gate (which requires rank <= 2):
+      1 = curated authority allowlist (highest trust)
+      2 = other government / official source (*.gov, *.mil, *.gov.* )
+      3 = other public source -> fails the verifier's authority gate (fail-closed)."""
+    if host_allowed(url, allowed_hosts):
+        return 1
+    host = _normalize_host(urlparse(url).hostname)
+    # Suffix-only (never a substring): a spoof like aqmd.gov.evil.example must NOT
+    # be treated as government — it ends in .example, so it stays rank 3.
+    if host == "gov" or host == "mil" or host.endswith((".gov", ".mil")):
+        return 2
+    return 3
+
+
 def host_allowed(url: str, allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS) -> bool:
     if not isinstance(url, str):
         return False
@@ -167,13 +211,13 @@ def _guarded_get(
         raw_location = _header(response, "location")
         next_url = urljoin(str(getattr(response, "url", current_url)), raw_location or "")
         chain_entry["location"] = next_url
-        if not host_allowed(next_url, policy.allowed_hosts):
+        if not host_fetchable(next_url):
             return (
                 None,
                 _error(
                     "blocked",
-                    "redirect_host_not_allowed",
-                    "Redirect target is outside sandbox policy.",
+                    "redirect_blocked",
+                    "Redirect target is not a fetchable public host (SSRF guard).",
                     redirect_chain=redirect_chain,
                     blocked_url=next_url,
                     **context,
@@ -200,8 +244,10 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
         return _invalid_argument("url", "a string", url)
     if not policy.allow_network:
         return _error("blocked", "network_disabled", "Network access is disabled by sandbox policy.", url=url)
-    if not host_allowed(url, policy.allowed_hosts):
-        return _error("blocked", "host_not_allowed", "URL host is not allowed by sandbox policy.", url=url)
+    # Open content gate: fetch any public source for durable research; only block
+    # SSRF-dangerous targets. Source AUTHORITY is judged by the verifier, not here.
+    if not host_fetchable(url):
+        return _error("blocked", "host_not_fetchable", "URL is not a fetchable public host (SSRF guard).", url=url)
 
     try:
         import httpx
@@ -214,11 +260,11 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
         if redirect_error is not None:
             return redirect_error
         final_url = str(response.url)
-        if not host_allowed(final_url, policy.allowed_hosts):
+        if not host_fetchable(final_url):
             return _error(
                 "blocked",
-                "redirect_host_not_allowed",
-                "Fetch redirected to a host outside sandbox policy.",
+                "redirect_blocked",
+                "Fetch redirected to a non-fetchable public host (SSRF guard).",
                 url=url,
                 final_url=final_url,
             )

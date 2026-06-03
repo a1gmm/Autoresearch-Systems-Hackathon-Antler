@@ -30,7 +30,7 @@ from research_core.raindrop import WorkshopTracer, workshop
 from research_core.scenarios import information_gap_options, scenarios_for_missing_fact
 from research_core.store import get_default_store
 from research_core.synthesis import synthesize_result
-from research_core.tools import DEFAULT_ALLOWED_HOSTS, SandboxPolicy
+from research_core.tools import DEFAULT_ALLOWED_HOSTS, SandboxPolicy, source_authority_rank
 from research_core.verifier import VerificationVerdict, repair_evidence, verify_evidence
 
 
@@ -698,7 +698,10 @@ def _sources_from_finding(finding: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "url": str(url),
             "source_name": _source_name(str(url)),
-            "authority_rank": 1,
+            # Honest, host-derived authority so the verifier's authority gate works
+            # now that fetching is open: curated authority -> 1, other .gov -> 2,
+            # anything else -> 3 (which fails the verifier's rank<=2 requirement).
+            "authority_rank": _source_authority_rank(str(url)),
             "fetched_at": None,
             "effective_date": None,
             "currency_status": "unconfirmed",
@@ -707,6 +710,10 @@ def _sources_from_finding(finding: dict[str, Any]) -> list[dict[str, Any]]:
         for url in urls
         if isinstance(url, str)
     ]
+
+
+def _source_authority_rank(url: str) -> int:
+    return source_authority_rank(url, _allowed_hosts_from_env())
 
 
 def _source_name(url: str) -> str:

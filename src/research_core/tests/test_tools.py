@@ -51,14 +51,20 @@ def test_write_artifact_rejects_traversal(tmp_path: Path):
     assert not (tmp_path / "outside.txt").exists()
 
 
-def test_web_fetch_rejects_disallowed_hosts(tmp_path: Path):
+def test_web_fetch_blocks_ssrf_but_authority_gate_catches_spoofs(tmp_path: Path):
+    from research_core.tools import source_authority_rank
+
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
 
-    result = web_fetch(policy, "https://aqmd.gov.evil.example/docs/rule.pdf")
-
+    # The content gate is open for durable research, but SSRF targets are blocked.
+    result = web_fetch(policy, "http://169.254.169.254/latest/meta-data")
     assert result["ok"] is False
     assert result["status"] == "blocked"
-    assert result["error"]["code"] == "host_not_allowed"
+    assert result["error"]["code"] == "host_not_fetchable"
+
+    # A spoofed authority host is fetchable (public), but the verifier catches it via
+    # authority_rank: a non-curated, non-.gov host is rank 3 (fails the rank<=2 gate).
+    assert source_authority_rank("https://aqmd.gov.evil.example/docs/rule.pdf") == 3
 
 
 def test_web_fetch_blocks_disallowed_redirect_before_fetching_it(tmp_path: Path, monkeypatch):
@@ -88,7 +94,7 @@ def test_web_fetch_blocks_disallowed_redirect_before_fetching_it(tmp_path: Path,
         def get(self, url: str, **kwargs):
             requested_urls.append(url)
             if url == "https://www.aqmd.gov/start":
-                return FakeResponse(url, 302, "https://evil.example/payload")
+                return FakeResponse(url, 302, "http://169.254.169.254/payload")
             raise AssertionError(f"Unexpected request to {url}")
 
     fake_httpx = ModuleType("httpx")
@@ -100,8 +106,8 @@ def test_web_fetch_blocks_disallowed_redirect_before_fetching_it(tmp_path: Path,
 
     assert result["ok"] is False
     assert result["status"] == "blocked"
-    assert result["error"]["code"] == "redirect_host_not_allowed"
-    assert result["blocked_url"] == "https://evil.example/payload"
+    assert result["error"]["code"] == "redirect_blocked"
+    assert result["blocked_url"] == "http://169.254.169.254/payload"
     assert requested_urls == ["https://www.aqmd.gov/start"]
 
 
@@ -469,3 +475,24 @@ def test_web_fetch_extracts_main_content_from_html():
     assert "A permit to construct is required" in text
     assert "MENU HOME ABOUT" not in text   # nav chrome stripped
     assert "junk()" not in text            # script stripped
+
+
+def test_host_fetchable_allows_public_blocks_ssrf():
+    from research_core.tools import host_fetchable
+    # Public hosts (gov AND non-gov) are fetchable — content gate is open.
+    assert host_fetchable("https://www.aqmd.gov/x")
+    assert host_fetchable("https://www.sandiegocounty.gov/x")
+    assert host_fetchable("https://example.com/x")
+    # SSRF-dangerous targets are blocked.
+    assert not host_fetchable("http://localhost/x")
+    assert not host_fetchable("http://127.0.0.1/x")
+    assert not host_fetchable("http://169.254.169.254/latest/meta-data")  # cloud metadata
+    assert not host_fetchable("http://10.0.0.5/x")
+    assert not host_fetchable("ftp://aqmd.gov/x")  # non-http scheme
+
+
+def test_source_authority_rank_tiers():
+    from research_core.tools import source_authority_rank
+    assert source_authority_rank("https://www.aqmd.gov/x") == 1        # curated allowlist
+    assert source_authority_rank("https://www.sandiegocounty.gov/x") == 2  # other gov
+    assert source_authority_rank("https://example.com/x") == 3         # other -> fails verifier
