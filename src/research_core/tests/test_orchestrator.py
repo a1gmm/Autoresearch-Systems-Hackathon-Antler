@@ -553,3 +553,44 @@ def test_modal_research_timeouts_are_production_grade():
     )
     assert MODAL_FUNCTION_TIMEOUT_SECONDS == 3600  # 60 min per endpoint
     assert MODAL_RESEARCH_RUN_TIMEOUT_SECONDS >= 3600  # background aggregator: larger ceiling
+
+
+def test_hypotheses_research_runs_in_parallel():
+    import threading
+    import time
+
+    class ConcurrencyDeps(ResearchDeps):
+        def __init__(self):
+            super().__init__(mode="fake")
+            self._lock = threading.Lock()
+            self.active = 0
+            self.max_active = 0
+            self.hypotheses = []
+
+        def research(self, task, scope):
+            with self._lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.05)
+            with self._lock:
+                self.active -= 1
+                self.hypotheses.append(task.hypothesis_id)
+            return _bundle_for(task.hypothesis_id, grounded=True, conclusion="needs_review")
+
+    deps = ConcurrencyDeps()
+    run_research_sync(
+        {"project_description": "Adds a coating booth and stores 60 gallons of flammable solvent."},
+        deps=deps,
+    )
+    # Multiple hypotheses were researched, and more than one ran at the SAME time
+    # (true parallelism, not sequential).
+    assert len(deps.hypotheses) >= 2
+    assert deps.max_active >= 2
+
+
+def test_max_research_concurrency_env_override(monkeypatch):
+    from research_core.orchestrator import _max_research_concurrency, DEFAULT_RESEARCH_CONCURRENCY
+    monkeypatch.delenv("RESEARCH_CORE_MAX_CONCURRENCY", raising=False)
+    assert _max_research_concurrency() == DEFAULT_RESEARCH_CONCURRENCY
+    monkeypatch.setenv("RESEARCH_CORE_MAX_CONCURRENCY", "3")
+    assert _max_research_concurrency() == 3

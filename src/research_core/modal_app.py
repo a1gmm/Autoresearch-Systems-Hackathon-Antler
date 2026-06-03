@@ -166,8 +166,8 @@ def _deps_from_env() -> ResearchDeps:
 # Production, not demo: each hypothesis gets up to ~60 min of durable research (the
 # per-hypothesis agent budget is 3600s). Modal's default function timeout is 300s,
 # which would cut real research off. Endpoints get 60 min; the background research_run
-# runs every hypothesis SEQUENTIALLY, so it gets a generous ceiling (6h) so a real
-# multi-hypothesis run is never truncated.
+# fans hypotheses out in PARALLEL but still gets a generous ceiling (6h) to cover
+# multiple concurrency waves of long-running hypotheses without ever truncating a run.
 MODAL_FUNCTION_TIMEOUT_SECONDS = 3600
 MODAL_RESEARCH_RUN_TIMEOUT_SECONDS = 21600
 

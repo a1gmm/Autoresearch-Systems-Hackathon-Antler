@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -168,8 +169,19 @@ def run_research_sync(
         verdicts: list[VerificationVerdict] = []
         if not blocking_requests:
             active_store.update_status(run_id, RunStatus.RESEARCHING.value)
-            for task in plan.research_tasks:
-                bundle = active_deps.research(task, scope)
+            # Run hypotheses in PARALLEL: each is an independent subagent doing long
+            # (up to 60 min) durable research, so total wall-clock ~= the slowest one
+            # instead of the sum. The agents are I/O-bound (LLM + fetches), so threads
+            # give real concurrency. Store writes + tracer events stay sequential and in
+            # plan order below for deterministic, race-free persistence.
+            tasks = list(plan.research_tasks)
+            if tasks:
+                workers = min(len(tasks), _max_research_concurrency())
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    bundles = list(executor.map(lambda t: active_deps.research(t, scope), tasks))
+            else:
+                bundles = []
+            for task, bundle in zip(tasks, bundles):
                 evidence.append(bundle)
                 active_store.write_evidence(run_id, bundle)
                 active_tracer.event(
@@ -354,6 +366,20 @@ def _allowed_hosts_from_env() -> tuple[str, ...]:
 def _agent_model_from_env() -> str | None:
     # Default the research agents to gpt-5.5; RESEARCH_CORE_AGENT_MODEL overrides.
     return _empty_to_none(_env(AGENT_MODEL_ENV)) or DEFAULT_AGENT_MODEL
+
+
+RESEARCH_CONCURRENCY_ENV = "RESEARCH_CORE_MAX_CONCURRENCY"
+DEFAULT_RESEARCH_CONCURRENCY = 8
+
+
+def _max_research_concurrency() -> int:
+    raw = _empty_to_none(_env(RESEARCH_CONCURRENCY_ENV))
+    if raw is not None:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return DEFAULT_RESEARCH_CONCURRENCY
 
 
 def _bool_env(name: str, *, default: bool) -> bool:
