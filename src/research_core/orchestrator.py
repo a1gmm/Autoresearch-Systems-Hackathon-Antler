@@ -59,6 +59,9 @@ class ResearchRunResult(BaseModel):
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     verdicts: list[VerificationVerdict] = Field(default_factory=list)
     result: dict[str, Any] = Field(default_factory=dict)
+    # The run's own trace timeline, so the UI animates the REAL run (the adapter coerces
+    # each {scope, payload, created_at} into a TraceEvent the replay drives the graph from).
+    trace_events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 @dataclass
@@ -260,6 +263,7 @@ def run_research_sync(
             evidence=evidence,
             verdicts=verdicts,
             result=result,
+            trace_events=list(active_tracer.events),
         )
     except Exception as exc:
         active_store.update_status(run_id, RunStatus.FAILED.value, reason=str(exc))
