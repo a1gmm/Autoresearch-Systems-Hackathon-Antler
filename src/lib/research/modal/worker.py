@@ -67,9 +67,8 @@ EXTRACT_SYSTEM = (
 
 
 def _model() -> str:
-    # All-reasoning worker: default to a reasoning-tier model; operator overrides via env
-    # with a reasoning model their OpenAI account has access to.
-    return os.environ.get("OPENAI_RESEARCH_MODEL", "o4-mini")
+    # Worker model. Default GPT-5.5; operator overrides via OPENAI_RESEARCH_MODEL.
+    return os.environ.get("OPENAI_RESEARCH_MODEL", "gpt-5.5")
 
 
 # EHS skill files are bundled into the image at /root/skills/<id>/SKILL.md
