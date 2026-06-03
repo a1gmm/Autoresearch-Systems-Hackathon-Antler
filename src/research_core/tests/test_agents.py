@@ -35,6 +35,7 @@ def test_researcher_agent_exposes_sandbox_tools_and_terminal_submit():
         "read_pdf",
         "read_docx",
         "read_spreadsheet",
+        "compute_voc_threshold",
         "write_artifact",
         "submit_finding",
     ]

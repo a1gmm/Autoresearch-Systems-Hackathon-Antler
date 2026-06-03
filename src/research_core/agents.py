@@ -23,6 +23,7 @@ RESEARCHER_TOOL_NAMES = (
     "read_pdf",
     "read_docx",
     "read_spreadsheet",
+    "compute_voc_threshold",
     "write_artifact",
     "submit_finding",
 )
@@ -112,7 +113,10 @@ def build_researcher_agent(
             "read official sources. web_fetch reads agency rule PDFs directly (it extracts "
             "the PDF text and clears bot/JS challenges via the browser) — fetch the actual "
             "rule and quote its verbatim requirement text; do not declare a PDF unreadable or "
-            "settle for a secondary summary when the primary rule is fetchable. Write "
+            "settle for a secondary summary when the primary rule is fetchable. When a rule sets "
+            "a mass-based limit (e.g. lb of ROC/VOC per period), call compute_voc_threshold with "
+            "the material's SDS content and density to turn it into the actionable usage limit "
+            "(gallons) or to estimate emissions — report the number, not just the rule text. Write "
             "intermediate artifacts when helpful, then call submit_finding exactly once with "
             "sourced conclusions; submit_finding is terminal."
         ),
@@ -305,6 +309,31 @@ def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dic
     def read_spreadsheet(path: str) -> dict[str, Any]:
         return _call_policy_tool(policy, sandbox_tools.read_spreadsheet, path)
 
+    def compute_voc_threshold(
+        voc_content: float,
+        voc_content_unit: str = "weight_percent",
+        density: float | None = None,
+        density_unit: str = "lb/gal",
+        mass_limit_lb: float | None = None,
+        usage: float | None = None,
+        usage_unit: str = "gal",
+        control_efficiency: float = 0.0,
+    ) -> dict[str, Any]:
+        # Pure math (no policy needed); still return structured errors, never raise.
+        try:
+            return sandbox_tools.compute_voc_threshold(
+                voc_content=voc_content,
+                voc_content_unit=voc_content_unit,
+                density=density,
+                density_unit=density_unit,
+                mass_limit_lb=mass_limit_lb,
+                usage=usage,
+                usage_unit=usage_unit,
+                control_efficiency=control_efficiency,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _structured_error("tool_call_failed", str(exc), exception_type=exc.__class__.__name__)
+
     def write_artifact(relative_path: str, contents: str) -> dict[str, Any]:
         return _call_policy_tool(policy, sandbox_tools.write_artifact, relative_path, contents)
 
@@ -336,6 +365,7 @@ def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dic
         "read_pdf": read_pdf,
         "read_docx": read_docx,
         "read_spreadsheet": read_spreadsheet,
+        "compute_voc_threshold": compute_voc_threshold,
         "write_artifact": write_artifact,
         "submit_finding": submit_finding,
     }
@@ -599,6 +629,11 @@ def _tool_description(name: str) -> str:
         "read_pdf": "Read a PDF artifact from the run workspace.",
         "read_docx": "Read a DOCX artifact from the run workspace.",
         "read_spreadsheet": "Read a CSV or XLSX artifact from the run workspace.",
+        "compute_voc_threshold": (
+            "Compute VOC/ROC permit thresholds: convert a mass-based rule limit "
+            "(lb/period) into an equivalent material-usage limit (gallons), or estimate "
+            "emissions from usage. Give VOC content (weight % or g/L) and density."
+        ),
         "write_artifact": "Write an artifact inside the run workspace.",
         "submit_finding": "Submit the final sourced finding. Terminal.",
     }
