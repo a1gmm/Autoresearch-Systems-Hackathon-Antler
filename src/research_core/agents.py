@@ -137,9 +137,17 @@ def build_repair_agent(
     return _build_agent(
         name="permitpilot-repair-agent",
         instructions=(
-            "Repair a prior research bundle in response to a bounded validation "
-            "ticket. Preserve good evidence, use sandbox tools only for the missing "
-            "or invalid pieces, and return a structured repair summary."
+            "Repair a prior research bundle in response to a bounded validation ticket "
+            "from the verifier. The ticket names exactly what failed (grounding, authority, "
+            "currency, or a missing predicate/threshold) — fix only that, and preserve "
+            "evidence that already passed. Call read_skill first to reload the hypothesis's "
+            "law-code skill for orientation (never citable evidence). Use the same sandbox "
+            "tools as the researcher: web_fetch reads agency rule PDFs directly (extracts PDF "
+            "text, clears bot/JS challenges) — fetch the primary rule and quote its verbatim "
+            "requirement text to fix a grounding/authority failure; call compute_voc_threshold "
+            "to supply a missing quantitative threshold. Your goal is to clear the verifier's "
+            "gate (verbatim-grounded quote from a rank-1/2 source, current, with a decided "
+            "conclusion). Return a structured repair summary."
         ),
         model=model,
         tools=tools if tools is not None else _researcher_tools(policy),
