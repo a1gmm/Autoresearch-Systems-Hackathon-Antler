@@ -1,0 +1,28 @@
+{
+  "confidence": 0.78,
+  "metadata": {
+    "hypothesis_id": "H-AIR-TITLE-V",
+    "key_thresholds": {
+      "hap_major_source": "10 tpy single HAP or 25 tpy aggregate HAP PTE",
+      "ozone_nonattainment_voc_nox": "100/50/25/10 tpy for Marginal-Moderate/Serious/Severe/Extreme areas",
+      "regulated_air_pollutant_major_source": "100 tpy PTE unless lower nonattainment thresholds apply"
+    },
+    "missing_facts": [
+      "county / air district / nonattainment classification",
+      "facility-wide potential to emit for VOC/regulated pollutants and HAPs",
+      "solvent composition and VOC/HAP content",
+      "annual solvent/coating throughput and controls",
+      "existing permits or enforceable PTE limits"
+    ],
+    "run_id": "run_057dc1227e2f",
+    "task_id": "T-AIR-TITLE-V"
+  },
+  "run_id": "run_057dc1227e2f",
+  "sources": [
+    "https://www.ecfr.gov/api/versioner/v1/full/2025-06-03/title-40.xml?part=70",
+    "https://ww2.arb.ca.gov/our-work/programs/federal-clean-air-act-title-v-operating-permits/fcaa-title-v-overview"
+  ],
+  "submitted_at": "2026-06-03T06:19:59.901854+00:00",
+  "summary": "Under 40 CFR part 70, approved state/local Title V programs must permit \u201cAny major source\u201d and other listed source categories. A \u201cmajor source\u201d includes a source with potential to emit 10 tpy or more of any listed HAP or 25 tpy aggregate HAPs, or 100 tpy or more of any air pollutant subject to regulation; lower major-source thresholds apply in specified nonattainment areas (e.g., ozone VOC/NOx thresholds of 100/50/25/10 tpy by classification). EPA\u2019s definition of potential to emit is the maximum capacity considering only federally enforceable physical/operational limits. California air districts implement Title V programs, but the facility county/jurisdiction is unknown, so the controlling air district and any local/nonattainment thresholds cannot be resolved. Based only on the project description\u2014storing 60 gallons of solvent at a coating shop with a coating/paint operation\u2014there is no evidence that facility-wide PTE reaches 100 tpy regulated pollutants or 10/25 tpy HAP thresholds, and no evidence it is an affected acid-rain source, solid waste incinerator, or EPA-designated category. Therefore Title V applicability is indeterminate pending facility location, solvent composition/HAP content, VOC content, annual throughput/usage, coating booth emissions/PTE, controls and enforceable limits, and current permits; on the limited facts, a Title V permit is not triggered by the stated 60-gallon storage alone.",
+  "title": "H-AIR-TITLE-V \u2014 Title V operating permit applicability cannot be confirmed without location/PTE, but 60 gal solvent storage at a coating shop is not itself enough to indicate a major source"
+}

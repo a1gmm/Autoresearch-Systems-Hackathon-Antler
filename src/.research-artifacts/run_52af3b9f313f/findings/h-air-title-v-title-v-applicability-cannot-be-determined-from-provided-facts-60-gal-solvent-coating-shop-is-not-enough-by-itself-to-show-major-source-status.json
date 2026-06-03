@@ -1,0 +1,22 @@
+{
+  "confidence": 0.78,
+  "metadata": {
+    "hypothesis_id": "H-AIR-TITLE-V",
+    "key_missing_facts": [
+      "county/air district and attainment classification",
+      "solvent composition and VOC/HAP content",
+      "annual usage/throughput and facility-wide PTE",
+      "existing enforceable permit limits/controls"
+    ],
+    "run_id": "run_52af3b9f313f",
+    "task_id": "T-AIR-TITLE-V"
+  },
+  "run_id": "run_52af3b9f313f",
+  "sources": [
+    "https://www.epa.gov/title-v-operating-permits/who-has-obtain-title-v-permit",
+    "https://ww2.arb.ca.gov/our-work/programs/federal-clean-air-act-title-v-operating-permits/fcaa-title-v-overview"
+  ],
+  "submitted_at": "2026-06-03T06:22:21.219013+00:00",
+  "summary": "Federal/California Title V operating permits generally apply to major sources and specified categories. EPA states that a major source has actual or potential emissions at or above the major-source threshold: default 100 tons/year for any air pollutant, lower nonattainment thresholds for the nonattainment pollutant, and 10 tons/year for a single HAP or 25 tons/year for combined HAPs. CARB states California air districts implement Title V programs and that applications generally are required from any CAA \u201cmajor source,\u201d Title IV acid-rain affected source, CAA section 129 solid-waste incinerator, or EPA-designated source category. The project facts only identify storage of 60 gallons of flammable solvent at a coating shop and a coating/paint operation, with no location/air district, solvent composition/VOC-HAP content, annual throughput, emissions controls, hours, or facility-wide potential-to-emit. Therefore Title V applicability is indeterminate; based on volume alone, 60 gal stored solvent does not establish PTE at Title V major-source thresholds. Resolve county/air district and calculate facility-wide PTE for VOC/NOx/other regulated pollutants and single/aggregate HAPs, including any lower ozone nonattainment VOC/NOx thresholds and district-specific Title V rule.",
+  "title": "H-AIR-TITLE-V: Title V applicability cannot be determined from provided facts; 60 gal solvent/coating shop is not enough by itself to show major-source status"
+}

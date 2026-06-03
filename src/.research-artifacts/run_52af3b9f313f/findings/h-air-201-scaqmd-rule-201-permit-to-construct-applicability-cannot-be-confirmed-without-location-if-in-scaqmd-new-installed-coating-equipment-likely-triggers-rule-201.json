@@ -1,0 +1,26 @@
+{
+  "confidence": 0.55,
+  "metadata": {
+    "chemical": "60 gal flammable solvent",
+    "hypothesis_id": "H-AIR-201",
+    "jurisdiction_status": "county/location unknown; SCAQMD not confirmed",
+    "limitations": "PDF text extraction unavailable in sandbox fetch; conclusion limited to potential applicability and jurisdiction caveat.",
+    "official_rule_pdf_fetch": {
+      "content_type": "application/pdf",
+      "last_modified": "Tue, 07 Apr 2026 22:13:38 GMT",
+      "pdf_title_metadata": "Rule 201. Permit to Construct",
+      "status_code": 200,
+      "url": "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf"
+    },
+    "project_equipment": "coating_booth"
+  },
+  "run_id": "run_52af3b9f313f",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf",
+    "https://www.aqmd.gov/home/rules-compliance/rules/scaqmd-rule-book/regulation-ii",
+    "https://www.aqmd.gov/home/permits/permit-requirements-and-procedures"
+  ],
+  "submitted_at": "2026-06-03T06:16:56.524659+00:00",
+  "summary": "The project describes storing 60 gal of flammable solvent at a coating shop and includes a coating/paint operation (coating booth). The facility location/jurisdiction is unresolved, so South Coast AQMD authority cannot be confirmed. If the site is within South Coast AQMD jurisdiction, the official Rule 201 source is the controlling permit-to-construct rule (official SCAQMD PDF titled \u201cRule 201. Permit to Construct\u201d; fetched from aqmd.gov, HTTP 200, last-modified Apr. 7, 2026). Based on that rule\u2019s title and official source, Rule 201 is potentially applicable to construction/installation/alteration of air-contaminant-emitting coating equipment. A final yes/no determination requires confirming the facility location and evaluating any separate exemption/registration pathway (e.g., Rule 219/222, not decided here).",
+  "title": "H-AIR-201 \u2014 SCAQMD Rule 201 permit-to-construct applicability cannot be confirmed without location; if in SCAQMD, new/installed coating equipment likely triggers Rule 201"
+}

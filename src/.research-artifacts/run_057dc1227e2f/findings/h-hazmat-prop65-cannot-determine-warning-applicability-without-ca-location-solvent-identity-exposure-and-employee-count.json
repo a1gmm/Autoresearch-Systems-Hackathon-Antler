@@ -1,0 +1,28 @@
+{
+  "confidence": 0.55,
+  "metadata": {
+    "determination": "indeterminate_missing_location_and_chemical_exposure_facts",
+    "facility_location_known": false,
+    "hypothesis_id": "H-HAZMAT-PROP65",
+    "missing_facts": [
+      "state/county/jurisdiction",
+      "solvent identity and CAS composition",
+      "employee count",
+      "exposure route and level compared to NSRL/MADL"
+    ],
+    "project": "store 60 gal solvent at a coating shop",
+    "quantity_gal": 60,
+    "run_id": "run_057dc1227e2f"
+  },
+  "run_id": "run_057dc1227e2f",
+  "sources": [
+    "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25249.6.",
+    "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25249.10.",
+    "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25249.11.",
+    "https://oehha.ca.gov/proposition-65/businesses-and-proposition-65",
+    "https://oehha.ca.gov/proposition-65/general-info/current-proposition-65-no-significant-risk-levels-nsrls-maximum"
+  ],
+  "submitted_at": "2026-06-03T06:20:27.074936+00:00",
+  "summary": "For a coating shop storing 60 gallons of unspecified flammable solvent, California Proposition 65 may be relevant only if the facility is in California and the solvent contains a listed chemical that causes exposures requiring a warning. The controlling statutory trigger is Health & Safety Code \u00a725249.6 (official LegInfo source), which prohibits a business from knowingly and intentionally exposing an individual to a listed carcinogen or reproductive toxicant without first giving a clear and reasonable warning. Official LegInfo also identifies exemptions/limitations in \u00a7\u00a725249.10 and 25249.11, including the small-business concept (persons in the course of doing business) and exposure/no-significant-risk concepts. Because the input lacks county/state, exact solvent/CAS composition, employee count, and any exposure assessment, this hypothesis is indeterminate rather than triggered or not triggered. If the site is in California, next facts needed are: whether the business has 10 or more employees, whether the solvent contains any OEHHA-listed Prop 65 chemicals, and whether storage/use can expose workers/customers/the public above applicable safe-harbor levels (NSRL/MADL) or otherwise requires a warning.",
+  "title": "H-HAZMAT-PROP65: Cannot determine warning applicability without CA location, solvent identity, exposure, and employee count"
+}

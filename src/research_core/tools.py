@@ -87,15 +87,47 @@ def host_fetchable(url: str) -> bool:
     return True
 
 
+_CA_AUTHORITY_HOSTS: frozenset[str] | None = None
+
+
+def _ca_authority_hosts() -> frozenset[str]:
+    """The hostnames of California EHS authorities the system already knows about
+    (the jurisdiction registry's air districts — VCAPCD, BAAQMD, SJVAPCD, etc.).
+    These live on mixed TLDs (.org/.us/.net/.com, not just .gov), so the verifier's
+    authority tier must recognize them rather than assume government TLDs. Lazily
+    derived from the single source of truth (jurisdiction_registry); cached."""
+    global _CA_AUTHORITY_HOSTS
+    if _CA_AUTHORITY_HOSTS is None:
+        hosts: set[str] = set(DEFAULT_ALLOWED_HOSTS)
+        try:
+            from research_core.jurisdiction_registry import AIR_DISTRICTS
+
+            for district in AIR_DISTRICTS:
+                host = _normalize_host(urlparse(district.website).hostname)
+                if host:
+                    hosts.add(host[4:] if host.startswith("www.") else host)
+        except Exception:  # noqa: BLE001 — never let registry import break authority ranking
+            pass
+        _CA_AUTHORITY_HOSTS = frozenset(hosts)
+    return _CA_AUTHORITY_HOSTS
+
+
+def _host_in(host: str, allowed: frozenset[str] | tuple[str, ...]) -> bool:
+    return any(host == a or host.endswith("." + a) for a in allowed)
+
+
 def source_authority_rank(url: str, allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS) -> int:
     """Authority tier for a fetched source, consumed by the verifier's authority
     gate (which requires rank <= 2):
-      1 = curated authority allowlist (highest trust)
-      2 = other government / official source (*.gov, *.mil, *.gov.* )
+      1 = a known EHS authority — curated allowlist OR a jurisdiction-registry
+          authority host (air districts, incl. .org/.us/.net like vcapcd.org)
+      2 = other government / official source (*.gov, *.mil)
       3 = other public source -> fails the verifier's authority gate (fail-closed)."""
-    if host_allowed(url, allowed_hosts):
-        return 1
     host = _normalize_host(urlparse(url).hostname)
+    if not host:
+        return 3
+    if host_allowed(url, allowed_hosts) or _host_in(host, _ca_authority_hosts()):
+        return 1
     # Suffix-only (never a substring): a spoof like aqmd.gov.evil.example must NOT
     # be treated as government — it ends in .example, so it stays rank 3.
     if host == "gov" or host == "mil" or host.endswith((".gov", ".mil")):
@@ -309,9 +341,10 @@ def _openai_web_search(query: str, *, limit: int = 5) -> dict[str, Any]:
         "Prefer government/authority sites. Question: " + query
     )
     resp = None
+    client = OpenAI(timeout=45.0, max_retries=1)
     for tool_type in ("web_search", "web_search_preview"):
         try:
-            resp = OpenAI().responses.create(model=model, tools=[{"type": tool_type}], input=instruction)
+            resp = client.responses.create(model=model, tools=[{"type": tool_type}], input=instruction)
             break
         except Exception:  # noqa: BLE001 — try the other tool name, else report unavailable
             resp = None
@@ -493,7 +526,10 @@ def _validate_sources(sources: list[str], policy: SandboxPolicy) -> dict[str, An
         if scheme in {"http", "https"}:
             if not parsed.hostname:
                 malformed.append(source)
-            elif not host_allowed(trimmed, policy.allowed_hosts):
+            elif not host_fetchable(trimmed):
+                # Only block SSRF-dangerous sources here. Whether a public source is
+                # AUTHORITATIVE is the verifier's job (authority_rank), not this gate —
+                # otherwise the agent can't even cite the correct rule (e.g. vcapcd.org).
                 disallowed.append(source)
         elif parsed.netloc:
             malformed.append(source)

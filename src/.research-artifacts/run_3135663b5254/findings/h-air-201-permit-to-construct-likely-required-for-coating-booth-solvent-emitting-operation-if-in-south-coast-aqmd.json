@@ -1,0 +1,20 @@
+{
+  "confidence": 0.73,
+  "metadata": {
+    "chemical_quantity": "60 gal flammable solvent",
+    "conditional_on_jurisdiction": "South Coast AQMD",
+    "hypothesis_id": "H-AIR-201",
+    "missing_fact": "jurisdiction.location:county_unknown",
+    "project_equipment": "coating_booth",
+    "run_id": "run_3135663b5254",
+    "task_id": "T-AIR-201"
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf",
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-219.pdf"
+  ],
+  "submitted_at": "2026-06-03T06:08:27.060631+00:00",
+  "summary": "SCAQMD Rule 201 is the controlling permit-to-construct rule identified for this hypothesis. It requires written authorization before building, installing, altering, or replacing equipment whose use may cause air-contaminant emissions. The proposed coating/paint operation (coating booth) and solvent use/storage at a coating shop may emit VOC/air contaminants, so the Rule 201 trigger is met unless a separate exemption/registration pathway applies. Because the facility county/location is unresolved, this conclusion is conditional on the site being within South Coast AQMD jurisdiction; the local air district must be confirmed before final applicability.",
+  "title": "H-AIR-201 \u2014 Permit to construct likely required for coating booth/solvent-emitting operation if in South Coast AQMD"
+}

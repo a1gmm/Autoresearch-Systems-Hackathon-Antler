@@ -1,0 +1,25 @@
+{
+  "confidence": 0.55,
+  "metadata": {
+    "fetched_rule_headers": {
+      "content_type": "application/pdf",
+      "last_modified": "Tue, 07 Apr 2026 22:23:17 GMT"
+    },
+    "hypothesis_id": "H-AIR-222",
+    "missing_facts": [
+      "facility county/location/jurisdiction",
+      "coating booth/process category under Rule 222",
+      "coating/solvent usage and VOC/emissions",
+      "whether new or modified equipment otherwise requiring permit"
+    ],
+    "run_id": "run_057dc1227e2f"
+  },
+  "run_id": "run_057dc1227e2f",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-222.pdf",
+    "https://www.aqmd.gov/home/permits/rule-222-filing-program"
+  ],
+  "submitted_at": "2026-06-03T06:13:38.764479+00:00",
+  "summary": "SCAQMD Rule 222 is the relevant registration-in-lieu-of-written-permit rule, but the facility location is unresolved and Rule 222 only applies within South Coast AQMD jurisdiction. The official rule title/source is \u201cRule 222 Filing Requirements for Specific Emission Sources Not Requiring a Written Permit Pursuant to Regulation II,\u201d and the official PDF metadata shows it is a South Coast AQMD rule source. For the described project (\u201ccoating or paint operation\u201d plus 60 gal flammable solvent storage), I cannot confirm Rule 222 applicability from the available facts because (1) county/jurisdiction is unknown, so SCAQMD may not be the permitting authority, and (2) the provided facts do not identify the exact Rule 222 equipment category, coating type, usage/emissions, or whether the booth is new/modified equipment that otherwise would require a written permit. Treat as indeterminate: if the site is in SCAQMD and the coating operation matches a listed Rule 222 category/conditions, registration filing may substitute for a written permit; otherwise a conventional permit/exemption analysis is needed.",
+  "title": "H-AIR-222: Rule 222 registration path not confirmed for coating booth/solvent storage without SCAQMD jurisdiction and equipment details"
+}

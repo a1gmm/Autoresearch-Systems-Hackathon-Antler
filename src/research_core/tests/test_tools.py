@@ -111,7 +111,10 @@ def test_web_fetch_blocks_disallowed_redirect_before_fetching_it(tmp_path: Path,
     assert requested_urls == ["https://www.aqmd.gov/start"]
 
 
-def test_web_search_returns_unavailable_without_optional_dependency(tmp_path: Path):
+def test_web_search_returns_unavailable_without_optional_dependency(tmp_path: Path, monkeypatch):
+    # Deterministic: no configured proxy AND no usable OpenAI fallback -> unavailable.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setitem(sys.modules, "openai", None)  # force ImportError in the fallback
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
 
     result = web_search(policy, "coating rules")
@@ -384,36 +387,38 @@ def test_submit_finding_rejects_non_numeric_confidence(tmp_path: Path):
     assert result["error"]["code"] == "invalid_argument"
 
 
-def test_submit_finding_rejects_lookalike_source_host_with_uppercase_scheme(tmp_path: Path):
+def test_submit_finding_blocks_ssrf_source(tmp_path: Path):
+    # submit_finding only blocks SSRF-dangerous sources; authority is the verifier's job.
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
 
     result = submit_finding(
         policy,
         title="Bad source",
         summary="Should be blocked.",
-        sources=["HTTPS://aqmd.gov.evil.example/rule.pdf"],
+        sources=["HTTP://169.254.169.254/rule.pdf"],
         confidence=0.5,
     )
 
     assert result["ok"] is False
     assert result["status"] == "blocked"
-    assert result["error"]["code"] == "host_not_allowed"
+    assert result["error"]["code"] in {"host_not_allowed", "host_not_fetchable"}
 
 
-def test_submit_finding_rejects_lookalike_source_host_with_leading_whitespace(tmp_path: Path):
+def test_submit_finding_accepts_public_source_but_verifier_catches_spoof(tmp_path: Path):
+    # A lookalike host is FETCHABLE (public) so submit_finding accepts it, but the
+    # verifier catches it: source_authority_rank is 3 (fails the rank<=2 gate).
+    from research_core.tools import source_authority_rank
+
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
-
     result = submit_finding(
         policy,
-        title="Bad source",
-        summary="Should be blocked.",
+        title="Lookalike source",
+        summary="Cited from a spoofed authority host.",
         sources=["  https://aqmd.gov.evil.example/rule.pdf"],
         confidence=0.5,
     )
-
-    assert result["ok"] is False
-    assert result["status"] == "blocked"
-    assert result["error"]["code"] == "host_not_allowed"
+    assert result["ok"] is True  # not blocked by the source gate
+    assert source_authority_rank("https://aqmd.gov.evil.example/rule.pdf") == 3  # verifier rejects
 
 
 def test_submit_finding_rejects_malformed_http_source(tmp_path: Path):
@@ -531,3 +536,14 @@ def test_openai_web_search_filters_and_ranks_results(monkeypatch):
     assert "https://www.aqmd.gov/rule-201.pdf" in urls
     assert "http://169.254.169.254/meta" not in urls  # SSRF dropped
     assert result["results"][0]["authority_rank"] == 1  # curated authority
+
+
+def test_ca_air_district_hosts_are_authoritative():
+    # The E2E gap: the agent found VCAPCD Rule 23 (vcapcd.org) but it was rejected.
+    # Air districts live on mixed TLDs; the verifier's authority tier must recognize
+    # the jurisdiction registry's authorities as rank 1 (not penalize .org).
+    from research_core.tools import source_authority_rank, host_fetchable
+    assert source_authority_rank("https://www.vcapcd.org/wp-content/uploads/Rulebook/Reg2/RULE%2023.pdf") == 1
+    assert source_authority_rank("https://www.baaqmd.gov/rules") == 1
+    assert source_authority_rank("https://www.valleyair.org/rules") == 1
+    assert host_fetchable("https://www.vcapcd.org/x")  # and it's fetchable

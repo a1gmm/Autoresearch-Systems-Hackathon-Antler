@@ -1,0 +1,24 @@
+{
+  "confidence": 0.86,
+  "metadata": {
+    "hypothesis_id": "H-AIR-TITLE-V",
+    "missing_facts": [
+      "facility county/air district and attainment status",
+      "facility-wide potential to emit by pollutant",
+      "solvent VOC and HAP composition",
+      "annual solvent throughput/emissions from coating operation",
+      "whether any non-major Title V source category applies"
+    ],
+    "task_id": "T-AIR-TITLE-V"
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "https://www.epa.gov/title-v-operating-permits/who-has-obtain-title-v-permit",
+    "https://uscode.house.gov/view.xhtml?req=(title:42%20section:7661a%20edition:prelim)",
+    "https://uscode.house.gov/view.xhtml?req=(title:42%20section:7602%20edition:prelim)",
+    "https://ww2.arb.ca.gov/our-work/programs/federal-clean-air-act-title-v-operating-permits/fcaa-title-v-overview"
+  ],
+  "submitted_at": "2026-06-03T06:16:38.444375+00:00",
+  "summary": "Title V applies to major sources and certain listed source categories. EPA states that a major source has actual or potential emissions at or above 100 tons/year for an air pollutant by default, with lower nonattainment thresholds for the nonattainment pollutant, and 10 tons/year for a single HAP or 25 tons/year combined HAPs. The Clean Air Act likewise makes it unlawful to operate a major source or other specified source subject to Title V except in compliance with a Title V permit, and defines a major stationary source generally as one that emits or has the potential to emit 100 tons/year or more of any air pollutant. California\u2019s CARB confirms Title V is implemented through California air districts and that applications are generally required for any CAA \u201cmajor source,\u201d affected acid-rain source, Section 129 solid-waste incinerator, or EPA-designated category. For the project facts supplied\u2014storage of 60 gallons of flammable solvent at a coating shop with a coating/paint operation\u2014there is no location/air district, attainment classification, solvent composition/VOC-HAP content, usage/emission rate, or facility potential-to-emit calculation. Therefore Title V applicability is indeterminate. Based only on the stated change (storage of 60 gallons), the record does not establish that the facility meets Title V major-source thresholds or another listed Title V category.",
+  "title": "H-AIR-TITLE-V \u2014 Title V operating permit applicability cannot be determined from the provided facts; the described solvent storage alone is not evidence of a major source"
+}

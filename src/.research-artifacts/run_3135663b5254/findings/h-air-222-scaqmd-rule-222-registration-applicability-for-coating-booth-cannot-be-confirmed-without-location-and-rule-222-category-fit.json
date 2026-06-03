@@ -1,0 +1,25 @@
+{
+  "confidence": 0.55,
+  "metadata": {
+    "blocking_facts": [
+      "facility county/city/address unknown; SCAQMD jurisdiction not confirmed",
+      "exact Rule 222 equipment category and coating process/material throughput not provided"
+    ],
+    "hypothesis_id": "H-AIR-222",
+    "project_facts_considered": {
+      "chemical_storage": "60 gal flammable solvent",
+      "equipment": "coating_booth / coating or paint operation"
+    },
+    "rule222_pdf_last_modified_header": "Tue, 07 Apr 2026 22:23:17 GMT",
+    "task_id": "T-AIR-222"
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-222.pdf",
+    "https://www.aqmd.gov/home/permits/rule-222-filing-program",
+    "https://www.aqmd.gov/docs/default-source/aqmd-forms/Rule-by-Numbers/r222-pcd.pdf?sfvrsn=a8171e61_16"
+  ],
+  "submitted_at": "2026-06-03T06:13:21.343862+00:00",
+  "summary": "The hypothesis is not determinable on the supplied facts. The official SCAQMD Rule 222 source is titled \u201cRule 222 Filing Requirements for Specific Emission Sources Not Requiring a Written Permit Pursuant to Regulation II,\u201d indicating Rule 222 is a filing/registration program for specified sources that do not require a written permit. However, the project location is unknown, so SCAQMD jurisdiction is not established. Also, the project description only says \u201ccoating or paint operation/coating booth\u201d and storage of 60 gal flammable solvent; without the exact coating equipment/process category and throughput/material facts, I cannot verify that it falls within a Rule 222-listed category. If the facility is in SCAQMD and the coating operation matches a listed Rule 222 coating category, registration/filing may be available instead of a written permit; otherwise a normal SCAQMD permit analysis remains needed.",
+  "title": "H-AIR-222: SCAQMD Rule 222 registration applicability for coating booth cannot be confirmed without location and Rule 222 category fit"
+}

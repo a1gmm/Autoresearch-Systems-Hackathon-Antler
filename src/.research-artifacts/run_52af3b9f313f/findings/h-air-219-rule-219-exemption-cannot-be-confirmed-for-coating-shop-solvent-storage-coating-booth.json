@@ -1,0 +1,25 @@
+{
+  "confidence": 0.62,
+  "metadata": {
+    "hypothesis_id": "H-AIR-219",
+    "missing_facts": [
+      "facility county/location to confirm SCAQMD jurisdiction",
+      "specific coating equipment/process details",
+      "coating/solvent VOC content and usage/emissions",
+      "whether equipment matches a specific Rule 219 exemption and all exemption conditions"
+    ],
+    "run_id": "run_52af3b9f313f",
+    "source_currency": {
+      "rule_201_last_modified_header": "Tue, 07 Apr 2026 22:13:38 GMT",
+      "rule_219_last_modified_header": "Tue, 07 Apr 2026 22:20:32 GMT"
+    }
+  },
+  "run_id": "run_52af3b9f313f",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-219.pdf",
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf"
+  ],
+  "submitted_at": "2026-06-03T06:19:05.889866+00:00",
+  "summary": "Applicability is indeterminate because the facility location/jurisdiction is unknown, so SCAQMD jurisdiction cannot be confirmed. If the coating shop is in SCAQMD, Rule 219 is the relevant official exemption rule for equipment not requiring a written permit, and Rule 201 is the baseline permit-to-construct rule. On the stated facts, a coating/paint operation/coating booth with 60 gal of flammable solvent is not enough to prove a Rule 219 exemption; the project would need a specific Rule 219 listed category and all conditions satisfied. Treat the coating operation as potentially requiring SCAQMD permitting unless jurisdiction is outside SCAQMD or a specific Rule 219 exemption is documented.",
+  "title": "H-AIR-219: Rule 219 exemption cannot be confirmed for coating-shop solvent storage/coating booth"
+}

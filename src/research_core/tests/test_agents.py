@@ -315,13 +315,11 @@ def _force_agent_shims(monkeypatch):
 
 
 def test_researcher_read_skill_loads_mapped_law_skill_on_wrong_guess():
-    from research_core.agents import _researcher_tools
+    from research_core.agents import _sandbox_function_map
     task = {"task_id": "T", "hypothesis_id": "H-AIR-201", "assigned_agent": "air",
             "allowed_tools": [], "blocked_tools": []}
-    tools = _researcher_tools(None, task)
-    by_name = {getattr(t, "name", None): t for t in tools}
-    assert "read_skill" in by_name
+    read_skill = _sandbox_function_map(None, task)["read_skill"]
     # The agent guesses a non-existent id -> falls back to the hypothesis's canonical skill.
-    result = by_name["read_skill"](skill_id="SCAQMD.Rule201.GUESS")
+    result = read_skill(skill_id="SCAQMD.Rule201.GUESS")
     assert result.get("skill_id") == "scaqmd-permit-to-construct"
     assert len(result.get("content", "")) > 50

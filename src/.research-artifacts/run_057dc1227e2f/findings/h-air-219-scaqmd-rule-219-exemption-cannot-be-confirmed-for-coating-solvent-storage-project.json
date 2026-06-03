@@ -1,0 +1,21 @@
+{
+  "confidence": 0.69,
+  "metadata": {
+    "artifact": "finding_H-AIR-219.md",
+    "chemical": "60 gal flammable solvent",
+    "fetched_source_headers": {
+      "rule_201_last_modified": "Tue, 07 Apr 2026 22:13:38 GMT",
+      "rule_219_last_modified": "Tue, 07 Apr 2026 22:20:32 GMT"
+    },
+    "jurisdiction_issue": "facility county/location unknown; SCAQMD applicability not established",
+    "project_equipment": "coating/paint operation; coating_booth"
+  },
+  "run_id": "run_057dc1227e2f",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-219.pdf",
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf"
+  ],
+  "submitted_at": "2026-06-03T06:11:48.016541+00:00",
+  "summary": "I cannot confirm a Rule 219 written-permit exemption for the described change. The facility location is unresolved, so SCAQMD jurisdiction is not established. If the site is in SCAQMD, Rule 219 is the official exempt-equipment rule, but exemption depends on matching a listed category and meeting its conditions. The input describes a coating/paint operation/coating booth and 60 gal of flammable solvent; without the booth design, coating/VOC usage, emissions, and exact Rule 219 category facts, the exemption is not demonstrated. Rule 201 should be treated as the fallback permit-to-construct requirement unless a specific Rule 219 listing and all conditions are verified.",
+  "title": "H-AIR-219 \u2014 SCAQMD Rule 219 exemption cannot be confirmed for coating/solvent storage project"
+}

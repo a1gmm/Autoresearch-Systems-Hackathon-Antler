@@ -1,0 +1,18 @@
+{
+  "confidence": 0.78,
+  "metadata": {
+    "determination": "indeterminate_pending_local_air_district",
+    "hypothesis_id": "H-AIR-AB2588",
+    "key_missing_fact": "facility county/local air district unknown",
+    "run_id": "run_3135663b5254"
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "https://ww2.arb.ca.gov/general-information-about-hot-spots",
+    "https://ww2.arb.ca.gov/ab-2588-air-toxics-hot-spots-regulatory-documents",
+    "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=44340.&lawCode=HSC"
+  ],
+  "submitted_at": "2026-06-03T06:14:28.784209+00:00",
+  "summary": "For the proposed coating shop storage/use of 60 gal flammable solvent, AB 2588 Air Toxics \u201cHot Spots\u201d obligations are not triggered by a single statewide quantity threshold. CARB describes the program under H&S Code Part 6 and lists the relevant facility-subject and inventory chapters (H&S \u00a7\u00a744320\u201344325, 44340\u201344346). CARB also states that H&S \u00a744340 requires an inventory plan, and that under the EIC&G regulation (17 CCR \u00a793300.5), an inventory plan is required \u201cif requested by the district.\u201d Because the facility county/location and therefore the controlling California air district are unknown, applicability is indeterminate: the district\u2019s inclusion/request/prioritization rules must be confirmed. If the local air district requests an AB 2588 inventory plan/report for the coating source/solvent constituents, the facility may have AB 2588 reporting and risk-assessment duties.",
+  "title": "H-AIR-AB2588 \u2014 California AB 2588 applicability cannot be determined without local air district; no statewide 60-gal solvent trigger identified"
+}

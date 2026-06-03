@@ -1,0 +1,38 @@
+{
+  "confidence": 0.78,
+  "metadata": {
+    "currency_status": "confirmed_current_official_source_refetched",
+    "permit_page_fetch": {
+      "content_type": "text/html; charset=utf-8",
+      "date_header": "Wed, 03 Jun 2026 06:23:16 GMT",
+      "status_code": 200,
+      "text_extraction": "empty"
+    },
+    "preserved_conclusion": "needs_review conditional_on_SCAQMD_jurisdiction",
+    "remaining_missing_facts": [
+      "facility county/location to confirm controlling air district",
+      "solvent SDS/VOC content and usage/throughput",
+      "whether booth is new/altered/replaced or existing"
+    ],
+    "repair_ticket_id": "R-H-AIR-VOC-currency",
+    "repaired_check": "currency",
+    "rule_201_fetch": {
+      "content_disposition": "inline; filename=rule-201.pdf",
+      "content_type": "application/pdf",
+      "date_header": "Wed, 03 Jun 2026 06:23:16 GMT",
+      "last_modified": "Tue, 07 Apr 2026 22:13:38 GMT",
+      "pdf_metadata_date": "2026-03-17T13:41:03+02:00",
+      "pdf_modify_date": "2026-03-17T13:41:03+02:00",
+      "pdf_title": "Rule 201. Permit to Construct",
+      "status_code": 200
+    }
+  },
+  "run_id": "run_057dc1227e2f",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf",
+    "https://www.aqmd.gov/home/permits/permit-requirements-and-procedures"
+  ],
+  "submitted_at": "2026-06-03T06:23:47.321603+00:00",
+  "summary": "Repaired the failed currency check by refetching the official South Coast AQMD Rule 201 PDF from aqmd.gov. The source returned HTTP 200 from aqmd.gov on Wed, 03 Jun 2026 06:23:16 GMT with content-type application/pdf, content-disposition filename rule-201.pdf, and Last-Modified Tue, 07 Apr 2026 22:13:38 GMT. The embedded PDF metadata identifies the document as \u201cRule 201. Permit to Construct\u201d and shows ModifyDate/MetadataDate 2026-03-17T13:41:03+02:00. The prior substantive conclusion is preserved: applicability remains conditional because facility location/county is unknown, but if the coating shop is within South Coast AQMD jurisdiction, Rule 201 is current official evidence for requiring permit-to-construct applicability review for installing/altering/replacing equipment that may cause air-contaminant emissions. The permit-requirements web page was also refetched from aqmd.gov with HTTP 200 on the same date, but text extraction remained empty, so it should remain only a supporting official pointer, not primary rule text.",
+  "title": "REPAIR H-AIR-VOC currency: SCAQMD Rule 201 current official source status proven"
+}
