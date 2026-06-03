@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export type RunStatus = "queued" | "running" | "bundles_complete" | "done" | "failed" | "stalled";
+export type RunStatus = "queued" | "running" | "bundles_complete" | "needs_review" | "done" | "failed" | "stalled";
 
 export type RunRecord = {
   run_id: string;
@@ -13,6 +13,8 @@ export type RunRecord = {
   trace_events: unknown[];
   determinations?: unknown[] | null;
   report_markdown?: string | null;
+  workspace_prefix?: string | null;
+  artifact_index?: unknown[];
 };
 
 let testClient: SupabaseClient | null = null;
@@ -54,11 +56,22 @@ export async function updateStatus(run_id: string, status: RunStatus): Promise<v
 
 export async function finalizeRun(
   run_id: string,
-  result: { determinations: unknown[]; report_markdown: string; trace_events: unknown[] }
+  result: {
+    determinations: unknown[];
+    report_markdown: string;
+    trace_events: unknown[];
+    status?: RunStatus;
+    workspace_prefix?: string | null;
+    artifact_index?: unknown[];
+  }
 ): Promise<void> {
-  const { error } = await client().from("research_runs").update({
-    status: "done", determinations: result.determinations, report_markdown: result.report_markdown,
+  const payload: Record<string, unknown> = {
+    status: result.status ?? "done", determinations: result.determinations, report_markdown: result.report_markdown,
     trace_events: result.trace_events, updated_at: new Date().toISOString(),
-  }).eq("run_id", run_id);
+  };
+  if (result.workspace_prefix !== undefined) payload.workspace_prefix = result.workspace_prefix;
+  if (result.artifact_index !== undefined) payload.artifact_index = result.artifact_index;
+
+  const { error } = await client().from("research_runs").update(payload).eq("run_id", run_id);
   if (error) throw new Error(`finalizeRun failed: ${error.message}`);
 }

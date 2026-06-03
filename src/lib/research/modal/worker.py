@@ -16,9 +16,17 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable
 
 import modal
 
+from agents_runtime import run_review, run_worker_draft, run_worker_repair
+from orchestrator_runtime import run_task_with_review
+from rulebook import build_rulebook
+from runtime_models import RuntimeTask
+from synthesis_runtime import evidence_bundle_from_review, synthesize_runtime_artifacts
+from trace_events import trace_event
 from worker_core import (
     EXTRACTION_HINTS,
     SOURCE_POINTERS,
@@ -31,9 +39,18 @@ app = modal.App("permitpilot-research")
 
 image = (
     modal.Image.debian_slim()
-    .pip_install("httpx", "pymupdf", "beautifulsoup4", "openai", "fastapi[standard]", "supabase")
+    .pip_install("httpx", "pymupdf", "beautifulsoup4", "openai", "fastapi[standard]", "supabase", "openai-agents")
     .add_local_dir("src/lib/research/skills", remote_path="/root/skills")
     .add_local_python_source("worker_core")
+    .add_local_python_source("prompts")
+    .add_local_python_source("tools")
+    .add_local_python_source("agents_runtime")
+    .add_local_python_source("orchestrator_runtime")
+    .add_local_python_source("rulebook")
+    .add_local_python_source("runtime_models")
+    .add_local_python_source("synthesis_runtime")
+    .add_local_python_source("trace_events")
+    .add_local_python_source("workspace_core")
 )
 
 MAX_BYTES = 5_000_000
@@ -195,6 +212,18 @@ def _run(task_spec: dict) -> dict:
         return failed_bundle(hid, f"Agent failed: {exc}")
 
 
+def _runtime_task_from_spec(task_spec: dict[str, Any]) -> RuntimeTask:
+    return RuntimeTask(
+        task_id=task_spec["task_id"],
+        hypothesis_id=task_spec["hypothesis_id"],
+        question=task_spec["question"],
+        family=task_spec.get("family", "unknown"),
+        skill_id=task_spec.get("skill_id"),
+        allowed_domains=task_spec.get("allowed_domains", []),
+        input=task_spec,
+    )
+
+
 @app.function(image=image, secrets=[
     modal.Secret.from_name("permitpilot-openai"),
     modal.Secret.from_name("permitpilot-research"),
@@ -222,19 +251,227 @@ def _write_bundle(sb, run_id: str, bundle: dict) -> None:
     sb.table("research_evidence").upsert(evidence_row(run_id, bundle)).execute()
 
 
+def _update_run(sb, run_id: str, payload: dict[str, Any]) -> None:
+    sb.table("research_runs").update(payload).eq("run_id", run_id).execute()
+
+
+def _timeline_events(workspace: Path) -> list[dict[str, Any]]:
+    timeline = workspace / "logs" / "timeline.jsonl"
+    if not timeline.is_file():
+        return []
+    events = []
+    for line in timeline.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            events.append(json.loads(line))
+    return events
+
+
+def _artifact_index(workspace: Path) -> list[dict[str, Any]]:
+    artifacts: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for event in _timeline_events(workspace):
+        artifact_path = event.get("artifact_path")
+        if not artifact_path or artifact_path in seen:
+            continue
+        seen.add(artifact_path)
+        artifacts.append({
+            "kind": event.get("type", "artifact"),
+            "path": artifact_path,
+            "task_id": event.get("task_id"),
+        })
+    return artifacts
+
+
+def _trace_events_from_timeline(workspace: Path, run_id: str) -> list[dict[str, Any]]:
+    mapped = []
+    for event in _timeline_events(workspace):
+        event_type = event.get("type")
+        task_id = event.get("task_id")
+        artifact_path = event.get("artifact_path")
+        if event_type == "draft":
+            mapped.append(trace_event(
+                "research_worker",
+                "draft.completed",
+                "done",
+                f"Draft completed for {task_id}",
+                artifact_path or task_id,
+                run_id=run_id,
+            ))
+        elif event_type == "review":
+            decision = event.get("decision", "needs_human_review")
+            status = "done" if decision == "accepted" else "needs_review"
+            mapped.append(trace_event(
+                "reviewer",
+                f"review.decision.{decision}",
+                status,
+                f"Reviewer returned {decision} for {task_id}",
+                artifact_path or task_id,
+                run_id=run_id,
+            ))
+        elif event_type == "repair":
+            mapped.append(trace_event(
+                "research_worker",
+                "repair.completed",
+                "done",
+                f"Repair attempt {event.get('attempt', 1)} completed for {task_id}",
+                artifact_path or task_id,
+                run_id=run_id,
+            ))
+        elif event_type == "needs_human_review":
+            mapped.append(trace_event(
+                "reviewer",
+                "review.needs_human_review",
+                "needs_review",
+                f"Reviewer escalated {task_id} to human review",
+                artifact_path or task_id,
+                run_id=run_id,
+            ))
+        elif event_type == "accepted":
+            mapped.append(trace_event(
+                "reviewer",
+                "review.accepted",
+                "done",
+                f"Reviewer accepted {task_id}",
+                artifact_path or task_id,
+                run_id=run_id,
+            ))
+        elif event_type == "synthesis":
+            mapped.append(trace_event(
+                "synthesis_agent",
+                "synthesis.completed",
+                "done",
+                "Runtime synthesis artifact written",
+                artifact_path or run_id,
+                run_id=run_id,
+            ))
+    return mapped
+
+
+def run_workspace_research(
+    run_id: str,
+    task_specs: list[dict[str, Any]],
+    *,
+    update_run_fn: Callable[[dict[str, Any]], None],
+    upsert_evidence_fn: Callable[[dict[str, Any]], None],
+    draft_fn: Callable[[RuntimeTask, str], Any],
+    review_fn: Callable[[RuntimeTask, Any, str], Any],
+    repair_fn: Callable[[RuntimeTask, Any, Any, str], Any],
+    workspace_root: Path,
+    read_skill_fn: Callable[[str], str],
+) -> dict[str, Any]:
+    from workspace_core import ensure_workspace
+
+    workspace = ensure_workspace(workspace_root, run_id)
+    trace_events = [
+        trace_event("parent", "workspace.booting", "running", "Booting workspace runtime", run_id, run_id=run_id),
+        trace_event("parent", "parent.planning", "running", "Planning runtime tasks", run_id, run_id=run_id),
+    ]
+    update_run_fn({
+        "status": "running",
+        "trace_events": trace_events,
+        "workspace_prefix": run_id,
+        "artifact_index": [],
+    })
+
+    try:
+        tasks = [_runtime_task_from_spec(task_spec) for task_spec in task_specs]
+        bundles = []
+        for task in tasks:
+            skill_text = read_skill_fn(task.skill_id or "")
+            rulebook = build_rulebook(task, skill_text)
+            review = run_task_with_review(
+                task,
+                workspace,
+                rulebook,
+                draft_fn=draft_fn,
+                review_fn=review_fn,
+                repair_fn=repair_fn,
+            )
+            bundle = evidence_bundle_from_review(task, review, workspace)
+            upsert_evidence_fn(bundle)
+            bundles.append(bundle)
+            trace_events = trace_events[:2] + _trace_events_from_timeline(workspace, run_id)
+            update_run_fn({
+                "status": "running",
+                "trace_events": trace_events,
+                "workspace_prefix": run_id,
+                "artifact_index": _artifact_index(workspace),
+            })
+
+        synthesis = synthesize_runtime_artifacts(run_id, tasks, workspace)
+        trace_events = trace_events[:2] + _trace_events_from_timeline(workspace, run_id)
+        trace_events.append(trace_event(
+            "synthesis_agent",
+            "bundles.complete",
+            "done",
+            "Runtime evidence rows are written; synthesis artifact is available",
+            run_id,
+            run_id=run_id,
+        ))
+        artifacts = _artifact_index(workspace)
+        update_run_fn({
+            "status": "bundles_complete",
+            "trace_events": trace_events,
+            "workspace_prefix": run_id,
+            "artifact_index": artifacts,
+        })
+        return {
+            "run_id": run_id,
+            "written": len(bundles),
+            "workspace_prefix": run_id,
+            "artifact_index": artifacts,
+            "trace_events": trace_events,
+            "bundles": bundles,
+            "synthesis": synthesis,
+        }
+    except Exception as exc:
+        try:
+            trace_events = trace_events[:2] + _trace_events_from_timeline(workspace, run_id)
+        except Exception:
+            trace_events = trace_events[:2]
+        trace_events.append(trace_event(
+            "parent",
+            "runtime.failed",
+            "failed",
+            f"Workspace runtime failed: {exc}",
+            run_id,
+            run_id=run_id,
+        ))
+        try:
+            artifacts = _artifact_index(workspace)
+        except Exception:
+            artifacts = []
+        update_run_fn({
+            "status": "failed",
+            "trace_events": trace_events,
+            "workspace_prefix": run_id,
+            "artifact_index": artifacts,
+        })
+        raise
+
+
 @app.function(image=image, secrets=[
     modal.Secret.from_name("permitpilot-openai"),
     modal.Secret.from_name("permitpilot-supabase"),
 ], timeout=3600)
 def research_run(run_id: str, task_specs: list) -> dict:
     sb = _supabase()
-    sb.table("research_runs").update({"status": "running"}).eq("run_id", run_id).execute()
-    written = 0
-    for result in research_task.map(task_specs):
-        _write_bundle(sb, run_id, result)
-        written += 1
-    sb.table("research_runs").update({"status": "bundles_complete"}).eq("run_id", run_id).execute()
-    return {"run_id": run_id, "written": written}
+    workspace_root = Path("/tmp/permitpilot-runs")
+
+    def draft_with_context(task: RuntimeTask, rulebook: str):
+        return run_worker_draft(task, rulebook, {"run_id": run_id, "workspace_prefix": str(workspace_root / run_id)})
+
+    return run_workspace_research(
+        run_id,
+        task_specs,
+        update_run_fn=lambda payload: _update_run(sb, run_id, payload),
+        upsert_evidence_fn=lambda bundle: _write_bundle(sb, run_id, bundle),
+        draft_fn=draft_with_context,
+        review_fn=run_review,
+        repair_fn=run_worker_repair,
+        workspace_root=workspace_root,
+        read_skill_fn=_read_skill_fn,
+    )
 
 
 @app.function(image=image, secrets=[

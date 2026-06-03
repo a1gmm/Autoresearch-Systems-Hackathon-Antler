@@ -13,6 +13,10 @@ create table if not exists research_runs (
   updated_at timestamptz
 );
 
+alter table research_runs
+  add column if not exists workspace_prefix text,
+  add column if not exists artifact_index jsonb not null default '[]'::jsonb;
+
 create table if not exists research_evidence (
   run_id text not null references research_runs(run_id) on delete cascade,
   hypothesis_id text not null,

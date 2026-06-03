@@ -3,6 +3,19 @@ import { useStore } from "@/lib/ui/store";
 import { getRepairHistory } from "@/lib/ui/selectors";
 import { X, CheckCircle2, XCircle, Wrench } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import type { ResearchRun, RuntimeArtifactMetadata } from "@/lib/research/types";
+
+function matchingArtifacts(run: ResearchRun, hypId: string): RuntimeArtifactMetadata[] {
+  const taskIds = new Set(run.research_tasks.filter((t) => t.hypothesis_id === hypId).map((t) => t.task_id.toLowerCase()));
+  const taskIdList = [...taskIds];
+  const needle = hypId.toLowerCase();
+  return (run.artifact_index ?? []).filter((artifact) => {
+    const artifactHyp = artifact.hypothesis_id?.toLowerCase();
+    const artifactTask = artifact.task_id?.toLowerCase();
+    const path = artifact.path.toLowerCase();
+    return artifactHyp === needle || Boolean(artifactTask && taskIds.has(artifactTask)) || path.includes(needle) || taskIdList.some((taskId) => path.includes(taskId));
+  });
+}
 
 export function EvidenceDrawer() {
   const run = useStore((s) => s.run);
@@ -13,6 +26,7 @@ export function EvidenceDrawer() {
   const bundle = run && hypId ? run.evidence_bundles.find((b) => b.hypothesis_id === hypId) : null;
   const verdict = run && hypId ? [...run.verification_verdicts].reverse().find((v) => v.hypothesis_id === hypId) : null;
   const history = run && hypId ? getRepairHistory(run, hypId) : [];
+  const artifacts = run && hypId ? matchingArtifacts(run, hypId) : [];
 
   return (
     <AnimatePresence>
@@ -119,6 +133,30 @@ export function EvidenceDrawer() {
               </div>
             </motion.div>
           ))}
+
+          {artifacts.length > 0 && (
+            <motion.div
+              className="mt-3 glass rounded-xl p-3.5"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.18, duration: 0.3 }}
+            >
+              <div className="text-[10px] text-cyan-300/70 uppercase tracking-wider font-semibold mb-2">
+                Artifacts
+              </div>
+              <div className="space-y-1">
+                {artifacts.slice(0, 4).map((artifact) => (
+                  <div key={`${artifact.kind ?? "artifact"}-${artifact.path}`} className="text-[11px] text-slate-400 font-mono break-all">
+                    {artifact.kind ? <span className="text-slate-500">{artifact.kind} · </span> : null}
+                    {artifact.path}
+                  </div>
+                ))}
+                {artifacts.length > 4 && (
+                  <div className="text-[11px] text-slate-500">+{artifacts.length - 4} more</div>
+                )}
+              </div>
+            </motion.div>
+          )}
 
           {/* Verifier checks */}
           {verdict && (

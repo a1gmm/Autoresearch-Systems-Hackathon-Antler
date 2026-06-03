@@ -10,6 +10,17 @@ const STATUS_COLOR: Record<string, string> = {
   queued: "text-slate-500",
 };
 
+const PHASE_LABELS: Record<string, string> = {
+  "parent.planning": "planning",
+  "draft.completed": "draft",
+  "review.decision.needs_repair": "review",
+  "repair.completed": "repair",
+  "review.accepted": "accepted",
+  "review.needs_human_review": "human review",
+  "runtime.failed": "failed",
+  "bundles.complete": "bundles",
+};
+
 export function TraceStream() {
   const run = useStore((s) => s.run);
   const replayed = useStore((s) => s.replayedEventIds);
@@ -37,11 +48,11 @@ export function TraceStream() {
             layout
           >
             <span
-              className={`${STATUS_COLOR[e.status] ?? "text-slate-400"} min-w-[70px] font-mono font-medium`}
+              className={`${STATUS_COLOR[e.status] ?? "text-slate-400"} min-w-[70px] font-mono font-medium truncate`}
             >
-              {e.phase}
+              {PHASE_LABELS[e.phase] ?? e.phase}
             </span>
-            <span className="text-slate-300">{e.message}</span>
+            <span className="text-slate-300 min-w-0 break-words">{e.message}</span>
           </motion.div>
         ))}
       </AnimatePresence>

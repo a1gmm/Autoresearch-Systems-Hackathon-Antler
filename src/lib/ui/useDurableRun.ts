@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import type { ResearchRun } from "@/lib/research/types";
 
+const TERMINAL_STATUSES = new Set(["done", "needs_review", "failed", "stalled"]);
+
 // Minimal durable-run consumer: poll GET /:id, and (if Supabase Realtime is configured)
 // re-fetch immediately when an evidence/run row changes. Not the full streaming rewrite.
 export function useDurableRun(runId: string | null, pollMs = 3000) {
@@ -37,7 +39,7 @@ export function useDurableRun(runId: string | null, pollMs = 3000) {
       : null;
 
     void refetch();
-    const timer = setInterval(() => { if (!stopped.current && statusRef.current !== "done") void refetch(); }, pollMs);
+    const timer = setInterval(() => { if (!stopped.current && !TERMINAL_STATUSES.has(statusRef.current)) void refetch(); }, pollMs);
 
     return () => { stopped.current = true; clearInterval(timer); if (sb && channel) void sb.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

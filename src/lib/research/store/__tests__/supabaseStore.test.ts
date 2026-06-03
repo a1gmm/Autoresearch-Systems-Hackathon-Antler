@@ -58,4 +58,49 @@ describe("supabaseStore", () => {
     expect(done?.status).toBe("done");
     expect(done?.report_markdown).toBe("md");
   });
+
+  it("finalizeRun can persist a computed needs_review status", async () => {
+    const c = fakeClient(); __setClientForTests(c as any);
+    await createRun({ run_id: "r4", status: "queued", input: {}, scope_pack: {}, plan: {}, jurisdiction_stack: [], task_count: 1, trace_events: [] });
+    await finalizeRun("r4", { status: "needs_review", determinations: [{ review_flag: true }], report_markdown: "md", trace_events: [] });
+    expect((await getRun("r4"))?.status).toBe("needs_review");
+  });
+
+  it("preserves durable artifact metadata through run normalization and finalization", async () => {
+    __setClientForTests(fakeClient() as any);
+    await createRun({
+      run_id: "r3",
+      status: "queued",
+      input: {},
+      scope_pack: {},
+      plan: {},
+      jurisdiction_stack: [],
+      task_count: 1,
+      trace_events: [],
+      workspace_prefix: "workspaces/r3",
+      artifact_index: [{ path: "report.md", kind: "report" }],
+    });
+
+    const created = await getRun("r3");
+    expect(created?.workspace_prefix).toBe("workspaces/r3");
+    expect(created?.artifact_index).toEqual([{ path: "report.md", kind: "report" }]);
+
+    await finalizeRun("r3", {
+      determinations: [],
+      report_markdown: "md",
+      trace_events: [],
+      workspace_prefix: "workspaces/r3/final",
+      artifact_index: [{ path: "final-report.md", kind: "report" }],
+    });
+
+    const finalized = await getRun("r3");
+    expect(finalized?.workspace_prefix).toBe("workspaces/r3/final");
+    expect(finalized?.artifact_index).toEqual([{ path: "final-report.md", kind: "report" }]);
+
+    await finalizeRun("r3", { determinations: [], report_markdown: "md2", trace_events: [] });
+
+    const finalizedAgain = await getRun("r3");
+    expect(finalizedAgain?.workspace_prefix).toBe("workspaces/r3/final");
+    expect(finalizedAgain?.artifact_index).toEqual([{ path: "final-report.md", kind: "report" }]);
+  });
 });

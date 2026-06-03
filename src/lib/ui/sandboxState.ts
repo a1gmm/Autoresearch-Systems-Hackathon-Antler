@@ -32,8 +32,90 @@ function fired(
   );
 }
 
+function eventMatchesTask(
+  event: ResearchRun["trace_events"][number],
+  task: ResearchRun["research_tasks"][number],
+): boolean {
+  const haystack = `${event.artifact_id ?? ""} ${event.message ?? ""}`.toLowerCase();
+  return haystack.includes(task.task_id.toLowerCase()) || haystack.includes(task.hypothesis_id.toLowerCase());
+}
+
+function runtimeFired(
+  run: ResearchRun,
+  ids: Set<string>,
+  task: ResearchRun["research_tasks"][number],
+  actor: string,
+  phase: string,
+  status?: string,
+): boolean {
+  return run.trace_events.some(
+    (e) =>
+      ids.has(e.id) &&
+      e.actor === actor &&
+      e.phase === phase &&
+      (!status || e.status === status) &&
+      eventMatchesTask(e, task),
+  );
+}
+
+function runtimeFiredAnyTask(
+  run: ResearchRun,
+  ids: Set<string>,
+  actor: string,
+  phase: string,
+  status?: string,
+): boolean {
+  return run.trace_events.some(
+    (e) => ids.has(e.id) && e.actor === actor && e.phase === phase && (!status || e.status === status),
+  );
+}
+
+function hasRuntimeTrace(run: ResearchRun): boolean {
+  return run.trace_events.some((e) =>
+    e.actor === "workspace.booting" ||
+    e.actor === "parent" ||
+    e.actor === "research_worker" ||
+    e.actor === "reviewer" ||
+    e.phase.includes(".") ||
+    e.phase === "bundles.complete",
+  );
+}
+
+function runtimeStatusForTask(run: ResearchRun, ids: Set<string>, task: ResearchRun["research_tasks"][number], terminal: SandboxStatus): SandboxStatus {
+  const booting =
+    runtimeFiredAnyTask(run, ids, "workspace.booting", "parent.planning", "running") ||
+    runtimeFiredAnyTask(run, ids, "parent", "workspace.booting", "running") ||
+    runtimeFiredAnyTask(run, ids, "parent", "parent.planning", "running");
+  const draftDone = runtimeFired(run, ids, task, "research_worker", "draft.completed", "done");
+  const needsRepair = runtimeFired(run, ids, task, "reviewer", "review.decision.needs_repair", "needs_review");
+  const repairDone = runtimeFired(run, ids, task, "research_worker", "repair.completed", "done");
+  const accepted = runtimeFired(run, ids, task, "reviewer", "review.accepted", "done");
+  const humanReview = runtimeFired(run, ids, task, "reviewer", "review.needs_human_review", "needs_review");
+  const runtimeFailed =
+    runtimeFiredAnyTask(run, ids, "parent", "runtime.failed", "failed") ||
+    runtimeFired(run, ids, task, "runtime", "runtime.failed", "failed") ||
+    runtimeFired(run, ids, task, "runtime", "failed", "failed") ||
+    runtimeFired(run, ids, task, "runtime.failed", "runtime.failed", "failed") ||
+    runtimeFired(run, ids, task, "runtime.failed", "failed", "failed") ||
+    runtimeFired(run, ids, task, "research_worker", "runtime.failed", "failed") ||
+    runtimeFired(run, ids, task, "reviewer", "runtime.failed", "failed");
+  const bundlesComplete = runtimeFiredAnyTask(run, ids, "synthesis_agent", "bundles.complete", "done");
+
+  if (runtimeFailed) return "failed";
+  if (humanReview) return "needs_review";
+  if (bundlesComplete && accepted) return repairDone || needsRepair ? "repaired" : "verified";
+  if (bundlesComplete) return terminal;
+  if (accepted) return repairDone || needsRepair ? "repaired" : "verified";
+  if (repairDone) return "repaired";
+  if (needsRepair) return "repairing";
+  if (draftDone) return "verifying";
+  if (booting) return "booting";
+  return "queued";
+}
+
 export function deriveSandboxTiles(run: ResearchRun, replayedEventIds: Set<string>): SandboxTile[] {
   const ids = replayedEventIds;
+  const runtimeTrace = hasRuntimeTrace(run);
   const fanoutRunning = fired(run, ids, "research_pool", "fanout", "running");
   const fanoutDone = fired(run, ids, "research_pool", "fanout", "done");
   const failFired = fired(run, ids, "verifier", "verification", "failed");
@@ -66,7 +148,9 @@ export function deriveSandboxTiles(run: ResearchRun, replayedEventIds: Set<strin
             : "needs_review";
 
     let status: SandboxStatus;
-    if (!fanoutRunning) status = "queued";
+    if (runtimeTrace) {
+      status = runtimeStatusForTask(run, ids, task, terminal);
+    } else if (!fanoutRunning) status = "queued";
     else if (!fanoutDone) status = "fetching";
     else if (!repairResolved) status = hasRepair && failFired ? "repairing" : "verifying";
     else status = terminal;

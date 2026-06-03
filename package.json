@@ -10,6 +10,8 @@
     "lint": "next lint",
     "eval": "tsx src/evals/golden.ts && npm run eval:grounding",
     "eval:grounding": "python3 src/lib/research/modal/pytests/worker_core_adversarial_eval.py",
+    "py:test": "python3 src/lib/research/modal/pytests/worker_core_test.py && python3 src/lib/research/modal/pytests/worker_core_adversarial_eval.py && python3 src/lib/research/modal/pytests/synthesis_runtime_test.py && python3 src/lib/research/modal/pytests/reviewer_loop_adversarial_eval.py && python3 src/lib/research/modal/pytests/workspace_core_test.py && python3 src/lib/research/modal/pytests/runtime_models_test.py && python3 src/lib/research/modal/pytests/rulebook_test.py && python3 src/lib/research/modal/pytests/orchestrator_runtime_test.py && python3 src/lib/research/modal/pytests/agents_runtime_test.py && python3 src/lib/research/modal/pytests/trace_events_test.py && python3 src/lib/research/modal/pytests/worker_runtime_test.py",
+    "py:smoke": "python3 src/lib/research/modal/pytests/agents_sdk_smoke_test.py",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

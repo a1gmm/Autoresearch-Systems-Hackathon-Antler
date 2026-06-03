@@ -8,7 +8,8 @@ export type RunStatus =
   | "partial"
   | "needs_review"
   | "done"
-  | "failed";
+  | "failed"
+  | "stalled";
 
 export type CoverageFamily =
   | "air"
@@ -146,6 +147,13 @@ export type EvidenceBundle = {
   }>;
   researcher_conclusion: "applies" | "does_not_apply" | "needs_review";
   uncertainties: string[];
+  runtime_review?: {
+    decision: "accepted" | "needs_repair" | "needs_human_review" | string;
+    verdict: "pass" | "fail" | "needs_review";
+    artifact_path?: string | null;
+    accepted_evidence_ids?: string[];
+    reason?: string;
+  };
   permit_filing?: {
     form_name: string;
     form_url: string;
@@ -216,6 +224,13 @@ export type MemoryUpdate = {
   expires_or_recheck_after: string | null;
 };
 
+export type RuntimeArtifactMetadata = {
+  kind?: string;
+  path: string;
+  task_id?: string | null;
+  hypothesis_id?: string | null;
+};
+
 export type ResearchRun = {
   run_id: string;
   status: RunStatus;
@@ -234,6 +249,8 @@ export type ResearchRun = {
   trace_events: TraceEvent[];
   report_markdown: string;
   sds_reviews?: SdsReview[];
+  workspace_prefix?: string | null;
+  artifact_index?: RuntimeArtifactMetadata[];
 };
 
 export type ResearchRunInput = {

@@ -13,6 +13,7 @@ function makeRun(): ResearchRun {
     evidence_bundles: [{ hypothesis_id: "hmbp", sources: [{ url: "https://example.org/x", source_name: "CA HSC", authority_rank: 1, fetched_at: "2026-01-01", content_hash: "abc123def456", effective_date: null, quote: "Businesses storing >= 55 gallons must file HMBP." }], extracted_claims: [], researcher_conclusion: "applies", uncertainties: [] }],
     verification_verdicts: [{ hypothesis_id: "hmbp", verdict: "pass", checks: { grounding: { pass: true, reason: "quote supports claim" } }, confidence: 0.9, repair_tickets: [] }],
     repair_tickets: [], memory_updates: [], determinations: [], trace_events: [], report_markdown: "",
+    artifact_index: [{ kind: "draft", path: "workspace/r/hmbp/draft.md", hypothesis_id: "hmbp", task_id: "task-hmbp" }],
   };
 }
 
@@ -30,5 +31,12 @@ describe("EvidenceDrawer", () => {
     render(<EvidenceDrawer />);
     expect(screen.getByText(/Businesses storing/)).toBeInTheDocument();
     expect(screen.getByText("CA HSC")).toBeInTheDocument();
+  });
+
+  it("renders matching artifact metadata when open", () => {
+    useStore.setState({ run: makeRun(), selectedHypothesisId: "hmbp", drawerOpen: true });
+    render(<EvidenceDrawer />);
+    expect(screen.getByText("Artifacts")).toBeInTheDocument();
+    expect(screen.getByText(/workspace\/r\/hmbp\/draft\.md/)).toBeInTheDocument();
   });
 });

@@ -13,6 +13,7 @@ export function VerificationSummary() {
   const filter = useStore((s) => s.matrixFilter);
   if (!run) return null;
   const c = getVerificationCounts(run);
+  const artifactCount = run.artifact_index?.length ?? 0;
   const rows: Row[] = [
     { label: "Verified", count: `${c.verified}`, color: "text-teal-400", key: "verified", Icon: CheckCircle2 },
     { label: "Needs Review", count: `${c.needs_review}`, color: "text-amber-400", key: "needs_review", Icon: AlertTriangle },
@@ -50,6 +51,12 @@ export function VerificationSummary() {
           <span className="tabular-nums font-mono text-slate-300">{count}</span>
         </motion.button>
       ))}
+      {artifactCount > 0 && (
+        <div className="flex items-center justify-between px-2.5 pt-1.5 mt-1 text-[11px] text-slate-500 border-t border-slate-800/40">
+          <span>Artifacts</span>
+          <span className="tabular-nums font-mono text-slate-400">{artifactCount}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,8 @@
-import type { ResearchRunInput, ResearchRun, EvidenceBundle } from "../types";
+import type { ResearchRunInput, ResearchRun, EvidenceBundle, RuntimeArtifactMetadata } from "../types";
 import { planRun, finalizeRun, type PlannedRun } from "../run";
 import * as store from "../store/supabaseStore";
+import { skillForHypothesis } from "../skillForHypothesis";
+import { ALLOWLISTED_HOSTS } from "../sourceAllowlist";
 
 export type DurableDeps = {
   planRun: (input: ResearchRunInput) => Promise<PlannedRun>;
@@ -10,12 +12,50 @@ export type DurableDeps = {
 };
 
 const realDeps: DurableDeps = { planRun, finalizeRun, startModalRun, store };
+const FINALIZABLE_STATUSES = new Set(["queued", "running", "bundles_complete"]);
+const FINAL_STATUSES = new Set(["done", "needs_review"]);
+
+type DurablePartialRun = {
+  run_id: string;
+  status: string;
+  task_count: number;
+  bundles_count: number;
+  trace_events: unknown[];
+  workspace_prefix?: string | null;
+  artifact_index?: RuntimeArtifactMetadata[];
+};
+
+function artifactIndex(value: unknown): RuntimeArtifactMetadata[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const artifacts = value.filter((a): a is RuntimeArtifactMetadata => {
+    return Boolean(a && typeof a === "object" && typeof (a as { path?: unknown }).path === "string");
+  });
+  return artifacts.length > 0 ? artifacts : [];
+}
+
+function attachRuntimeMetadata<T extends ResearchRun>(result: T, run: { workspace_prefix?: string | null; artifact_index?: unknown[] }): T {
+  if (run.workspace_prefix !== undefined) result.workspace_prefix = run.workspace_prefix;
+  const artifacts = artifactIndex(run.artifact_index);
+  if (artifacts !== undefined) result.artifact_index = artifacts;
+  return result;
+}
 
 export async function enqueueRun(input: ResearchRunInput, deps: DurableDeps = realDeps): Promise<{ run_id: string; status: string }> {
   const planned = await deps.planRun(input);
   const task_specs = planned.plan.research_tasks.map((task) => {
     const h = planned.plan.research_graph.find((g) => g.id === task.hypothesis_id);
-    return { task_id: task.task_id, hypothesis_id: task.hypothesis_id, question: h?.question ?? task.hypothesis_id, allowed_tools: task.allowed_tools, blocked_tools: task.blocked_tools, budget: task.budget, ...(task.jurisdiction_context ? { jurisdiction_context: task.jurisdiction_context } : {}) };
+    return {
+      task_id: task.task_id,
+      hypothesis_id: task.hypothesis_id,
+      question: h?.question ?? task.hypothesis_id,
+      family: h?.family ?? "air",
+      skill_id: skillForHypothesis(task.hypothesis_id),
+      allowed_domains: Array.from(ALLOWLISTED_HOSTS),
+      allowed_tools: task.allowed_tools,
+      blocked_tools: task.blocked_tools,
+      budget: task.budget,
+      ...(task.jurisdiction_context ? { jurisdiction_context: task.jurisdiction_context } : {}),
+    };
   });
   await deps.store.createRun({
     run_id: planned.run_id, status: "queued", input, scope_pack: planned.scope_pack, plan: planned.plan,
@@ -30,31 +70,65 @@ export async function enqueueRun(input: ResearchRunInput, deps: DurableDeps = re
   return { run_id: planned.run_id, status: "queued" };
 }
 
-export async function getDurableRun(run_id: string, deps: DurableDeps = realDeps): Promise<ResearchRun | { run_id: string; status: string; task_count: number; bundles_count: number; trace_events: unknown[] }> {
+export async function getDurableRun(run_id: string, deps: DurableDeps = realDeps): Promise<ResearchRun | DurablePartialRun> {
   const run = await deps.store.getRun(run_id);
   if (!run) throw new Error(`Run not found: ${run_id}`);
   const evidence = await deps.store.listEvidence(run_id);
-  const complete = run.status !== "done" && evidence.length >= run.task_count;
+  const complete = FINALIZABLE_STATUSES.has(run.status) && evidence.length >= run.task_count;
   if (complete) {
     // Two concurrent polls can both finalize here. That is safe: finalizeRun is pure and
     // deterministic over the same stored bundles, and store.finalizeRun writes the same
     // idempotent payload — the loser is redundant work, not a wrong result.
     const bundles = evidence.map((e) => e.bundle as EvidenceBundle);
-    const result = deps.finalizeRun(run_id, run.scope_pack as PlannedRun["scope_pack"], run.plan as PlannedRun["plan"], bundles, (run.trace_events as PlannedRun["trace_events"]) ?? []);
-    await deps.store.finalizeRun(run_id, { determinations: result.determinations, report_markdown: result.report_markdown, trace_events: result.trace_events });
+    const result = attachRuntimeMetadata(
+      deps.finalizeRun(run_id, run.scope_pack as PlannedRun["scope_pack"], run.plan as PlannedRun["plan"], bundles, (run.trace_events as PlannedRun["trace_events"]) ?? []),
+      run,
+    );
+    await deps.store.finalizeRun(run_id, {
+      determinations: result.determinations,
+      report_markdown: result.report_markdown,
+      trace_events: result.trace_events,
+      status: result.status === "needs_review" ? "needs_review" : "done",
+      ...(run.workspace_prefix !== undefined ? { workspace_prefix: run.workspace_prefix } : {}),
+      ...(run.artifact_index !== undefined ? { artifact_index: run.artifact_index } : {}),
+    });
     return result;
   }
-  if (run.status === "done") {
+  if (FINAL_STATUSES.has(run.status)) {
     const bundles = evidence.map((e) => e.bundle as EvidenceBundle);
-    return deps.finalizeRun(run_id, run.scope_pack as PlannedRun["scope_pack"], run.plan as PlannedRun["plan"], bundles, (run.trace_events as PlannedRun["trace_events"]) ?? []);
+    return attachRuntimeMetadata(
+      deps.finalizeRun(run_id, run.scope_pack as PlannedRun["scope_pack"], run.plan as PlannedRun["plan"], bundles, (run.trace_events as PlannedRun["trace_events"]) ?? []),
+      run,
+    );
   }
-  return { run_id, status: run.status, task_count: run.task_count, bundles_count: evidence.length, trace_events: (run.trace_events as unknown[]) ?? [] };
+  return {
+    run_id,
+    status: run.status,
+    task_count: run.task_count,
+    bundles_count: evidence.length,
+    trace_events: (run.trace_events as unknown[]) ?? [],
+    ...(run.workspace_prefix !== undefined ? { workspace_prefix: run.workspace_prefix } : {}),
+    ...(run.artifact_index !== undefined ? { artifact_index: artifactIndex(run.artifact_index) ?? [] } : {}),
+  };
 }
 
-async function startModalRun(run_id: string, task_specs: unknown[]): Promise<void> {
+export async function startModalRun(run_id: string, task_specs: unknown[]): Promise<void> {
   const endpoint = process.env.MODAL_START_RUN_ENDPOINT;
   const token = process.env.MODAL_RESEARCH_TOKEN;
   if (!endpoint || !token) throw new Error("Modal start_run endpoint not configured");
   const resp = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, run_id, task_specs }) });
+  const text = await resp.text();
+  const body = parseJsonObject(text);
   if (!resp.ok) throw new Error(`start_run HTTP ${resp.status}`);
+  if (body && typeof body.error === "string") throw new Error(`start_run error: ${body.error}`);
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  if (!text.trim()) return null;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }

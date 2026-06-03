@@ -110,10 +110,14 @@ export function finalizeRun(
   const repair_tickets = [];
 
   for (const bundle of initialEvidence) {
-    const verdict = verifyEvidence(scope_pack, bundle);
+    const verdict = runtimeReviewVerdict(bundle) ?? verifyEvidence(scope_pack, bundle);
     verification_verdicts.push(verdict);
     if (verdict.verdict === "fail") {
       trace_events.push(trace(run_id, "verifier", "verification", "failed", `Verifier rejected ${bundle.hypothesis_id}`, bundle.hypothesis_id));
+    }
+    if (bundle.runtime_review) {
+      trace_events.push(trace(run_id, "reviewer", "runtime_review", verdict.verdict === "pass" ? "done" : "needs_review",
+        `Runtime reviewer verdict for ${bundle.hypothesis_id}: ${verdict.verdict}`, bundle.hypothesis_id));
     }
     for (const ticket of verdict.repair_tickets) {
       repair_tickets.push(ticket);
@@ -176,6 +180,33 @@ export function finalizeRun(
     determinations,
     trace_events,
     report_markdown: synthesis.report_markdown,
+  };
+}
+
+function runtimeReviewVerdict(bundle: EvidenceBundle): VerificationVerdict | null {
+  const runtime = bundle.runtime_review;
+  if (!runtime) return null;
+  const verdict = runtime.verdict === "pass" ? "pass" : runtime.verdict === "fail" ? "fail" : "needs_review";
+  const pass = verdict === "pass";
+  return {
+    hypothesis_id: bundle.hypothesis_id,
+    verdict,
+    checks: {
+      reviewer_judgment: {
+        pass,
+        reason: runtime.reason ?? `runtime reviewer decision: ${runtime.decision}`,
+      },
+      grounding_hygiene: {
+        pass: Boolean(bundle.sources[0]?.url && bundle.sources[0]?.quote && bundle.extracted_claims[0]?.quote),
+        reason: pass ? "runtime reviewer accepted grounded evidence" : "runtime reviewer did not accept complete grounded evidence",
+      },
+      applicability: {
+        pass: bundle.researcher_conclusion === "applies" || bundle.researcher_conclusion === "does_not_apply",
+        reason: `runtime researcher conclusion: ${bundle.researcher_conclusion}`,
+      },
+    },
+    confidence: pass ? 0.92 : 0.45,
+    repair_tickets: [],
   };
 }
 
