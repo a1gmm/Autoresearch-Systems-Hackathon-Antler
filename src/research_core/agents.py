@@ -109,8 +109,12 @@ def build_researcher_agent(
             "read_skill to load the law-code skill that orients you on this hypothesis's "
             "thresholds and exemptions (orientation only — a skill is NEVER citable "
             "evidence). Then use only the sandbox-scoped tools provided to gather and "
-            "read official sources. Write intermediate artifacts when helpful, then call "
-            "submit_finding exactly once with sourced conclusions; submit_finding is terminal."
+            "read official sources. web_fetch reads agency rule PDFs directly (it extracts "
+            "the PDF text and clears bot/JS challenges via the browser) — fetch the actual "
+            "rule and quote its verbatim requirement text; do not declare a PDF unreadable or "
+            "settle for a secondary summary when the primary rule is fetchable. Write "
+            "intermediate artifacts when helpful, then call submit_finding exactly once with "
+            "sourced conclusions; submit_finding is terminal."
         ),
         model=model,
         tools=tools if tools is not None else _researcher_tools(policy, task),

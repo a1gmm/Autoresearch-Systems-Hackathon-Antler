@@ -547,3 +547,258 @@ def test_ca_air_district_hosts_are_authoritative():
     assert source_authority_rank("https://www.baaqmd.gov/rules") == 1
     assert source_authority_rank("https://www.valleyair.org/rules") == 1
     assert host_fetchable("https://www.vcapcd.org/x")  # and it's fetchable
+
+
+# --- PDF-over-HTTP extraction + Cloudflare browser fallback --------------------
+
+def _make_pdf_bytes(text: str) -> bytes:
+    import fitz
+
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), text)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def test_extract_pdf_text_reads_real_pdf_bytes():
+    from research_core.tools import _extract_pdf_text
+
+    data = _make_pdf_bytes("RULE 23 EXEMPTION THRESHOLD")
+    extracted = _extract_pdf_text(data)
+    assert extracted is not None
+    assert "RULE 23 EXEMPTION THRESHOLD" in extracted
+
+
+def test_extract_pdf_text_returns_none_on_garbage():
+    from research_core.tools import _extract_pdf_text
+
+    assert _extract_pdf_text(b"not a pdf at all") is None
+
+
+class _PdfResponse:
+    def __init__(self, url: str, content: bytes, content_type: str):
+        self.url = url
+        self.status_code = 200
+        self.content = content
+        self.headers = {"content-type": content_type}
+
+    @property
+    def is_success(self):
+        return True
+
+    @property
+    def text(self):
+        # Mimic httpx: decoding PDF bytes yields garbage, never the rule text.
+        return self.content.decode("latin-1", errors="replace")
+
+
+def _install_fake_httpx(monkeypatch, response):
+    class FakeClient:
+        def __init__(self, *, follow_redirects: bool, timeout: float):
+            assert follow_redirects is False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def get(self, url: str, **kwargs):
+            return response
+
+    fake_httpx = ModuleType("httpx")
+    fake_httpx.Client = FakeClient
+    monkeypatch.setitem(sys.modules, "httpx", fake_httpx)
+
+
+def test_web_fetch_extracts_pdf_text_from_pdf_response(tmp_path: Path, monkeypatch):
+    pdf = _make_pdf_bytes("RULE 23 INKJET ROC THRESHOLD 29.44 GAL")
+    response = _PdfResponse(
+        "https://ww2.arb.ca.gov/rules/RuleID1061.pdf", pdf, "application/pdf"
+    )
+    _install_fake_httpx(monkeypatch, response)
+    policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
+
+    result = web_fetch(policy, "https://ww2.arb.ca.gov/rules/RuleID1061.pdf")
+
+    assert result["ok"] is True
+    assert result["status"] == "fetched"
+    assert result["extracted_format"] == "pdf"
+    assert "RULE 23 INKJET ROC THRESHOLD 29.44 GAL" in result["text"]
+
+
+def test_web_fetch_detects_pdf_by_magic_bytes_when_content_type_generic(tmp_path: Path, monkeypatch):
+    pdf = _make_pdf_bytes("GRAPHIC ARTS RULE 74.19")
+    response = _PdfResponse(
+        "https://www.vcapcd.org/RULE%2074.19.pdf", pdf, "application/octet-stream"
+    )
+    _install_fake_httpx(monkeypatch, response)
+    policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
+
+    result = web_fetch(policy, "https://www.vcapcd.org/RULE%2074.19.pdf")
+
+    assert result["ok"] is True
+    assert result["extracted_format"] == "pdf"
+    assert "GRAPHIC ARTS RULE 74.19" in result["text"]
+
+
+class _CloudflareResponse:
+    def __init__(self, url: str):
+        self.url = url
+        self.status_code = 403
+        self.content = b"<html><body>Just a moment...</body></html>"
+        self.headers = {"content-type": "text/html", "cf-ray": "abc123", "server": "cloudflare"}
+
+    @property
+    def is_success(self):
+        return False
+
+    @property
+    def text(self):
+        return self.content.decode()
+
+
+def test_web_fetch_falls_back_to_browser_on_cloudflare_block(tmp_path: Path, monkeypatch):
+    _install_fake_httpx(monkeypatch, _CloudflareResponse("https://www.vcapcd.org/rule23"))
+
+    def fake_browser_use(policy, url, **kwargs):
+        return {
+            "ok": True,
+            "status": "navigated",
+            "snapshot": {
+                "url": url,
+                "title": "Rule 23",
+                "text": "RULE 23 full rule text via browser",
+                "status_code": 200,
+            },
+        }
+
+    monkeypatch.setattr("research_core.tools.browser_use", fake_browser_use)
+    policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
+
+    result = web_fetch(policy, "https://www.vcapcd.org/rule23")
+
+    assert result["ok"] is True
+    assert result["via"] == "browser_fallback"
+    assert "RULE 23 full rule text via browser" in result["text"]
+
+
+def test_web_fetch_does_not_fall_back_when_browser_disabled(tmp_path: Path, monkeypatch):
+    _install_fake_httpx(monkeypatch, _CloudflareResponse("https://www.vcapcd.org/rule23"))
+
+    def fail_browser(policy, url, **kwargs):
+        raise AssertionError("browser_use must not run when allow_browser is False")
+
+    monkeypatch.setattr("research_core.tools.browser_use", fail_browser)
+    policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path, allow_browser=False)
+
+    result = web_fetch(policy, "https://www.vcapcd.org/rule23")
+
+    assert result["ok"] is True
+    assert result["status"] == "http_error"
+    assert result.get("via") != "browser_fallback"
+
+
+def test_browser_use_extracts_pdf_text_for_pdf_navigation(tmp_path: Path, monkeypatch):
+    # The combined Cloudflare+PDF case (e.g. vcapcd.org RULE 23.pdf): the browser clears
+    # the JS challenge, then we pull the PDF bytes via the browser's request context and
+    # extract the rule text (a rendered PDF viewer would yield empty body text).
+    pdf = _make_pdf_bytes("RULE 23 VCAPCD EXEMPTION FULL TEXT")
+
+    class FakeApiResponse:
+        def body(self):
+            return pdf
+
+    class FakeRequestContext:
+        def get(self, url: str):
+            return FakeApiResponse()
+
+    class FakeResponse:
+        status = 200
+        headers = {"content-type": "application/pdf"}
+
+    class FakeLocator:
+        def count(self):
+            return 1
+
+        def inner_text(self, *, timeout: int):
+            return ""
+
+    class FakePage:
+        url = "https://www.vcapcd.org/RULE%2023.pdf"
+
+        def goto(self, url: str, *, wait_until: str, timeout: int):
+            self.context_handler(_NoopRoute(url), _NoopRequest(url))
+            return FakeResponse()
+
+        def title(self):
+            return "RULE 23.pdf"
+
+        def locator(self, selector: str):
+            return FakeLocator()
+
+    class FakeBrowserContext:
+        request = FakeRequestContext()
+
+        def route(self, pattern: str, handler):
+            self.handler = handler
+
+        def new_page(self):
+            page = FakePage()
+            page.context_handler = self.handler
+            return page
+
+        def close(self):
+            pass
+
+    class FakeBrowser:
+        def new_context(self, *, service_workers: str):
+            return FakeBrowserContext()
+
+        def close(self):
+            pass
+
+    class FakeChromium:
+        def launch(self, *, headless: bool):
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    class FakeCtx:
+        def __enter__(self):
+            return FakePlaywright()
+
+        def __exit__(self, *a):
+            return False
+
+    fake_sync_api = ModuleType("playwright.sync_api")
+    fake_sync_api.sync_playwright = lambda: FakeCtx()
+    monkeypatch.setitem(sys.modules, "playwright", ModuleType("playwright"))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", fake_sync_api)
+    policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
+
+    result = browser_use(policy, "https://www.vcapcd.org/RULE%2023.pdf")
+
+    assert result["ok"] is True
+    assert result["snapshot"]["content_type"] == "application/pdf"
+    assert "RULE 23 VCAPCD EXEMPTION FULL TEXT" in result["snapshot"]["text"]
+
+
+class _NoopRoute:
+    def __init__(self, url: str):
+        self.url = url
+
+    def continue_(self):
+        pass
+
+    def abort(self):
+        pass
+
+
+class _NoopRequest:
+    def __init__(self, url: str):
+        self.url = url
+        self.resource_type = "document"

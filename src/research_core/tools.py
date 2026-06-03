@@ -44,6 +44,55 @@ def _extract_main_text(html: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
+def _extract_pdf_text(data: bytes) -> str | None:
+    """Extract text from in-memory PDF bytes (a PDF fetched over HTTP, e.g. an ARB or
+    air-district rule PDF). web_fetch otherwise hands the agent decoded PDF bytes as
+    'text' — unreadable garbage — so the agent can never quote the rule. Returns the
+    joined page text, or None if PyMuPDF is unavailable or the bytes are not a parseable
+    PDF (caller then treats the response as non-PDF)."""
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        return None
+    try:
+        import fitz
+    except ImportError:
+        return None
+    try:
+        with fitz.open(stream=bytes(data), filetype="pdf") as document:
+            text = "\n".join(page.get_text("text") for page in document)
+        return text or None
+    except Exception:  # noqa: BLE001 — not a parseable PDF; let caller fall back
+        return None
+
+
+_BOT_BLOCK_STATUS = {403, 429, 503}
+_BOT_BLOCK_BODY_MARKERS = (
+    "just a moment",
+    "cf-browser-verification",
+    "challenge-platform",
+    "attention required",
+    "enable javascript and cookies",
+    "_cf_chl",
+)
+
+
+def _looks_bot_blocked(response: Any) -> bool:
+    """A plain HTTP client (httpx, no JS) often gets bounced by bot protection
+    (Cloudflare's 'Just a moment…' interstitial) on legitimate agency sites like
+    vcapcd.org. Detect that so web_fetch can retry through a real browser, which runs
+    the JS challenge. Conservative: only non-success statuses with a Cloudflare/challenge
+    signature, so ordinary 403/404s do not trigger a (slow) browser fallback."""
+    if getattr(response, "status_code", None) not in _BOT_BLOCK_STATUS:
+        return False
+    headers = {str(k).lower(): str(v).lower() for k, v in dict(getattr(response, "headers", {})).items()}
+    if "cf-ray" in headers or "cf-mitigated" in headers or "cloudflare" in headers.get("server", ""):
+        return True
+    try:
+        body = (response.text or "")[:4000].lower()
+    except Exception:  # noqa: BLE001 — binary/undecodable body is not a challenge page
+        return False
+    return any(marker in body for marker in _BOT_BLOCK_BODY_MARKERS)
+
+
 @dataclass(frozen=True)
 class SandboxPolicy:
     run_id: str
@@ -271,6 +320,35 @@ def _guarded_get(
     )
 
 
+def _browser_fallback(
+    policy: SandboxPolicy,
+    url: str,
+    *,
+    redirect_chain: list[dict[str, Any]],
+    original_url: str,
+) -> dict[str, Any] | None:
+    """Re-fetch a bot-blocked URL through the headless browser (runs JS, clears the
+    Cloudflare challenge). Returns a web_fetch-shaped success on success, or None so the
+    caller falls through to its normal http_error response."""
+    try:
+        result = browser_use(policy, url)
+    except Exception:  # noqa: BLE001 — browser is best-effort; fall through on any error
+        return None
+    if not isinstance(result, dict) or not result.get("ok"):
+        return None
+    snapshot = result.get("snapshot") or {}
+    return _success(
+        "fetched",
+        url=original_url,
+        final_url=snapshot.get("url", url),
+        status_code=snapshot.get("status_code"),
+        content_type=snapshot.get("content_type", "text/html"),
+        text=snapshot.get("text", ""),
+        via="browser_fallback",
+        redirect_chain=redirect_chain,
+    )
+
+
 def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
     if not isinstance(url, str):
         return _invalid_argument("url", "a string", url)
@@ -301,10 +379,39 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
                 final_url=final_url,
             )
         content_type = response.headers.get("content-type")
+        ctype = (content_type or "").lower()
+
+        # Bot-protection (Cloudflare interstitial) blocks the plain HTTP client on
+        # legitimate agency sites. Retry through a real browser, which runs the JS
+        # challenge, before giving up. (Only when the policy allows the browser.)
+        if not response.is_success and policy.allow_browser and _looks_bot_blocked(response):
+            fallback = _browser_fallback(policy, final_url, redirect_chain=redirect_chain, original_url=url)
+            if fallback is not None:
+                return fallback
+
+        # PDF served over HTTP: extract the rule text so the agent can quote it. Detect
+        # by content-type or the %PDF magic bytes (agency PDFs are often served as
+        # application/octet-stream). Falls through to text handling if not parseable.
+        body_bytes = response.content if response.is_success else b""
+        is_pdf = ("pdf" in ctype) or (body_bytes[:5].startswith(b"%PDF"))
+        if is_pdf and body_bytes:
+            extracted = _extract_pdf_text(body_bytes)
+            if extracted is not None:
+                return _success(
+                    "fetched",
+                    url=url,
+                    final_url=final_url,
+                    status_code=response.status_code,
+                    content_type=content_type or "application/pdf",
+                    text=extracted,
+                    extracted_format="pdf",
+                    headers=dict(response.headers),
+                    redirect_chain=redirect_chain,
+                )
+
         raw = response.text if response.is_success else ""
         # Extract readable main content for HTML so the agent reads the rule, not the
-        # nav/chrome. Non-HTML (PDF text, JSON, plain) passes through unchanged.
-        ctype = (content_type or "").lower()
+        # nav/chrome. Non-HTML (JSON, plain) passes through unchanged.
         is_html = "html" in ctype or (raw[:512].lstrip().lower().startswith(("<!doctype html", "<html")))
         text = _extract_main_text(raw) if (is_html and raw) else raw
         return _success(

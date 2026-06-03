@@ -6,10 +6,33 @@ from research_core.tools import (
     SandboxPolicy,
     _error,
     _exception_error,
+    _extract_pdf_text,
     _invalid_argument,
     _success,
     host_fetchable,
 )
+
+
+def _pdf_text_via_browser(context: Any, response: Any, final_url: str) -> str | None:
+    """When the browser lands on a PDF (e.g. an air-district rule PDF behind a JS
+    bot-challenge), the rendered page body is empty — pull the PDF bytes through the
+    browser's own request context (reusing its cleared-challenge cookies) and extract
+    the text. Returns None when the target is not a PDF or extraction is not possible."""
+    content_type = ""
+    try:
+        headers = getattr(response, "headers", None) or {}
+        content_type = (headers.get("content-type") or "").lower()
+    except Exception:  # noqa: BLE001 — header shape varies; fall back to URL sniffing
+        content_type = ""
+    path = final_url.lower().split("?", 1)[0]
+    if "pdf" not in content_type and not path.endswith(".pdf"):
+        return None
+    try:
+        api_response = context.request.get(final_url)
+        data = api_response.body()
+    except Exception:  # noqa: BLE001 — best-effort; caller falls back to rendered text
+        return None
+    return _extract_pdf_text(data)
 
 
 def browser_use(policy: SandboxPolicy, url: str, *, wait_until: str = "domcontentloaded") -> dict[str, Any]:
@@ -79,13 +102,23 @@ def browser_use(policy: SandboxPolicy, url: str, *, wait_until: str = "domconten
                         url=url,
                         final_url=final_url,
                     )
-                body = page.locator("body")
-                snapshot = {
-                    "url": final_url,
-                    "title": page.title(),
-                    "text": body.inner_text(timeout=int(policy.timeout_seconds * 1000)) if body.count() else "",
-                    "status_code": response.status if response is not None else None,
-                }
+                pdf_text = _pdf_text_via_browser(context, response, final_url)
+                if pdf_text:
+                    snapshot = {
+                        "url": final_url,
+                        "title": page.title(),
+                        "text": pdf_text,
+                        "status_code": response.status if response is not None else None,
+                        "content_type": "application/pdf",
+                    }
+                else:
+                    body = page.locator("body")
+                    snapshot = {
+                        "url": final_url,
+                        "title": page.title(),
+                        "text": body.inner_text(timeout=int(policy.timeout_seconds * 1000)) if body.count() else "",
+                        "status_code": response.status if response is not None else None,
+                    }
             finally:
                 if context is not None:
                     context.close()
