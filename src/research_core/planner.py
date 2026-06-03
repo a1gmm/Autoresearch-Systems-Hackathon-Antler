@@ -121,6 +121,17 @@ def _unique(ids: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
+def _program_jurisdiction_ok(program: ProgramRegistryEntry, scope: ScopePack) -> bool:
+    """Jurisdiction gate (additive / strict): a program may declare an `air_district`; if so
+    it only activates when that district is the resolved controlling authority for the
+    facility (present in the jurisdiction stack). Programs WITHOUT an air_district (statewide
+    CA / federal / the legacy SCAQMD templates) are never gated, so no run regresses."""
+    district = getattr(program, "air_district", None)
+    if not district:
+        return True
+    return district in (scope.facility.jurisdiction_stack or [])
+
+
 def research_worker_tool_ids() -> list[str]:
     return _unique((*UNIVERSAL_TOOL_IDS, *RESEARCHER_CORE_TOOL_IDS))
 
@@ -154,6 +165,7 @@ def plan_research(
         for program in PROGRAM_REGISTRY
         if program.family in active_families
         and (program.triggered_by(scope) or program.family in sds_active_families)
+        and _program_jurisdiction_ok(program, scope)
     ]
     family_status_by = {status.family: status for status in coverage_family_statuses}
     regulatory_angles = [

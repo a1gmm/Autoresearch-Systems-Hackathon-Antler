@@ -27,6 +27,9 @@ class ProgramRegistryEntry:
     authority_rank: int
     hypotheses: tuple[ProgramHypothesis, ...]
     triggered_by: Callable[[ScopePack], bool]
+    # Optional jurisdiction gate: the resolved air-district name this program is scoped to
+    # (e.g. "Ventura County APCD"). None = statewide/federal/template (never gated).
+    air_district: str | None = None
 
 
 def _has_equipment(scope: ScopePack) -> bool:
@@ -99,6 +102,7 @@ def _entry_from_data(data: dict[str, Any], source: Path) -> ProgramRegistryEntry
             for h in data.get("hypotheses", [])
         ),
         triggered_by=_TRIGGERS[str(trigger)],
+        air_district=(str(data["air_district"]) if data.get("air_district") else None),
     )
 
 
