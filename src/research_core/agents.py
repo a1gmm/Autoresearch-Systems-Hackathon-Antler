@@ -16,6 +16,7 @@ from research_core.tools import SandboxPolicy
 
 
 RESEARCHER_TOOL_NAMES = (
+    "read_skill",
     "web_search",
     "web_fetch",
     "browser_use",
@@ -25,6 +26,30 @@ RESEARCHER_TOOL_NAMES = (
     "write_artifact",
     "submit_finding",
 )
+
+# Law-code skill library (one folder per program/skill id with a SKILL.md). Sits
+# beside the jurisdiction skills the planner already reads.
+_SKILLS_ROOT = Path(__file__).resolve().parents[1] / "lib" / "research" / "skills"
+
+
+def _read_law_skill(skill_id: str) -> str:
+    if not skill_id:
+        return ""
+    path = _SKILLS_ROOT / skill_id / "SKILL.md"
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _task_hypothesis_id(task: Any) -> str:
+    if task is None:
+        return ""
+    if isinstance(task, dict):
+        return str(task.get("hypothesis_id", "") or "")
+    return str(getattr(task, "hypothesis_id", "") or "")
 RESEARCHER_TERMINAL_TOOL_NAMES = ("submit_finding",)
 AGENT_INPUT_PREFIX = "PermitPilot agent input JSON:\n"
 
@@ -75,17 +100,20 @@ def build_researcher_agent(
     policy: SandboxPolicy | None = None,
     model: Any = None,
     tools: list[Any] | None = None,
+    task: Any = None,
 ) -> Any:
     return _build_agent(
         name="permitpilot-researcher",
         instructions=(
-            "Research one assigned permit applicability hypothesis. Use only the "
-            "sandbox-scoped tools provided to gather and read sources. Write "
-            "intermediate artifacts when helpful, then call submit_finding exactly "
-            "once with sourced conclusions; submit_finding is terminal."
+            "Research one assigned permit applicability hypothesis. Begin by calling "
+            "read_skill to load the law-code skill that orients you on this hypothesis's "
+            "thresholds and exemptions (orientation only — a skill is NEVER citable "
+            "evidence). Then use only the sandbox-scoped tools provided to gather and "
+            "read official sources. Write intermediate artifacts when helpful, then call "
+            "submit_finding exactly once with sourced conclusions; submit_finding is terminal."
         ),
         model=model,
-        tools=tools if tools is not None else _researcher_tools(policy),
+        tools=tools if tools is not None else _researcher_tools(policy, task),
         terminal_tool_names=RESEARCHER_TERMINAL_TOOL_NAMES,
     )
 
@@ -147,7 +175,7 @@ def run_researcher_agent(
     runner: Callable[..., Any] | None = None,
     max_turns: int | None = None,
 ) -> dict[str, Any]:
-    agent = build_researcher_agent(policy=policy, model=model, tools=tools)
+    agent = build_researcher_agent(policy=policy, model=model, tools=tools, task=task)
     turn_budget = max_turns if max_turns is not None else _task_max_turns(task, default=6)
     input_payload = {
         "task": _dump_payload(task),
@@ -232,15 +260,29 @@ def _build_agent(
     return agent
 
 
-def _researcher_tools(policy: SandboxPolicy | None) -> list[Any]:
-    functions = _sandbox_function_map(policy)
+def _researcher_tools(policy: SandboxPolicy | None, task: Any = None) -> list[Any]:
+    functions = _sandbox_function_map(policy, task)
     return [
         _function_tool(functions[name], name=name, terminal=name in RESEARCHER_TERMINAL_TOOL_NAMES)
         for name in RESEARCHER_TOOL_NAMES
     ]
 
 
-def _sandbox_function_map(policy: SandboxPolicy | None) -> dict[str, Callable[..., dict[str, Any]]]:
+def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dict[str, Callable[..., dict[str, Any]]]:
+    def read_skill(skill_id: str = "") -> dict[str, Any]:
+        # The agent's skill_id is a HINT — models routinely guess non-existent ids.
+        # If it misses, fall back to the hypothesis's canonical mapped skill so the
+        # curated law-code guidance is actually loaded (orientation only; never cited).
+        from research_core.registry import skill_for_hypothesis
+
+        hid = _task_hypothesis_id(task)
+        mapped = skill_for_hypothesis(hid) if hid else None
+        for candidate in [c for c in ((skill_id or "").strip(), mapped) if c]:
+            content = _read_law_skill(candidate)
+            if content:
+                return {"skill_id": candidate, "content": content}
+        return {"error": f"no law-code skill found for {hid or 'this hypothesis'}"}
+
     def web_search(query: str, limit: int = 5) -> dict[str, Any]:
         return _call_policy_tool(policy, sandbox_tools.web_search, query, limit=limit)
 
@@ -283,6 +325,7 @@ def _sandbox_function_map(policy: SandboxPolicy | None) -> dict[str, Callable[..
         )
 
     return {
+        "read_skill": read_skill,
         "web_search": web_search,
         "web_fetch": web_fetch,
         "browser_use": browser_use,

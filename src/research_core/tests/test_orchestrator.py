@@ -535,3 +535,12 @@ def _bundle_for(hypothesis_id, *, grounded, conclusion):
         "researcher_conclusion": conclusion,
         "uncertainties": [],
     }
+
+
+def test_agent_model_defaults_to_gpt55(monkeypatch):
+    from research_core.orchestrator import _agent_model_from_env, DEFAULT_AGENT_MODEL
+    monkeypatch.delenv("RESEARCH_CORE_AGENT_MODEL", raising=False)
+    assert DEFAULT_AGENT_MODEL == "gpt-5.5"
+    assert _agent_model_from_env() == "gpt-5.5"
+    monkeypatch.setenv("RESEARCH_CORE_AGENT_MODEL", "o4-mini")
+    assert _agent_model_from_env() == "o4-mini"

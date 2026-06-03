@@ -526,3 +526,12 @@ def all_programs() -> tuple[ProgramRegistryEntry, ...]:
 
 def programs_for_family(family: str) -> tuple[ProgramRegistryEntry, ...]:
     return tuple(program for program in PROGRAM_REGISTRY if program.family == family)
+
+
+def skill_for_hypothesis(hypothesis_id: str) -> str | None:
+    """The canonical law-code skill id for a hypothesis: the program that owns it.
+    The program id IS the skill folder name under src/lib/research/skills/<id>/SKILL.md."""
+    for program in PROGRAM_REGISTRY:
+        if any(h.id == hypothesis_id for h in program.hypotheses):
+            return program.id
+    return None

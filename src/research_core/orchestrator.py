@@ -41,6 +41,7 @@ ALLOW_NETWORK_ENV = "RESEARCH_CORE_ALLOW_NETWORK"
 ALLOW_BROWSER_ENV = "RESEARCH_CORE_ALLOW_BROWSER"
 SEARCH_ENDPOINT_ENV = "RESEARCH_CORE_SEARCH_ENDPOINT"
 AGENT_MODEL_ENV = "RESEARCH_CORE_AGENT_MODEL"
+DEFAULT_AGENT_MODEL = "gpt-5.5"
 
 
 class ResearchRunResult(BaseModel):
@@ -351,7 +352,8 @@ def _allowed_hosts_from_env() -> tuple[str, ...]:
 
 
 def _agent_model_from_env() -> str | None:
-    return _empty_to_none(_env(AGENT_MODEL_ENV))
+    # Default the research agents to gpt-5.5; RESEARCH_CORE_AGENT_MODEL overrides.
+    return _empty_to_none(_env(AGENT_MODEL_ENV)) or DEFAULT_AGENT_MODEL
 
 
 def _bool_env(name: str, *, default: bool) -> bool:

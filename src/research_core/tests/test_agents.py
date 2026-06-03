@@ -28,6 +28,7 @@ def test_researcher_agent_exposes_sandbox_tools_and_terminal_submit():
     agent = build_researcher_agent()
 
     assert [tool.name for tool in agent.tools] == [
+        "read_skill",
         "web_search",
         "web_fetch",
         "browser_use",
@@ -178,7 +179,7 @@ def test_sdk_function_tool_failure_is_not_silently_shimmed(monkeypatch):
     fake_agents.function_tool = broken_function_tool
     monkeypatch.setitem(sys.modules, "agents", fake_agents)
 
-    with pytest.raises(RuntimeError, match="sdk decorator rejected web_search"):
+    with pytest.raises(RuntimeError, match="sdk decorator rejected read_skill"):
         build_researcher_agent()
 
 
@@ -311,3 +312,16 @@ def test_default_runner_parses_stringified_terminal_tool_dict(tmp_path: Path, mo
 def _force_agent_shims(monkeypatch):
     monkeypatch.setattr("research_core.agents._sdk_agent_class", lambda: None)
     monkeypatch.setattr("research_core.agents._sdk_function_tool", lambda: None)
+
+
+def test_researcher_read_skill_loads_mapped_law_skill_on_wrong_guess():
+    from research_core.agents import _researcher_tools
+    task = {"task_id": "T", "hypothesis_id": "H-AIR-201", "assigned_agent": "air",
+            "allowed_tools": [], "blocked_tools": []}
+    tools = _researcher_tools(None, task)
+    by_name = {getattr(t, "name", None): t for t in tools}
+    assert "read_skill" in by_name
+    # The agent guesses a non-existent id -> falls back to the hypothesis's canonical skill.
+    result = by_name["read_skill"](skill_id="SCAQMD.Rule201.GUESS")
+    assert result.get("skill_id") == "scaqmd-permit-to-construct"
+    assert len(result.get("content", "")) > 50
