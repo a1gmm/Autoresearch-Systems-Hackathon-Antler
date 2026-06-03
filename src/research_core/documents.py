@@ -4,7 +4,14 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from research_core.tools import SandboxPolicy, _error, _exception_error, _resolve_workspace_path, _success
+from research_core.tools import (
+    SandboxPolicy,
+    _cap_text,
+    _error,
+    _exception_error,
+    _resolve_workspace_path,
+    _success,
+)
 
 
 def _path_or_error(policy: SandboxPolicy, path: str | Path) -> Path | dict[str, Any]:
@@ -40,7 +47,7 @@ def read_pdf(policy: SandboxPolicy, path: str | Path) -> dict[str, Any]:
             "read",
             path=str(checked),
             page_count=len(pages),
-            text="\n".join(page["text"] for page in pages),
+            text=_cap_text("\n".join(page["text"] for page in pages)),
             pages=pages,
         )
     except Exception as exc:
@@ -67,7 +74,7 @@ def read_docx(policy: SandboxPolicy, path: str | Path) -> dict[str, Any]:
         return _success(
             "read",
             path=str(checked),
-            text="\n".join(paragraphs),
+            text=_cap_text("\n".join(paragraphs)),
             paragraphs=paragraphs,
             tables=tables,
         )
@@ -102,7 +109,7 @@ def _read_csv(path: Path) -> dict[str, Any]:
             "read",
             path=str(path),
             sheets=[{"name": path.stem, "rows": rows}],
-            text=_rows_to_text(rows),
+            text=_cap_text(_rows_to_text(rows)),
         )
     except Exception as exc:
         return _exception_error("csv_read_failed", exc, path=str(path))
@@ -125,7 +132,7 @@ def _read_xlsx(path: Path) -> dict[str, Any]:
             "read",
             path=str(path),
             sheets=sheets,
-            text="\n\n".join(_rows_to_text(sheet["rows"]) for sheet in sheets),
+            text=_cap_text("\n\n".join(_rows_to_text(sheet["rows"]) for sheet in sheets)),
         )
     except Exception as exc:
         return _exception_error("spreadsheet_read_failed", exc, path=str(path))

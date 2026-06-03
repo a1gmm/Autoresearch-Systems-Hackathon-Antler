@@ -380,18 +380,35 @@ def _documents_from_input(input_payload: dict[str, Any]) -> list[ProvidedDocumen
     raw = input_payload.get("documents")
     if not raw:
         raw = input_payload.get("demo_documents") or []
+    # Provided docs ride along in every hypothesis's context, so bound each one's text:
+    # 8 full SDS would otherwise overflow a small-context worker. ~6k chars keeps the SDS
+    # identity + composition (Sections 1-3) while staying affordable.
+    per_doc_cap = _provided_doc_char_cap()
     documents: list[ProvidedDocument] = []
     for item in raw:
         if not isinstance(item, dict):
             continue
+        text = str(item.get("text") or "")
+        if len(text) > per_doc_cap:
+            text = text[:per_doc_cap] + "\n[...document truncated to fit context; re-upload a focused excerpt if a later section is needed...]"
         documents.append(
             ProvidedDocument(
                 name=str(item.get("name") or "document").strip() or "document",
                 type=str(item.get("type") or "other"),
-                text=str(item.get("text") or ""),
+                text=text,
             )
         )
     return documents
+
+
+def _provided_doc_char_cap() -> int:
+    raw = _empty_to_none(_env("RESEARCH_CORE_MAX_DOC_CHARS"))
+    if raw:
+        try:
+            return max(1000, int(raw))
+        except ValueError:
+            pass
+    return 6000
 
 
 def _coerce_deps(deps: str | ResearchDeps) -> ResearchDeps:

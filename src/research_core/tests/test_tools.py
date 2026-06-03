@@ -802,3 +802,40 @@ class _NoopRequest:
     def __init__(self, url: str):
         self.url = url
         self.resource_type = "document"
+
+
+def test_cap_text_truncates_oversize_tool_output_with_marker(monkeypatch):
+    from research_core.tools import _cap_text
+    monkeypatch.setenv("RESEARCH_CORE_MAX_TOOL_CHARS", "1000")
+    big = "X" * 5000
+    out = _cap_text(big)
+    assert len(out) < 5000
+    assert "truncated" in out
+    # small inputs pass through unchanged
+    assert _cap_text("short") == "short"
+
+
+def test_web_fetch_caps_huge_response_text(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("RESEARCH_CORE_MAX_TOOL_CHARS", "2000")
+    huge = "<html><body>" + ("A" * 50000) + "</body></html>"
+
+    class _Resp:
+        url = "https://www.arb.ca.gov/big"
+        status_code = 200
+        content = huge.encode()
+        headers = {"content-type": "text/html"}
+
+        @property
+        def is_success(self):
+            return True
+
+        @property
+        def text(self):
+            return huge
+
+    _install_fake_httpx(monkeypatch, _Resp())
+    policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
+    result = web_fetch(policy, "https://www.arb.ca.gov/big")
+    assert result["ok"] is True
+    assert len(result["text"]) < 5000  # capped, not the full 50k
+    assert "truncated" in result["text"]

@@ -23,6 +23,37 @@ REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 MAX_REDIRECT_HOPS = 5
 
 
+def _max_tool_chars() -> int:
+    """Per-tool-output character cap. The agent's full tool-output history accumulates in
+    the model's context every turn, so a single uncapped fetch (a 25k-char rule PDF, a big
+    HTML page) can blow a small-context worker's window. Override with RESEARCH_CORE_MAX_TOOL_CHARS."""
+    import os
+
+    raw = os.environ.get("RESEARCH_CORE_MAX_TOOL_CHARS")
+    if raw:
+        try:
+            return max(1000, int(raw))
+        except ValueError:
+            pass
+    return 16000
+
+
+def _cap_text(text: Any) -> Any:
+    """Truncate an over-long tool output, leaving a marker so the agent knows to fetch a more
+    specific page/section if it needs the rest. Non-str inputs pass through unchanged."""
+    if not isinstance(text, str):
+        return text
+    limit = _max_tool_chars()
+    if len(text) <= limit:
+        return text
+    dropped = len(text) - limit
+    return (
+        text[:limit]
+        + f"\n\n[...truncated {dropped} of {len(text)} characters to fit the model context — "
+        "fetch a more specific URL/section, or read a particular SDS/page, if you need the rest...]"
+    )
+
+
 def _extract_main_text(html: str) -> str:
     """Extract the main readable content from an HTML page: strip nav/chrome, prefer
     <main>/<article>, fall back to the full de-chromed page. Live gov rules/guidance
@@ -489,7 +520,7 @@ def _browser_fallback(
         final_url=snapshot.get("url", url),
         status_code=snapshot.get("status_code"),
         content_type=snapshot.get("content_type", "text/html"),
-        text=snapshot.get("text", ""),
+        text=_cap_text(snapshot.get("text", "")),
         via="browser_fallback",
         redirect_chain=redirect_chain,
     )
@@ -549,7 +580,7 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
                     final_url=final_url,
                     status_code=response.status_code,
                     content_type=content_type or "application/pdf",
-                    text=extracted,
+                    text=_cap_text(extracted),
                     extracted_format="pdf",
                     headers=dict(response.headers),
                     redirect_chain=redirect_chain,
@@ -566,7 +597,7 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
             final_url=final_url,
             status_code=response.status_code,
             content_type=content_type,
-            text=text,
+            text=_cap_text(text),
             headers=dict(response.headers),
             redirect_chain=redirect_chain,
         )
