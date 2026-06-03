@@ -347,6 +347,27 @@ def coverage_status_for(
             ),
         )
 
+    if family == "fire_code":
+        has_equipment = len(scope.project_change.equipment) > 0
+        active = has_chemicals or has_equipment or sds_flagged
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "Hazardous materials or a facility buildout may require fire-department "
+                "permits (hazardous-materials operational permit and/or high-piled storage)."
+                if active
+                else "No hazardous materials or storage/buildout change indicated."
+            ),
+            project_facts_considered=[
+                f"chemicals={has_chemicals}",
+                *equipment_kinds,
+                *(["sds:fire_relevance"] if sds_flagged else []),
+            ],
+            missing_facts=[],
+        )
+
     return CoverageFamilyStatus(
         id=id,
         family=family,
