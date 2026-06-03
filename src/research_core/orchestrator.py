@@ -293,7 +293,8 @@ def resume_research_sync(
 
 def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
     description = str(input_payload.get("project_description") or "").strip()
-    facility_payload = input_payload.get("facility") or {}
+    facility_payload = dict(input_payload.get("facility") or {})
+    _apply_location_answer(facility_payload, input_payload.get("provided_estimates") or {})
     chemicals = _chemicals_from_input(input_payload, description)
     equipment = _equipment_from_description(description)
     waste_streams = _waste_from_input(input_payload, description)
@@ -330,6 +331,42 @@ def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
             "assumptions": _assumptions(input_payload),
         }
     )
+
+
+def _apply_location_answer(facility_payload: dict[str, Any], provided_estimates: dict[str, Any]) -> None:
+    """Fold a jurisdiction/county answer (a reply to the 'what county controls this facility'
+    missing fact) into the facility so the jurisdiction resolver can resolve the controlling
+    air district / CUPA. The answer arrives under a field naming county/jurisdiction/location."""
+    if facility_payload.get("county"):
+        return
+    for field, value in provided_estimates.items():
+        key = str(field).lower()
+        if not any(token in key for token in ("county", "jurisdiction", "location")):
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        parts = [part.strip() for part in text.split(",") if part.strip()]
+        if len(parts) >= 2:
+            facility_payload.setdefault("city", parts[0])
+            county = parts[1]
+        else:
+            county = parts[0]
+        county = re.sub(r"\bcount(?:y|ies)\b\.?", "", county, flags=re.IGNORECASE).strip()
+        if county:
+            facility_payload["county"] = county
+        return
+
+
+def _coerce_quantity(value: Any) -> float | None:
+    """A provided quantity arrives from the UI as free text ('30', '30 gal'). Pull the
+    leading number so the hazmat threshold compare gets a real float, not a string."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    match = re.search(r"\d+(?:\.\d+)?", str(value))
+    return float(match.group()) if match else None
 
 
 def _documents_from_input(input_payload: dict[str, Any]) -> list[ProvidedDocument]:
@@ -555,8 +592,8 @@ def _chemicals_from_input(input_payload: dict[str, Any], description: str) -> li
     if "solvent" not in lower and "chemical" not in lower and "paint" not in lower:
         return []
     provided_estimates = input_payload.get("provided_estimates") or {}
-    quantity = provided_estimates.get("chemicals.quantity")
-    unit = provided_estimates.get("chemicals.unit")
+    quantity = _coerce_quantity(provided_estimates.get("chemicals.quantity"))
+    unit = provided_estimates.get("chemicals.unit") or None
     if quantity is None:
         quantity = _quantity_from_text(description)
     if unit is None:

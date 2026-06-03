@@ -1,14 +1,31 @@
 "use client";
+import { useState } from "react";
 import { useStore } from "@/lib/ui/store";
 import { getInformationRequests, getScenarios } from "@/lib/ui/selectors";
-import { AlertTriangle, GitCompare } from "lucide-react";
+import { AlertTriangle, GitCompare, Play, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export function MissingFactsCard() {
   const run = useStore((s) => s.run);
+  const startRun = useStore((s) => s.startRun);
+  const isRunning = useStore((s) => s.isRunning);
+  const lastInput = useStore((s) => s.lastInput);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const requests = run ? getInformationRequests(run) : [];
   const scenarios = run ? getScenarios(run) : [];
   if (requests.length === 0 && scenarios.length === 0) return null;
+
+  const filled = Object.entries(answers).filter(([, v]) => v.trim().length > 0);
+  function rerunWithFacts() {
+    if (isRunning || filled.length === 0) return;
+    const provided_estimates: Record<string, string> = {};
+    for (const [field, value] of filled) provided_estimates[field] = value.trim();
+    void startRun({
+      project_description: lastInput?.project_description ?? "",
+      demo_documents: lastInput?.demo_documents ?? [],
+      provided_estimates: { ...(lastInput?.provided_estimates ?? {}), ...provided_estimates },
+    });
+  }
   return (
     <motion.div
       className="glass rounded-xl p-3"
@@ -26,13 +43,27 @@ export function MissingFactsCard() {
           <div className="text-[11px] text-slate-400 mt-0.5">{request.why_needed}</div>
           <div className="text-[11px] text-slate-500">Blocks: {request.blocks.join(", ")}</div>
           <input
-            disabled
+            value={answers[request.field] ?? ""}
+            onChange={(e) => setAnswers((prev) => ({ ...prev, [request.field]: e.target.value }))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") rerunWithFacts();
+            }}
             placeholder={request.field}
             title={request.field}
-            className="mt-1.5 w-full px-2 py-1.5 bg-slate-950/60 text-slate-400 border border-slate-700/40 rounded-lg text-xs cursor-not-allowed"
+            disabled={isRunning}
+            className="mt-1.5 w-full px-2 py-1.5 bg-slate-950/60 text-slate-100 border border-slate-700/40 rounded-lg text-xs placeholder:text-slate-500 focus:outline-none focus:border-cyan-600/50 transition-colors disabled:opacity-50"
           />
         </div>
       ))}
+      <button
+        type="button"
+        onClick={rerunWithFacts}
+        disabled={isRunning || filled.length === 0}
+        className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-600/90 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 disabled:cursor-default disabled:opacity-40"
+      >
+        {isRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+        Re-run with {filled.length || ""} fact{filled.length === 1 ? "" : "s"}
+      </button>
       {scenarios.length > 0 && (
         <div className="mt-3 pt-3 border-t border-slate-800/60">
           <div className="flex items-center gap-1.5 mb-2 text-[11px] uppercase font-semibold text-cyan-300/80" style={{ letterSpacing: "0.16em" }}>

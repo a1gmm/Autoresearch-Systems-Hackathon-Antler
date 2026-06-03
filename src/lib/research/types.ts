@@ -280,4 +280,7 @@ export type ResearchRunInput = {
     type: "sds" | "tds" | "permit" | "equipment_spec" | "other" | string;
     text: string;
   }>;
+  // Answers to missing-fact information requests, keyed by the request's `field`
+  // (e.g. "chemicals.quantity", "location:county_unknown"). Folded into the scope on re-run.
+  provided_estimates?: Record<string, string | number>;
 };

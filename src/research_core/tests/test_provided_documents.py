@@ -47,3 +47,44 @@ def test_scope_skips_malformed_document_entries():
     # Garbage strings are dropped; dict entries are kept (name defaults).
     assert len(scope.provided_documents) == 2
     assert scope.provided_documents[0].text == "no name ok"
+
+
+# --- provided_estimates: answering missing facts (county + quantity) -----------
+
+def test_provided_estimates_resolve_county_from_jurisdiction_answer():
+    scope = scope_from_input(
+        {
+            "project_description": "Inkjet printing operation using solvent",
+            "provided_estimates": {"location:county_unknown": "Oxnard, Ventura County"},
+        },
+        "run_loc",
+    )
+    assert scope.facility.county == "Ventura"
+    assert scope.facility.city == "Oxnard"
+
+
+def test_provided_estimates_set_chemical_quantity_and_clear_missing_fact():
+    scope = scope_from_input(
+        {
+            "project_description": "A shop stores solvent of unknown quantity",
+            "provided_estimates": {"chemicals.quantity": "30 gal", "chemicals.unit": "gal"},
+        },
+        "run_qty",
+    )
+    assert scope.project_change.chemicals
+    assert scope.project_change.chemicals[0].quantity == 30.0
+    assert scope.project_change.chemicals[0].unit == "gal"
+    # The quantity-blocking missing fact is now satisfied.
+    assert not any(f.field == "chemicals.quantity" for f in scope.missing_facts)
+
+
+def test_explicit_facility_county_is_not_overwritten_by_answer():
+    scope = scope_from_input(
+        {
+            "project_description": "x",
+            "facility": {"county": "Los Angeles"},
+            "provided_estimates": {"location:county_unknown": "Ventura"},
+        },
+        "run_keep",
+    )
+    assert scope.facility.county == "Los Angeles"
