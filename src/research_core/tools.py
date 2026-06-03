@@ -289,6 +289,54 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
         return _exception_error("fetch_failed", exc, url=url)
 
 
+def _openai_web_search(query: str, *, limit: int = 5) -> dict[str, Any]:
+    """Real open web discovery via the OpenAI Responses API web_search tool. Returns
+    broad results (title/url/snippet) with no host restriction — the agent chooses the
+    authoritative source and the verifier gates it. Fails closed to 'unavailable' when
+    openai or the API key are absent."""
+    import os
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return _error("unavailable", "search_dependency_missing", "openai is not installed.", query=query)
+    if not os.environ.get("OPENAI_API_KEY"):
+        return _error("unavailable", "search_provider_unavailable", "No OPENAI_API_KEY configured for web search.", query=query)
+
+    model = os.environ.get("RESEARCH_CORE_AGENT_MODEL") or "gpt-5.5"
+    instruction = (
+        "Find official primary sources that answer this California EHS permit question. "
+        "Prefer government/authority sites. Question: " + query
+    )
+    resp = None
+    for tool_type in ("web_search", "web_search_preview"):
+        try:
+            resp = OpenAI().responses.create(model=model, tools=[{"type": tool_type}], input=instruction)
+            break
+        except Exception:  # noqa: BLE001 — try the other tool name, else report unavailable
+            resp = None
+    if resp is None:
+        return _error("unavailable", "search_failed", "Web search call failed.", query=query)
+
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in (getattr(resp, "output", None) or []):
+        for content in (getattr(item, "content", None) or []):
+            for ann in (getattr(content, "annotations", None) or []):
+                url = getattr(ann, "url", None)
+                if not url or url in seen or not host_fetchable(url):
+                    continue
+                seen.add(url)
+                results.append({
+                    "url": url,
+                    "title": getattr(ann, "title", "") or "",
+                    "authority_rank": source_authority_rank(url),
+                })
+                if len(results) >= max(1, limit):
+                    break
+    return _success("searched", query=query, results=results)
+
+
 def web_search(policy: SandboxPolicy, query: str, *, limit: int = 5) -> dict[str, Any]:
     if not isinstance(query, str):
         return _invalid_argument("query", "a string", query)
@@ -299,13 +347,11 @@ def web_search(policy: SandboxPolicy, query: str, *, limit: int = 5) -> dict[str
     if not query.strip():
         return _error("error", "empty_query", "Search query must not be empty.", query=query)
     if policy.search_endpoint is None:
-        return _error(
-            "unavailable",
-            "search_provider_unavailable",
-            "No sandbox web search provider is configured.",
-            query=query,
-            limit=limit,
-        )
+        # No configured proxy -> do REAL open web discovery via the OpenAI Responses
+        # API web_search tool (uses the model's own search; the agent then fetches the
+        # best official result and the verifier gates authority). Returns "unavailable"
+        # if openai/key are absent (e.g. offline tests).
+        return _openai_web_search(query, limit=limit)
     if not isinstance(policy.search_endpoint, str):
         return _invalid_argument("search_endpoint", "a string", policy.search_endpoint)
     if not host_allowed(policy.search_endpoint, policy.allowed_hosts):

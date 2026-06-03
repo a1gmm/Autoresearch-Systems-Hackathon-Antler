@@ -68,3 +68,12 @@ def test_research_tasks_use_researcher_tool_boundaries():
     assert "analyze_voc_content" in task.allowed_tools
     assert "get_form" in task.blocked_tools
     assert "propose_map_entry" in task.blocked_tools
+
+
+def test_research_budget_is_production_grade():
+    plan = plan_research(scope_with_equipment_and_solvent())
+    task = plan.research_tasks[0]
+    # Production, not demo: up to 60 min of durable research per hypothesis.
+    assert task.budget.max_runtime_seconds == 3600
+    assert task.budget.max_model_calls >= 12
+    assert task.budget.max_sources >= 5

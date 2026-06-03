@@ -200,14 +200,15 @@ def test_document_readers_reject_invalid_path_type(tmp_path: Path):
     assert result["error"]["code"] == "invalid_argument"
 
 
-def test_browser_use_rejects_disallowed_hosts(tmp_path: Path):
+def test_browser_use_blocks_ssrf_targets(tmp_path: Path):
+    # Open content gate (any public page), but SSRF targets are still blocked.
     policy = SandboxPolicy(run_id="run_1", artifact_root=tmp_path)
 
-    result = browser_use(policy, "https://evil.example")
+    result = browser_use(policy, "http://169.254.169.254/latest/meta-data")
 
     assert result["ok"] is False
     assert result["status"] == "blocked"
-    assert result["error"]["code"] == "host_not_allowed"
+    assert result["error"]["code"] == "host_not_fetchable"
 
 
 def test_browser_use_installs_context_route_before_page_and_blocks_popup_request(tmp_path: Path, monkeypatch):
@@ -245,8 +246,8 @@ def test_browser_use_installs_context_route_before_page_and_blocks_popup_request
             assert route_indices and page_indices and route_indices[0] < page_indices[0]
             self.context_handler(FakeRoute(url), FakeRequest(url))
             self.context_handler(
-                FakeRoute("https://evil.example/popup"),
-                FakeRequest("https://evil.example/popup"),
+                FakeRoute("http://169.254.169.254/popup"),
+                FakeRequest("http://169.254.169.254/popup"),
             )
             return type("Response", (), {"status": 200})()
 
@@ -309,9 +310,9 @@ def test_browser_use_installs_context_route_before_page_and_blocks_popup_request
 
     assert result["ok"] is False
     assert result["status"] == "blocked"
-    assert result["error"]["code"] == "resource_host_not_allowed"
+    assert result["error"]["code"] == "resource_blocked"
     assert ("new_context", "block") in actions
-    assert ("abort", "https://evil.example/popup") in actions
+    assert ("abort", "http://169.254.169.254/popup") in actions
     assert ("context_close", None) in actions
     assert ("browser_close", None) in actions
 
@@ -496,3 +497,37 @@ def test_source_authority_rank_tiers():
     assert source_authority_rank("https://www.aqmd.gov/x") == 1        # curated allowlist
     assert source_authority_rank("https://www.sandiegocounty.gov/x") == 2  # other gov
     assert source_authority_rank("https://example.com/x") == 3         # other -> fails verifier
+
+
+def test_openai_web_search_filters_and_ranks_results(monkeypatch):
+    from types import ModuleType, SimpleNamespace
+    from research_core.tools import web_search
+
+    # Fake OpenAI Responses API returning url-citation annotations (one public gov,
+    # one SSRF target that must be dropped).
+    ann_ok = SimpleNamespace(url="https://www.aqmd.gov/rule-201.pdf", title="Rule 201")
+    ann_bad = SimpleNamespace(url="http://169.254.169.254/meta", title="metadata")
+    content = SimpleNamespace(annotations=[ann_ok, ann_bad])
+    item = SimpleNamespace(content=[content])
+    resp = SimpleNamespace(output=[item])
+
+    class FakeResponses:
+        def create(self, **kwargs):
+            return resp
+
+    class FakeOpenAI:
+        def __init__(self, *a, **k):
+            self.responses = FakeResponses()
+
+    fake = ModuleType("openai")
+    fake.OpenAI = FakeOpenAI
+    monkeypatch.setitem(sys.modules, "openai", fake)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    policy = SandboxPolicy(run_id="run_1", artifact_root=Path("/tmp"))  # no search_endpoint -> real path
+    result = web_search(policy, "SCAQMD permit to construct spray booth")
+    assert result["ok"] is True
+    urls = [r["url"] for r in result["results"]]
+    assert "https://www.aqmd.gov/rule-201.pdf" in urls
+    assert "http://169.254.169.254/meta" not in urls  # SSRF dropped
+    assert result["results"][0]["authority_rank"] == 1  # curated authority

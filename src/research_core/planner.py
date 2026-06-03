@@ -404,12 +404,14 @@ def task_for_hypothesis(
         allowed_tools=research_worker_tool_ids(),
         blocked_tools=blocked_tool_ids_for_role("researcher"),
         budget=ResearchTaskBudget(
-            # Headroom for the real flow: read_skill -> web_search -> web_fetch/browser
-            # -> read + corroborate -> submit_finding, with room to recover from a bad
-            # fetch. 4 turns was too tight (couldn't even reach submit after orienting).
-            max_sources=5,
-            max_runtime_seconds=120,
-            max_model_calls=10,
+            # Long, durable research on hard problems: read_skill -> search -> fetch +
+            # read across MULTIPLE official sources -> corroborate -> write artifacts ->
+            # submit. Generous budget so the subagent can be thorough; the verifier (not
+            # a turn cap) is the gate on result quality.
+            # Production, not demo: allow up to 60 min of durable research per hypothesis.
+            max_sources=8,
+            max_runtime_seconds=3600,
+            max_model_calls=16,
         ),
         jurisdiction_context=jurisdiction_context,
     )

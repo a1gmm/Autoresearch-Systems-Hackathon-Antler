@@ -101,12 +101,14 @@ def _build_modal_app() -> Any | None:
 def _register_modal_functions(modal_app_instance: Any, modal: Any) -> None:
     endpoint = _endpoint_decorator(modal)
     function_options = _modal_function_options(modal)
+    # research_run runs every hypothesis sequentially -> needs a larger ceiling.
+    research_run_options = {**function_options, "timeout": MODAL_RESEARCH_RUN_TIMEOUT_SECONDS}
 
     def _background(function):
         function._permitpilot_background = True
         return function
 
-    @modal_app_instance.function(**function_options)
+    @modal_app_instance.function(**research_run_options)
     @_background
     def research_run(
         run_or_payload: str | dict[str, Any],
@@ -161,8 +163,17 @@ def _deps_from_env() -> ResearchDeps:
     return ResearchDeps(mode="live")
 
 
+# Production, not demo: each hypothesis gets up to ~60 min of durable research (the
+# per-hypothesis agent budget is 3600s). Modal's default function timeout is 300s,
+# which would cut real research off. Endpoints get 60 min; the background research_run
+# runs every hypothesis SEQUENTIALLY, so it gets a generous ceiling (6h) so a real
+# multi-hypothesis run is never truncated.
+MODAL_FUNCTION_TIMEOUT_SECONDS = 3600
+MODAL_RESEARCH_RUN_TIMEOUT_SECONDS = 21600
+
+
 def _modal_function_options(modal: Any) -> dict[str, Any]:
-    options: dict[str, Any] = {}
+    options: dict[str, Any] = {"timeout": MODAL_FUNCTION_TIMEOUT_SECONDS}
     image = _modal_image(modal)
     if image is not None:
         options["image"] = image

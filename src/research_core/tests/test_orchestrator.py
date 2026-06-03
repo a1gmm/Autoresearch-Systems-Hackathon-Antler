@@ -544,3 +544,12 @@ def test_agent_model_defaults_to_gpt55(monkeypatch):
     assert _agent_model_from_env() == "gpt-5.5"
     monkeypatch.setenv("RESEARCH_CORE_AGENT_MODEL", "o4-mini")
     assert _agent_model_from_env() == "o4-mini"
+
+
+def test_modal_research_timeouts_are_production_grade():
+    from research_core.modal_app import (
+        MODAL_FUNCTION_TIMEOUT_SECONDS,
+        MODAL_RESEARCH_RUN_TIMEOUT_SECONDS,
+    )
+    assert MODAL_FUNCTION_TIMEOUT_SECONDS == 3600  # 60 min per endpoint
+    assert MODAL_RESEARCH_RUN_TIMEOUT_SECONDS >= 3600  # background aggregator: larger ceiling

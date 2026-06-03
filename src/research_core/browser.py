@@ -8,7 +8,7 @@ from research_core.tools import (
     _exception_error,
     _invalid_argument,
     _success,
-    host_allowed,
+    host_fetchable,
 )
 
 
@@ -17,8 +17,8 @@ def browser_use(policy: SandboxPolicy, url: str, *, wait_until: str = "domconten
         return _invalid_argument("url", "a string", url)
     if not policy.allow_browser:
         return _error("blocked", "browser_disabled", "Browser access is disabled by sandbox policy.", url=url)
-    if not host_allowed(url, policy.allowed_hosts):
-        return _error("blocked", "host_not_allowed", "URL host is not allowed by sandbox policy.", url=url)
+    if not host_fetchable(url):
+        return _error("blocked", "host_not_fetchable", "URL is not a fetchable public host (SSRF guard).", url=url)
 
     try:
         from playwright.sync_api import sync_playwright
@@ -34,7 +34,7 @@ def browser_use(policy: SandboxPolicy, url: str, *, wait_until: str = "domconten
 
                 def guard_route(route: Any, request: Any) -> None:
                     request_url = getattr(request, "url", "")
-                    if host_allowed(request_url, policy.allowed_hosts):
+                    if host_fetchable(request_url):
                         route.continue_()
                         return
                     blocked_requests.append(
@@ -54,7 +54,7 @@ def browser_use(policy: SandboxPolicy, url: str, *, wait_until: str = "domconten
                     if blocked_requests:
                         return _error(
                             "blocked",
-                            "resource_host_not_allowed",
+                            "resource_blocked",
                             "Browser blocked a request outside sandbox policy.",
                             url=url,
                             blocked_url=blocked_requests[0]["url"],
@@ -64,17 +64,17 @@ def browser_use(policy: SandboxPolicy, url: str, *, wait_until: str = "domconten
                 if blocked_requests:
                     return _error(
                         "blocked",
-                        "resource_host_not_allowed",
+                        "resource_blocked",
                         "Browser blocked a request outside sandbox policy.",
                         url=url,
                         blocked_url=blocked_requests[0]["url"],
                         blocked_requests=blocked_requests,
                     )
                 final_url = page.url
-                if not host_allowed(final_url, policy.allowed_hosts):
+                if not host_fetchable(final_url):
                     return _error(
                         "blocked",
-                        "redirect_host_not_allowed",
+                        "redirect_blocked",
                         "Browser navigation reached a host outside sandbox policy.",
                         url=url,
                         final_url=final_url,
