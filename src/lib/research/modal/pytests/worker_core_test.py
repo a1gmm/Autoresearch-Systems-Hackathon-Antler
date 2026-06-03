@@ -73,7 +73,7 @@ def test_assemble_evidence_ungrounded_fails_closed():
 
 RESEARCHER_ALLOWED = [
     "read_skill", "get_triggers", "get_source_pointers", "get_cached_source", "fetch_source",
-    "prove_currency", "extract_threshold", "evaluate_predicate", "quarantine_injection",
+    "web_search", "prove_currency", "extract_threshold", "evaluate_predicate", "quarantine_injection",
 ]
 RESEARCHER_BLOCKED = [
     "get_form", "build_applicability_matrix", "generate_compliance_calendar",
@@ -128,6 +128,34 @@ def test_agent_injects_jurisdiction_context_into_prompt():
     user_msg = next(m for m in seen["messages"] if m["role"] == "user")
     assert "South Coast AQMD" in user_msg["content"]
     assert "water_geometry:Los Angeles" in user_msg["content"]
+
+
+def test_agent_researches_without_a_pointer_via_web_search():
+    # A hypothesis with NO curated SOURCE_POINTERS entry must still be researchable:
+    # the agent discovers the official source via web_search, fetches it, and grounds.
+    assert "H-DISCOVER-1" not in SOURCE_POINTERS
+    discovered = "https://www.aqmd.gov/discovered-rule.pdf"
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "web_search", {"query": "SCAQMD spray booth permit requirement"})]},
+        {"tool_calls": [_tc("c2", "fetch_source", {"url": discovered})]},
+        {"tool_calls": [_tc("c3", "extract_threshold", {
+            "field": "permit_required", "threshold_value": 1,
+            "verbatim_quote": "a permit to construct is required", "applies": "applies", "confidence": 0.9})]},
+    )
+    search_calls = []
+    def search_fn(query):
+        search_calls.append(query)
+        return [{"title": "SCAQMD Rule 201", "url": discovered, "snippet": "permit to construct"}]
+    fetch_fn = lambda url: ("sha256:x", "Under Rule 201, a permit to construct is required before installation.")
+
+    spec = dict(_spec())
+    spec["hypothesis_id"] = "H-DISCOVER-1"
+    spec["question"] = "Does the spray booth require a permit to construct?"
+    bundle = run_research_agent(spec, llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t", search_fn=search_fn)
+
+    assert search_calls, "web_search was never invoked"
+    assert bundle["researcher_conclusion"] == "applies"
+    assert bundle["sources"][0]["url"] == discovered  # cites the DISCOVERED source, not a pre-mapped one
 
 
 def test_agent_happy_path_fetch_then_submit():

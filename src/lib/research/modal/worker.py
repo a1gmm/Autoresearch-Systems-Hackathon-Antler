@@ -32,6 +32,7 @@ from worker_core import (
     SOURCE_POINTERS,
     evidence_row,
     failed_bundle,
+    host_allowed,
     run_research_agent,
 )
 
@@ -199,15 +200,52 @@ def _extract_fn(text: str, question: str, hint: dict) -> dict:
     return json.loads(calls[0].function.arguments or "{}")
 
 
+def _web_search_fn(query: str) -> list[dict]:
+    """Real web discovery via the OpenAI Responses API web_search tool, filtered to
+    allowlisted authority hosts. Returns [{title,url,snippet}]; never throws."""
+    if not query.strip():
+        return []
+    from openai import OpenAI
+
+    client = OpenAI()
+    instruction = (
+        "Find the official primary-source page(s) that govern this California EHS question. "
+        "Prefer authority sites: aqmd.gov, waterboards.ca.gov, leginfo.legislature.ca.gov, "
+        "epa.gov, dtsc.ca.gov, oehha.ca.gov, arb.ca.gov, calepa.ca.gov, cdph.ca.gov, "
+        "osfm.fire.ca.gov. Question: " + query
+    )
+    resp = None
+    for tool_type in ("web_search", "web_search_preview"):
+        try:
+            resp = client.responses.create(model="gpt-4o-mini", tools=[{"type": tool_type}], input=instruction)
+            break
+        except Exception:  # noqa: BLE001 — try the other tool name, else give up
+            resp = None
+    if resp is None:
+        return []
+
+    results: list[dict] = []
+    seen: set[str] = set()
+    for item in (getattr(resp, "output", None) or []):
+        for content in (getattr(item, "content", None) or []):
+            for ann in (getattr(content, "annotations", None) or []):
+                url = getattr(ann, "url", None)
+                title = getattr(ann, "title", "") or ""
+                if url and url not in seen and host_allowed(url):
+                    seen.add(url)
+                    results.append({"title": title, "url": url, "snippet": ""})
+    return results
+
+
 def _run(task_spec: dict) -> dict:
+    # No pointer gate: a hypothesis without a curated SOURCE_POINTERS seed is still
+    # researchable — the agent discovers the official source via web_search.
     hid = task_spec.get("hypothesis_id", "")
-    if SOURCE_POINTERS.get(hid) is None:
-        return failed_bundle(hid, f"No source pointer for {hid}")
     now_iso = datetime.now(timezone.utc).isoformat()
     try:
         return run_research_agent(task_spec, llm_fn=_llm_fn, fetch_fn=_fetch_fn,
                                   extract_fn=_extract_fn, now_iso=now_iso,
-                                  read_skill_fn=_read_skill_fn)
+                                  read_skill_fn=_read_skill_fn, search_fn=_web_search_fn)
     except Exception as exc:  # noqa: BLE001 — never throw out of the worker
         return failed_bundle(hid, f"Agent failed: {exc}")
 

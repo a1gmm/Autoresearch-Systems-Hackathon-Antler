@@ -44,6 +44,23 @@ TOOL_SCHEMAS: dict[str, dict] = {
             "parameters": {"type": "object", "properties": {"url": {"type": "string"}}},
         },
     },
+    "web_search": {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web for the official primary source that governs this hypothesis. "
+                "Returns only results on allowlisted California/federal authority sites (title, url, "
+                "snippet). Use this to DISCOVER the source to fetch_source when you have no curated "
+                "seed, or to corroborate across authorities."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        },
+    },
     "prove_currency": {
         "type": "function",
         "function": {

@@ -198,9 +198,11 @@ export function taskForHypothesis(hypothesis: ResearchHypothesis, jurisdiction_c
     allowed_tools: researchWorkerToolIds(),
     blocked_tools: blockedToolIdsForRole("researcher"),
     budget: {
-      max_sources: 3,
-      max_runtime_seconds: 30,
-      max_model_calls: 4
+      // Headroom for genuine investigation: discover via web_search, fetch + corroborate
+      // across multiple authorities, and ground — not just fetch-one-known-url.
+      max_sources: 5,
+      max_runtime_seconds: 90,
+      max_model_calls: 8
     },
     ...(jurisdiction_context ? { jurisdiction_context } : {})
   };

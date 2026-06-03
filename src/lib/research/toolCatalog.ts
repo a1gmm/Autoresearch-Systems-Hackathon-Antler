@@ -128,6 +128,14 @@ export const harnessToolCatalog = [
     safetyCritical: true
   },
   {
+    id: "web_search",
+    category: "retrieval_currency",
+    description: "Discover the official primary source on an allowlisted authority site (returns title/url/snippet). Used when no curated source seed exists or to corroborate.",
+    writes: "fetched_sources",
+    scopedTo: ["researcher"],
+    safetyCritical: true
+  },
+  {
     id: "prove_currency",
     category: "retrieval_currency",
     description: "Determine current, stale, or unconfirmed status from fetched text, headers, and known date fields.",
@@ -398,6 +406,7 @@ export const researcherCoreToolIds = [
   "get_source_pointers",
   "get_cached_source",
   "fetch_source",
+  "web_search",
   "prove_currency",
   "extract_threshold",
   "evaluate_predicate",
