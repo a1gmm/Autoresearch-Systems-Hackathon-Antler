@@ -64,3 +64,11 @@ name: City of Los Angeles
 - Industrial zones: M1 (Limited Industrial), M2 (Light Industrial), M3 (Heavy Industrial)
 - CUP through LADCP: https://www.planning.lacity.org
 - Planning counter: (213) 482-7077
+
+## Fetched Reference Files
+
+Detailed permit reference files fetched 2026-06-03 and written to this directory:
+
+- [lasan-industrial-waste-permit.md](./lasan-industrial-waste-permit.md) — LASAN IWMD Industrial Wastewater Permit (IWP): who must apply, SIU/LIU classification, application steps, regulated parameters (BOD/TSS/metals/pH), fee structure (application $616, quality surcharge, volume charge), monitoring and reporting obligations, annual renewal. Authority: LAMC § 64.30. Contact: IWMD (323) 342-6200.
+
+- [lafd-hazmat-permits.md](./lafd-hazmat-permits.md) — LAFD hazmat operational permits: two-track system (Annual Consolidated CUPA Permit via CERS/HMBP + Operational Fire Permit via Office of Finance), CUPA Project Permits (UST work, fuel transfer), full FY 2025/2026 Unified Program fee schedule (HMBP tiers $489–$2,095, UST annual $1,257/tank, APSA $1,497, CalARP $1,947 admin fee, hazardous waste generator tiers $693–$4,906). Contact: LAFD CUPA lafdcupa@lacity.org, (213) 978-3680.
