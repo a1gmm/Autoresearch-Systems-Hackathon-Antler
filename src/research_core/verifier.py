@@ -6,6 +6,16 @@ from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from research_core.confidence import (
+    authority_score,
+    confidence_from_checks,
+    corroboration_score,
+    currency_score,
+    grounding_score,
+    predicate_score,
+    score_confidence,
+)
+
 
 CONFIDENCE_GATE = 0.9
 FailureType = Literal[
@@ -17,18 +27,6 @@ FailureType = Literal[
     "low_confidence",
 ]
 
-FAIL_CAP: dict[str, float] = {
-    "currency": 0.3,
-    "grounding": 0.35,
-    "authority": 0.5,
-    "predicate_math": 0.55,
-    "cross_source": 0.7,
-}
-DEFAULT_FAIL_CAP = 0.6
-BASE_ALL_PASS = 0.9
-PER_EXTRA_FAIL_PENALTY = 0.05
-MIN_CONFIDENCE = 0.05
-MAX_CONFIDENCE = 0.97
 
 
 class VerificationCheck(BaseModel):
@@ -62,6 +60,7 @@ class VerificationVerdict(BaseModel):
     confidence: float = Field(ge=0, le=1)
     repair_tickets: list[RepairTicket]
     distrust_reasons: list[str] = Field(default_factory=list)
+    confidence_breakdown: dict[str, Any] | None = None
 
 
 def quote_grounded(quote: str | None, source: str | None) -> bool:
@@ -127,20 +126,9 @@ def compute_confidence(
     checks: Mapping[str, VerificationCheck | Mapping[str, Any]],
     consistency: ConsistencySignal | Mapping[str, Any] | None = None,
 ) -> float:
-    failed = [(name, check) for name, check in checks.items() if not _check_passed(check)]
-
-    confidence = BASE_ALL_PASS
-    for name, _check in failed:
-        confidence = min(confidence, FAIL_CAP.get(name, DEFAULT_FAIL_CAP))
-    if len(failed) > 1:
-        confidence -= PER_EXTRA_FAIL_PENALTY * (len(failed) - 1)
-
-    signal = _consistency_signal(consistency)
-    if signal and signal.samples > 0:
-        stability = _clamp(signal.stable_samples / signal.samples, 0, 1)
-        confidence *= 0.6 + 0.4 * stability
-
-    return _round2(_clamp(confidence, MIN_CONFIDENCE, MAX_CONFIDENCE))
+    """Legacy boolean-check entry point. Delegates to the numerical confidence model
+    (continuous dimension scores -> weighted geometric mean); see research_core.confidence."""
+    return confidence_from_checks(checks, consistency)["score"]
 
 
 def make_repair_ticket(
@@ -226,7 +214,21 @@ def verify_evidence(
         ),
         "predicate_math": predicate_check(conclusion),
     }
-    confidence = compute_confidence(checks, consistency)
+    # Compute confidence as an actual number from continuous evidence signals (graded
+    # grounding/authority/currency/corroboration/quantification), not boolean check caps.
+    authoritative_sources = sum(
+        1 for candidate in sources if (_coerce_rank(_get(candidate, "authority_rank")) or 99) <= 2
+    )
+    dated = bool(_first_date(_get(source, "effective_date")) or _first_date(_get(source, "fetched_at")))
+    breakdown = score_confidence(
+        grounding=grounding_score(claim_quote, source_quote),
+        authority=authority_score(_get(source, "authority_rank")),
+        corroboration=corroboration_score(authoritative_sources),
+        currency=currency_score(_currency_status(source), dated=dated),
+        predicate=predicate_score(conclusion, quantified=_is_quantified(bundle, claim)),
+        consistency=consistency,
+    )
+    confidence = breakdown["score"]
     distrust_reasons = _distrust_reasons(checks)
 
     if not grounded:
@@ -237,6 +239,7 @@ def verify_evidence(
             confidence=confidence,
             repair_tickets=_repair_tickets_for_failed_checks(hypothesis_id, checks),
             distrust_reasons=distrust_reasons,
+            confidence_breakdown=breakdown,
         )
 
     all_checks_pass = all(check.pass_ for check in checks.values())
@@ -248,6 +251,7 @@ def verify_evidence(
             confidence=confidence,
             repair_tickets=[],
             distrust_reasons=[],
+            confidence_breakdown=breakdown,
         )
 
     tickets = _repair_tickets_for_failed_checks(hypothesis_id, checks)
@@ -280,7 +284,17 @@ def verify_evidence(
             "Verifier does not trust the work because confidence is below the "
             f"{CONFIDENCE_GATE:.2f} gate."
         ],
+        confidence_breakdown=breakdown,
     )
+
+
+def _is_quantified(bundle: Any, claim: Any) -> bool:
+    """True when the finding rests on an actual computed/quoted number (a threshold value
+    or numeric metric), which earns higher predicate credit than a purely qualitative call."""
+    if _get(bundle, "quantified") or _get(bundle, "computed_threshold"):
+        return True
+    value = str(_get(claim, "value") or "")
+    return any(ch.isdigit() for ch in value)
 
 
 def needs_review_verdict(
