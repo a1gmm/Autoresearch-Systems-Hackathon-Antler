@@ -84,8 +84,18 @@ ALLOWED_HOSTS = {
 
 
 def host_allowed(url: str) -> bool:
+    """Tier 1: a curated allowlist authority (highest trust)."""
     host = (urlparse(url).hostname or "").lower()
     return host in ALLOWED_HOSTS
+
+
+def host_credible(url: str) -> bool:
+    """Tier 2: fetchable fallback when the curated allowlist yields nothing —
+    any US government domain (.gov, incl. *.ca.gov / county / city .gov). NOT the open
+    web: non-government hosts stay out. Allowlist-first; this only broadens to other
+    official sources so a discoverable rule is never unreachable."""
+    host = (urlparse(url).hostname or "").lower()
+    return host in ALLOWED_HOSTS or host.endswith(".gov")
 
 
 def evidence_row(run_id: str, bundle: dict) -> dict:
@@ -180,12 +190,17 @@ def exposed_tool_schemas(allowed_tools: list[str]) -> list[dict]:
 
 
 def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso: str,
-                       source_pointers: dict | None = None, read_skill_fn=None) -> dict:
+                       source_pointers: dict | None = None, read_skill_fn=None, search_fn=None) -> dict:
     """Catalog-governed agentic researcher.
 
     llm_fn(messages, tools) -> {"content": str|None, "tool_calls": [{"id","name","arguments"}]} | {"tool_calls": []}
     fetch_fn(url) -> (content_hash, text)
     extract_fn(text, question, hint) -> extract dict   (used only by the deterministic fallback)
+    search_fn(query) -> [{"title","url","snippet"}]     (allowlist-filtered web discovery)
+
+    SOURCE_POINTERS is now an OPTIONAL seed: a hypothesis without a curated pointer is
+    still researchable — the agent discovers the official primary source via web_search.
+    There is no pointer gate.
     """
     pointers = source_pointers if source_pointers is not None else SOURCE_POINTERS
     hid = task_spec.get("hypothesis_id", "")
@@ -196,10 +211,15 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
     budget = task_spec.get("budget", {}) or {}
     max_calls = _int_or(budget.get("max_model_calls"), 4)
     max_sources = _int_or(budget.get("max_sources"), 3)
+    # Cap discovery searches separately so the agent can't burn its whole turn budget
+    # searching and never get to fetch + read + ground.
+    max_searches = _int_or(budget.get("max_searches"), 3)
+    searches_used = 0
 
+    # Optional curated seed; may be None (then the agent must discover via web_search).
     pointer = pointers.get(hid)
-    if pointer is None:
-        return failed_bundle(hid, f"No source pointer for {hid}")
+    # The source actually fetched and grounded against — pointer when used, else discovered.
+    last_source: dict | None = None
 
     tools = exposed_tool_schemas(list(allowed))
     user_content = f"Hypothesis {hid}. Question: {question}"
@@ -221,6 +241,19 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
     sources_used = 0
 
     for _ in range(max_calls):
+        # Offer tools dynamically. Two rules keep the agent on-task:
+        #  - A curated seed IS the authoritative source: when this hypothesis has a
+        #    pointer, do NOT offer web_search at all — the agent must fetch + extract
+        #    from the seed, not wander the web (which regressed mapped hypotheses).
+        #    Discovery is strictly the fallback for hypotheses with NO seed.
+        #  - Hard-enforce the search cap and source cap by removing the exhausted tool
+        #    (a soft error wasn't enough; reasoning models ignore it and burn the budget).
+        available = list(allowed)
+        if "web_search" in available and (pointer is not None or searches_used >= max_searches):
+            available.remove("web_search")
+        if "fetch_source" in available and sources_used >= max_sources:
+            available.remove("fetch_source")
+        tools = exposed_tool_schemas(available)
         resp = llm_fn(messages, tools)
         calls = resp.get("tool_calls") or []
         # Record the assistant turn before any tool results (OpenAI ordering rule).
@@ -239,6 +272,11 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
                 continue
 
             if name == "extract_threshold":
+                # Cite whatever source was actually fetched and grounded against: the
+                # discovered source if the agent searched, else the curated seed.
+                source = last_source or pointer
+                if source is None:
+                    return failed_bundle(hid, "No source was fetched; cannot ground a claim.")
                 extract = dict(args)
                 quote = (extract.get("verbatim_quote") or "").strip()
                 grounded = bool(quote) and _norm_ws(quote) in _norm_ws(fetched_text)
@@ -246,37 +284,93 @@ def run_research_agent(task_spec: dict, *, llm_fn, fetch_fn, extract_fn, now_iso
                     extract["verbatim_quote"] = ""
                     extract["applies"] = "needs_review"
                 extract.setdefault("field", EXTRACTION_HINTS.get(hid, {}).get("field", "source_claim"))
-                return assemble_evidence(hid, pointer, content_hash, now_iso, extract)
+                return assemble_evidence(hid, source, content_hash, now_iso, extract)
 
-            if name == "get_source_pointers":
-                payload = {"url": pointer["url"], "source_name": pointer["source_name"],
-                           "authority_rank": pointer["authority_rank"]}
+            if name == "web_search":
+                query = (args.get("query") or "").strip()
+                if searches_used >= max_searches:
+                    payload = {"error": "max_searches reached — stop searching and fetch_source the most authoritative result you already found"}
+                elif not query:
+                    payload = {"error": "web_search requires a non-empty query"}
+                elif search_fn is None:
+                    payload = {"error": "web search is unavailable"}
+                else:
+                    try:
+                        results = search_fn(query) or []
+                    except Exception as exc:  # noqa: BLE001 — never throw out of the loop
+                        results = []
+                        payload = {"error": f"web_search failed: {exc}"}
+                    else:
+                        searches_used += 1
+                        # search_fn returns allowlisted results first, then other official
+                        # .gov; surface them so the agent can fetch_source the best one.
+                        payload = {"results": results, "searches_left": max_searches - searches_used} if results else {
+                            "results": [],
+                            "note": "No official source matched; refine the query (rule number, program, authority).",
+                            "searches_left": max_searches - searches_used,
+                        }
+            elif name == "get_source_pointers":
+                # A curated seed if one exists; otherwise instruct discovery (no gate).
+                payload = ({"url": pointer["url"], "source_name": pointer["source_name"],
+                            "authority_rank": pointer["authority_rank"]} if pointer else
+                           {"seed": None,
+                            "note": "No curated source seed for this hypothesis. Use web_search to "
+                                    "find the official primary source on an allowlisted authority, then fetch_source it."})
             elif name == "get_triggers":
                 payload = EXTRACTION_HINTS.get(hid, {})
             elif name == "read_skill":
-                requested = (args.get("skill_id") or "").strip() or SKILL_FOR_HYPOTHESIS.get(hid, "")
-                if not requested:
+                # The agent's skill_id is a HINT. Models routinely guess non-existent ids
+                # (e.g. "SCAQMD.Rule201"), so if the hint misses, fall back to the
+                # hypothesis's canonical mapped skill — otherwise curated guidance is
+                # never actually loaded and the skill library goes unused.
+                requested = (args.get("skill_id") or "").strip()
+                mapped = SKILL_FOR_HYPOTHESIS.get(hid, "")
+                candidates = [c for c in (requested, mapped) if c]
+                if not candidates:
                     payload = {"error": f"no skill mapped for {hid}"}
                 elif read_skill_fn is None:
                     payload = {"error": "skill library unavailable"}
                 else:
-                    try:
-                        content = read_skill_fn(requested)
-                    except Exception:  # noqa: BLE001 — never throw out of the loop
-                        content = ""
-                    payload = ({"skill_id": requested, "content": content} if content
-                               else {"error": f"skill '{requested}' not found"})
+                    loaded, content = "", ""
+                    for cand in candidates:
+                        try:
+                            content = read_skill_fn(cand)
+                        except Exception:  # noqa: BLE001 — never throw out of the loop
+                            content = ""
+                        if content:
+                            loaded = cand
+                            break
+                    payload = ({"skill_id": loaded, "content": content} if content
+                               else {"error": f"no skill found for {hid} (tried {candidates})"})
             elif name == "fetch_source":
                 if sources_used >= max_sources:
                     payload = {"error": "max_sources budget exceeded"}
                 else:
-                    url = (args.get("url") or "").strip() or pointer["url"]
-                    if not host_allowed(url):
-                        payload = {"error": f"host not allowlisted: {url}"}
+                    # Default to the curated seed url only when one exists; otherwise the
+                    # agent must supply a url it discovered via web_search.
+                    url = (args.get("url") or "").strip() or (pointer["url"] if pointer else "")
+                    if not url:
+                        payload = {"error": "no url to fetch; use web_search to find an official source first"}
+                    elif not host_credible(url):
+                        payload = {"error": f"host not an official source (allowlist or .gov required): {url}"}
                     else:
-                        content_hash, fetched_text = fetch_fn(url)
-                        sources_used += 1
-                        payload = {"content_hash": content_hash, "text": fetched_text}
+                        try:
+                            content_hash, fetched_text = fetch_fn(url)
+                        except Exception as exc:  # noqa: BLE001 — a dead/404 url must not crash the run
+                            # Return the error so the agent can recover (search again / try
+                            # another result). A failed fetch does NOT consume the source budget.
+                            payload = {"error": f"could not fetch {url}: {exc}"}
+                        else:
+                            sources_used += 1
+                            # Record the source actually fetched so extract_threshold cites it.
+                            if pointer and url == pointer["url"]:
+                                last_source = dict(pointer)
+                            else:
+                                host = (urlparse(url).hostname or "").lower()
+                                # Curated allowlist authority = rank 1; other official .gov = rank 2.
+                                last_source = {"url": url, "source_name": host or url,
+                                               "authority_rank": 1 if host_allowed(url) else 2}
+                            payload = {"content_hash": content_hash, "text": fetched_text}
             elif name == "prove_currency":
                 payload = ({"status": "no_source", "detail": "fetch a source first"}
                            if not fetched_text

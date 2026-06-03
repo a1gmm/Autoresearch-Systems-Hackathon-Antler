@@ -73,7 +73,7 @@ def test_assemble_evidence_ungrounded_fails_closed():
 
 RESEARCHER_ALLOWED = [
     "read_skill", "get_triggers", "get_source_pointers", "get_cached_source", "fetch_source",
-    "prove_currency", "extract_threshold", "evaluate_predicate", "quarantine_injection",
+    "web_search", "prove_currency", "extract_threshold", "evaluate_predicate", "quarantine_injection",
 ]
 RESEARCHER_BLOCKED = [
     "get_form", "build_applicability_matrix", "generate_compliance_calendar",
@@ -128,6 +128,133 @@ def test_agent_injects_jurisdiction_context_into_prompt():
     user_msg = next(m for m in seen["messages"] if m["role"] == "user")
     assert "South Coast AQMD" in user_msg["content"]
     assert "water_geometry:Los Angeles" in user_msg["content"]
+
+
+def test_agent_researches_without_a_pointer_via_web_search():
+    # A hypothesis with NO curated SOURCE_POINTERS entry must still be researchable:
+    # the agent discovers the official source via web_search, fetches it, and grounds.
+    assert "H-DISCOVER-1" not in SOURCE_POINTERS
+    discovered = "https://www.aqmd.gov/discovered-rule.pdf"
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "web_search", {"query": "SCAQMD spray booth permit requirement"})]},
+        {"tool_calls": [_tc("c2", "fetch_source", {"url": discovered})]},
+        {"tool_calls": [_tc("c3", "extract_threshold", {
+            "field": "permit_required", "threshold_value": 1,
+            "verbatim_quote": "a permit to construct is required", "applies": "applies", "confidence": 0.9})]},
+    )
+    search_calls = []
+    def search_fn(query):
+        search_calls.append(query)
+        return [{"title": "SCAQMD Rule 201", "url": discovered, "snippet": "permit to construct"}]
+    fetch_fn = lambda url: ("sha256:x", "Under Rule 201, a permit to construct is required before installation.")
+
+    spec = dict(_spec())
+    spec["hypothesis_id"] = "H-DISCOVER-1"
+    spec["question"] = "Does the spray booth require a permit to construct?"
+    bundle = run_research_agent(spec, llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t", search_fn=search_fn)
+
+    assert search_calls, "web_search was never invoked"
+    assert bundle["researcher_conclusion"] == "applies"
+    assert bundle["sources"][0]["url"] == discovered  # cites the DISCOVERED source, not a pre-mapped one
+
+
+def test_tiered_sources_allowlist_first_then_other_gov():
+    from worker_core import host_allowed, host_credible
+    # Tier 1: curated allowlist authority.
+    assert host_allowed("https://www.aqmd.gov/x") and host_credible("https://www.aqmd.gov/x")
+    # Tier 2: other official .gov NOT in the strict allowlist -> credible fallback, not allowlisted.
+    assert host_credible("https://www.cityofvernon.org/x") is False  # non-gov stays out
+    assert host_credible("https://www.sandiegocounty.gov/x") and not host_allowed("https://www.sandiegocounty.gov/x")
+
+    # A credible-but-not-allowlisted .gov source is fetchable, cited at lower authority_rank.
+    gov = "https://www.sandiegocounty.gov/deh/rule.pdf"
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "fetch_source", {"url": gov})]},
+        {"tool_calls": [_tc("c2", "extract_threshold", {
+            "field": "permit_required", "threshold_value": 1,
+            "verbatim_quote": "a permit is required", "applies": "applies", "confidence": 0.8})]},
+    )
+    fetch_fn = lambda url: ("h", "Per county code, a permit is required.")
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-DISCOVER-3"
+    bundle = run_research_agent(spec, llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t")
+    assert bundle["researcher_conclusion"] == "applies"
+    assert bundle["sources"][0]["url"] == gov
+    assert bundle["sources"][0]["authority_rank"] == 2  # fallback tier
+
+
+def test_read_skill_falls_back_to_mapped_skill_when_agent_guesses_wrong_id():
+    # The agent often guesses a non-existent skill_id. read_skill must fall back to the
+    # hypothesis's canonical mapped skill so curated guidance is actually loaded, not "not found".
+    from worker_core import SKILL_FOR_HYPOTHESIS
+    assert SKILL_FOR_HYPOTHESIS.get("H-AIR-201")  # H-AIR-201 has a real mapped skill
+    real_id = SKILL_FOR_HYPOTHESIS["H-AIR-201"]
+
+    def reader(sid):
+        return "# Real SCAQMD skill content" if sid == real_id else ""
+
+    captured = {}
+    state = {"n": 0}
+    def llm_fn(messages, tools):
+        i = state["n"]; state["n"] += 1
+        if i == 0:
+            return {"tool_calls": [_tc("c1", "read_skill", {"skill_id": "SCAQMD.Rule201.GUESS"})]}
+        captured["messages"] = messages
+        return {"content": "done", "tool_calls": []}
+
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-AIR-201"
+    run_research_agent(spec, llm_fn=llm_fn, fetch_fn=lambda u: ("h", "t"), extract_fn=None,
+                       now_iso="t", read_skill_fn=reader)
+    skill_msgs = [m for m in captured["messages"] if m.get("role") == "tool" and m.get("name") == "read_skill"]
+    assert skill_msgs, "no read_skill tool result"
+    assert "Real SCAQMD skill content" in skill_msgs[-1]["content"]  # mapped skill loaded despite wrong guess
+
+
+def test_web_search_is_capped_so_it_cannot_starve_fetching():
+    # The agent must not be able to burn its whole turn budget searching. After
+    # max_searches, web_search is refused and the agent is told to fetch what it has.
+    seen_errors = []
+    state = {"n": 0}
+    def llm_fn(messages, tools):
+        # Inspect the last tool result for the cap error.
+        for m in reversed(messages):
+            if m.get("role") == "tool" and m.get("name") == "web_search":
+                try:
+                    import json as _j
+                    err = _j.loads(m["content"]).get("error", "")
+                    if "max_searches" in err:
+                        seen_errors.append(err)
+                except Exception:
+                    pass
+                break
+        state["n"] += 1
+        return {"tool_calls": [_tc(f"c{state['n']}", "web_search", {"query": f"q{state['n']}"})]}
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-DISCOVER-4"
+    spec["budget"] = {"max_model_calls": 8, "max_sources": 5, "max_searches": 2}
+    run_research_agent(spec, llm_fn=llm_fn, fetch_fn=lambda u: ("h", "t"), extract_fn=None,
+                       now_iso="t", search_fn=lambda q: [{"title": "t", "url": "https://www.aqmd.gov/x", "snippet": ""}])
+    assert seen_errors, "web_search was never capped despite exceeding max_searches"
+
+
+def test_fetch_error_is_returned_to_model_not_raised():
+    # A discovered URL may 404. The fetch error must come back as a tool result so the
+    # agent can recover (try another source) — it must NOT crash the run.
+    bad = "https://www.aqmd.gov/dead.pdf"
+    good = "https://www.aqmd.gov/rule.pdf"
+    def fetch_fn(url):
+        if url == bad:
+            raise RuntimeError("404 Not Found")
+        return ("sha256:x", "A permit to construct is required.")
+    llm = _scripted_llm(
+        {"tool_calls": [_tc("c1", "fetch_source", {"url": bad})]},       # 404 -> error back, keep going
+        {"tool_calls": [_tc("c2", "fetch_source", {"url": good})]},      # recover with another source
+        {"tool_calls": [_tc("c3", "extract_threshold", {
+            "field": "permit_required", "threshold_value": 1,
+            "verbatim_quote": "A permit to construct is required", "applies": "applies", "confidence": 0.9})]},
+    )
+    spec = dict(_spec()); spec["hypothesis_id"] = "H-DISCOVER-2"
+    bundle = run_research_agent(spec, llm_fn=llm, fetch_fn=fetch_fn, extract_fn=None, now_iso="t")
+    assert bundle["researcher_conclusion"] == "applies"
+    assert bundle["sources"][0]["url"] == good
 
 
 def test_agent_happy_path_fetch_then_submit():

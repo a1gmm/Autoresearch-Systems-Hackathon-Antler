@@ -7,7 +7,7 @@ function deps(overrides: Partial<DurableDeps> = {}): DurableDeps {
   const finalStatus = (overrides as { _finalStatus?: string })._finalStatus;
   return {
     planRun: async (_input: unknown) => ({ run_id: "run_x", scope_pack: { facility: { jurisdiction_stack: ["SCAQMD"] } } as any, plan: { research_tasks: [{ task_id: "T1", hypothesis_id: "H-AIR-201", allowed_tools: [], blocked_tools: [], budget: {} }], research_graph: [{ id: "H-AIR-201", question: "q" }], coverage_family_statuses: [], regulatory_angles: [] } as any, trace_events: [] }),
-    finalizeRun: (run_id: string, _scope, _plan, finalEvidence, baseTrace) => {
+    finalizeRun: (run_id: string, _scope: any, _plan: any, finalEvidence: any, baseTrace: any) => {
       const runtimeVerdict = finalEvidence[0]?.bundle?.runtime_review?.verdict ?? finalEvidence[0]?.runtime_review?.verdict;
       return { run_id, status: finalStatus ?? (runtimeVerdict === "needs_review" ? "needs_review" : "done"), determinations: [{ verified: true }], report_markdown: "md", trace_events: baseTrace } as any;
     },

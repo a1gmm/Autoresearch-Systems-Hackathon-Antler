@@ -32,6 +32,8 @@ from worker_core import (
     SOURCE_POINTERS,
     evidence_row,
     failed_bundle,
+    host_allowed,
+    host_credible,
     run_research_agent,
 )
 
@@ -65,9 +67,8 @@ EXTRACT_SYSTEM = (
 
 
 def _model() -> str:
-    # All-reasoning worker: default to a reasoning-tier model; operator overrides via env
-    # with a reasoning model their OpenAI account has access to.
-    return os.environ.get("OPENAI_RESEARCH_MODEL", "o4-mini")
+    # Worker model. Default GPT-5.5; operator overrides via OPENAI_RESEARCH_MODEL.
+    return os.environ.get("OPENAI_RESEARCH_MODEL", "gpt-5.5")
 
 
 # EHS skill files are bundled into the image at /root/skills/<id>/SKILL.md
@@ -106,7 +107,19 @@ def _fetch_fn(url: str) -> tuple[str, str]:
     else:
         from bs4 import BeautifulSoup
 
-        text = BeautifulSoup(data, "html.parser").get_text(" ", strip=True)
+        # Live gov rules/guidance are HTML. Strip nav/chrome and prefer the main
+        # content region so the agent reads the actual requirement text, not menus
+        # and footers (which otherwise dominate get_text and crowd out the rule).
+        soup = BeautifulSoup(data, "html.parser")
+        for tag in soup(["script", "style", "noscript", "nav", "header", "footer", "aside", "form", "svg", "button"]):
+            tag.decompose()
+        main = soup.find("main") or soup.find("article") or soup.find(attrs={"role": "main"})
+        text = main.get_text("\n", strip=True) if main else ""
+        # Fall back to the whole (de-chromed) page if the main region is thin/missing —
+        # don't return a near-empty blob just because there's no <main>.
+        if len(text) < 400:
+            text = (soup.body or soup).get_text("\n", strip=True)
+        text = re.sub(r"\n{3,}", "\n\n", text)
     return content_hash, text[:MAX_TEXT_CHARS]
 
 
@@ -199,15 +212,60 @@ def _extract_fn(text: str, question: str, hint: dict) -> dict:
     return json.loads(calls[0].function.arguments or "{}")
 
 
+def _web_search_fn(query: str) -> list[dict]:
+    """Real web discovery via the OpenAI Responses API web_search tool, filtered to
+    allowlisted authority hosts. Returns [{title,url,snippet}]; never throws."""
+    if not query.strip():
+        return []
+    from openai import OpenAI
+
+    client = OpenAI()
+    instruction = (
+        "Find the official primary-source page(s) that govern this California EHS question. "
+        "Prefer authority sites: aqmd.gov, waterboards.ca.gov, leginfo.legislature.ca.gov, "
+        "epa.gov, dtsc.ca.gov, oehha.ca.gov, arb.ca.gov, calepa.ca.gov, cdph.ca.gov, "
+        "osfm.fire.ca.gov. Question: " + query
+    )
+    resp = None
+    for tool_type in ("web_search", "web_search_preview"):
+        try:
+            resp = client.responses.create(model="gpt-4o-mini", tools=[{"type": tool_type}], input=instruction)
+            break
+        except Exception:  # noqa: BLE001 — try the other tool name, else give up
+            resp = None
+    if resp is None:
+        return []
+
+    # Allowlist-first, then other official .gov as fallback: prefer curated authorities,
+    # but if none surface, still return other government sources so a discoverable rule is
+    # never unreachable. Non-government hosts are dropped (not the open web).
+    tier1: list[dict] = []
+    tier2: list[dict] = []
+    seen: set[str] = set()
+    for item in (getattr(resp, "output", None) or []):
+        for content in (getattr(item, "content", None) or []):
+            for ann in (getattr(content, "annotations", None) or []):
+                url = getattr(ann, "url", None)
+                title = getattr(ann, "title", "") or ""
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                if host_allowed(url):
+                    tier1.append({"title": title, "url": url, "snippet": "", "authority": "allowlisted"})
+                elif host_credible(url):
+                    tier2.append({"title": title, "url": url, "snippet": "", "authority": "other_gov"})
+    return tier1 + tier2
+
+
 def _run(task_spec: dict) -> dict:
+    # No pointer gate: a hypothesis without a curated SOURCE_POINTERS seed is still
+    # researchable — the agent discovers the official source via web_search.
     hid = task_spec.get("hypothesis_id", "")
-    if SOURCE_POINTERS.get(hid) is None:
-        return failed_bundle(hid, f"No source pointer for {hid}")
     now_iso = datetime.now(timezone.utc).isoformat()
     try:
         return run_research_agent(task_spec, llm_fn=_llm_fn, fetch_fn=_fetch_fn,
                                   extract_fn=_extract_fn, now_iso=now_iso,
-                                  read_skill_fn=_read_skill_fn)
+                                  read_skill_fn=_read_skill_fn, search_fn=_web_search_fn)
     except Exception as exc:  # noqa: BLE001 — never throw out of the worker
         return failed_bundle(hid, f"Agent failed: {exc}")
 
