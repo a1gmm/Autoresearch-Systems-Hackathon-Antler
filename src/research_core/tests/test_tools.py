@@ -82,7 +82,7 @@ def test_web_fetch_blocks_disallowed_redirect_before_fetching_it(tmp_path: Path,
             return 200 <= self.status_code < 300
 
     class FakeClient:
-        def __init__(self, *, follow_redirects: bool, timeout: float):
+        def __init__(self, *, follow_redirects: bool, timeout: float, **_kwargs):
             assert follow_redirects is False
 
         def __enter__(self):
@@ -264,6 +264,9 @@ def test_browser_use_installs_context_route_before_page_and_blocks_popup_request
         def __init__(self):
             self.handler = None
 
+        def add_init_script(self, script):
+            pass
+
         def route(self, pattern: str, handler):
             actions.append(("context_route", pattern))
             self.handler = handler
@@ -279,7 +282,7 @@ def test_browser_use_installs_context_route_before_page_and_blocks_popup_request
             actions.append(("context_close", None))
 
     class FakeBrowser:
-        def new_context(self, *, service_workers: str):
+        def new_context(self, *, service_workers: str, **_kwargs):
             actions.append(("new_context", service_workers))
             return FakeBrowserContext()
 
@@ -290,7 +293,7 @@ def test_browser_use_installs_context_route_before_page_and_blocks_popup_request
             actions.append(("browser_close", None))
 
     class FakeChromium:
-        def launch(self, *, headless: bool):
+        def launch(self, *, headless: bool, **_kwargs):
             return FakeBrowser()
 
     class FakePlaywright:
@@ -596,7 +599,7 @@ class _PdfResponse:
 
 def _install_fake_httpx(monkeypatch, response):
     class FakeClient:
-        def __init__(self, *, follow_redirects: bool, timeout: float):
+        def __init__(self, *, follow_redirects: bool, timeout: float, **_kwargs):
             assert follow_redirects is False
 
         def __enter__(self):
@@ -708,6 +711,7 @@ def test_browser_use_extracts_pdf_text_for_pdf_navigation(tmp_path: Path, monkey
     pdf = _make_pdf_bytes("RULE 23 VCAPCD EXEMPTION FULL TEXT")
 
     class FakeApiResponse:
+        status = 200
         def body(self):
             return pdf
 
@@ -742,6 +746,9 @@ def test_browser_use_extracts_pdf_text_for_pdf_navigation(tmp_path: Path, monkey
     class FakeBrowserContext:
         request = FakeRequestContext()
 
+        def add_init_script(self, script):
+            pass
+
         def route(self, pattern: str, handler):
             self.handler = handler
 
@@ -754,14 +761,14 @@ def test_browser_use_extracts_pdf_text_for_pdf_navigation(tmp_path: Path, monkey
             pass
 
     class FakeBrowser:
-        def new_context(self, *, service_workers: str):
+        def new_context(self, *, service_workers: str, **_kwargs):
             return FakeBrowserContext()
 
         def close(self):
             pass
 
     class FakeChromium:
-        def launch(self, *, headless: bool):
+        def launch(self, *, headless: bool, **_kwargs):
             return FakeBrowser()
 
     class FakePlaywright:
@@ -839,3 +846,28 @@ def test_web_fetch_caps_huge_response_text(tmp_path: Path, monkeypatch):
     assert result["ok"] is True
     assert len(result["text"]) < 5000  # capped, not the full 50k
     assert "truncated" in result["text"]
+
+
+def test_looks_bot_blocked_catches_200_cloudflare_challenge_page():
+    from research_core.tools import _looks_bot_blocked
+
+    class _Resp200Challenge:
+        status_code = 200
+        headers = {"content-type": "text/html", "cf-ray": "x", "server": "cloudflare"}
+        @property
+        def text(self):
+            return "<html><head><title>Just a moment...</title></head><body>checking your browser</body></html>"
+    assert _looks_bot_blocked(_Resp200Challenge()) is True
+
+
+def test_looks_bot_blocked_ignores_pdf_success():
+    from research_core.tools import _looks_bot_blocked
+
+    class _RespPdf:
+        status_code = 200
+        headers = {"content-type": "application/pdf", "cf-ray": "x", "server": "cloudflare"}
+        @property
+        def text(self):
+            return "%PDF-1.7 ...binary..."
+    # A real PDF behind Cloudflare (cf-ray present) must NOT be treated as a challenge.
+    assert _looks_bot_blocked(_RespPdf()) is False
