@@ -346,3 +346,45 @@ def test_read_skill_loads_a_real_skill_for_every_registry_hypothesis():
             out = read_skill(skill_id="wrong.guess.that.does.not.exist")
             assert out.get("skill_id") == skill_for_hypothesis(hypothesis.id) == program.id, hypothesis.id
             assert len(out.get("content", "")) > 100, hypothesis.id
+
+
+def test_read_skill_surfaces_reference_files_catalog():
+    # read_skill (no ref) returns the SKILL.md PLUS a catalog of the program's reference files.
+    from research_core.agents import _sandbox_function_map
+    task = {"task_id": "T", "hypothesis_id": "H-HAZMAT-HMBP", "assigned_agent": "x",
+            "allowed_tools": [], "blocked_tools": []}
+    read_skill = _sandbox_function_map(None, task)["read_skill"]
+    out = read_skill()
+    assert out["skill_id"] == "ca-hmbp"
+    assert len(out["content"]) > 50
+    files = {r["file"] for r in out["reference_files"]}
+    assert "reporting-thresholds.md" in files  # the ca-hmbp reference files are surfaced
+    assert "how_to_read_references" in out
+
+
+def test_read_skill_reads_a_specific_program_reference_file():
+    from research_core.agents import _sandbox_function_map
+    task = {"task_id": "T", "hypothesis_id": "H-HAZMAT-HMBP", "assigned_agent": "x",
+            "allowed_tools": [], "blocked_tools": []}
+    read_skill = _sandbox_function_map(None, task)["read_skill"]
+    out = read_skill(ref="reporting-thresholds.md")  # bare filename -> program folder
+    assert "55 gallon" in out["content"] or "55 gallons" in out["content"]
+
+
+def test_read_skill_reads_jurisdiction_and_air_district_references_by_path():
+    from research_core.agents import _sandbox_function_map
+    read_skill = _sandbox_function_map(None, None)["read_skill"]
+    # a jurisdiction local-rule file
+    juris = read_skill(ref="jurisdictions/ventura-county/city-of-oxnard")
+    assert "reference_files" in juris  # folder path -> listing
+    # an air-district rule reference
+    air = read_skill(ref="air-districts/south-coast-aqmd")
+    assert any("rule" in r["file"].lower() for r in air["reference_files"])
+
+
+def test_read_skill_ref_is_sandboxed_against_traversal():
+    from research_core.agents import _sandbox_function_map
+    read_skill = _sandbox_function_map(None, None)["read_skill"]
+    out = read_skill(ref="../../../../etc/passwd")
+    assert "error" in out
+    assert "outside the skills tree" in out["error"]
