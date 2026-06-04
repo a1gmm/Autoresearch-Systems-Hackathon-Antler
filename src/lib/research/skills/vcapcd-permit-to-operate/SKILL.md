@@ -26,3 +26,10 @@ when_to_use: Use for the `air` coverage family when the facility is in Ventura C
 ## Sources
 
 - https://www.vcapcd.org/wp-content/uploads/Rulebook/Reg2/RULE%2010.pdf
+
+## Canonical rule references
+The detailed, PDF-dissected rule references for this program now live in the air-district
+library: **air-districts/ventura-county-apcd/**. read_skill automatically surfaces them as
+`district_references` (resolved to the FACILITY's actual air district), or read one directly with
+read_skill(ref='air-districts/ventura-county-apcd/<file>.md'). This program's hypotheses orient the
+research; the air-district library holds the verbatim rule text.

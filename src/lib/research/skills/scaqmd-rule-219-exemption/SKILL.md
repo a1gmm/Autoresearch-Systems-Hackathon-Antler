@@ -24,3 +24,10 @@ when_to_use: Use for hypothesis H-AIR-219 — determine whether the project's eq
 ## Sources
 
 - https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-219.pdf
+
+## Canonical rule references
+The detailed, PDF-dissected rule references for this program now live in the air-district
+library: **air-districts/south-coast-aqmd/**. read_skill automatically surfaces them as
+`district_references` (resolved to the FACILITY's actual air district), or read one directly with
+read_skill(ref='air-districts/south-coast-aqmd/<file>.md'). This program's hypotheses orient the
+research; the air-district library holds the verbatim rule text.
