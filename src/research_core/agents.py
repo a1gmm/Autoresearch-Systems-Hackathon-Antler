@@ -45,6 +45,45 @@ def _read_law_skill(skill_id: str) -> str:
         return ""
 
 
+def _reference_title(path: Path) -> str:
+    """The `title:` from a reference file's YAML frontmatter, for the manifest."""
+    import re
+
+    try:
+        head = path.read_text(encoding="utf-8")[:600]
+    except OSError:
+        return path.stem
+    match = re.search(r'(?m)^title:\s*"?(.+?)"?\s*$', head)
+    return match.group(1).strip() if match else path.stem
+
+
+def _list_skill_references(folder: Path) -> list[dict[str, str]]:
+    """Catalog the reference files in a skill/jurisdiction/air-district folder (everything
+    except the SKILL.md index and machine metadata) so the agent can pick which to read."""
+    if not folder.is_dir():
+        return []
+    refs: list[dict[str, str]] = []
+    for path in sorted(folder.glob("*.md")):
+        if path.name in {"SKILL.md", "AGENTS.md"}:
+            continue
+        refs.append({"file": path.name, "title": _reference_title(path)})
+    return refs
+
+
+def _resolve_skill_path(ref: str) -> Path | None:
+    """Resolve a reference path relative to the skills root, sandboxed against traversal —
+    the agent may only read files under src/lib/research/skills/."""
+    if not ref:
+        return None
+    root = _SKILLS_ROOT.resolve()
+    target = (root / ref).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return None
+    return target
+
+
 def _task_hypothesis_id(task: Any) -> str:
     if task is None:
         return ""
@@ -114,7 +153,17 @@ def build_researcher_agent(
             "Research one assigned permit applicability hypothesis. Begin by calling "
             "read_skill to load the law-code skill that orients you on this hypothesis's "
             "thresholds and exemptions (orientation only — a skill is NEVER citable "
-            "evidence). Analyze any facility-provided documents in your context "
+            "evidence). read_skill returns a reference_files catalog of distilled rule "
+            "references — read the relevant ones with read_skill(ref='<file>') to get the "
+            "specific thresholds/exemption tables BEFORE fetching the raw rule, so you know "
+            "exactly what to look for. Also pull the facility's LOCAL rules: for the "
+            "facility's county/city call read_skill(ref='jurisdictions/<county-slug>/<city-slug>/"
+            "fire-code-local.md' | 'cupa-local.md' | 'wastewater-local.md' | 'zoning-industrial.md'), "
+            "and for air, the controlling district's rules via read_skill(ref='air-districts/<district-id>/...'). "
+            "These references give you the local ordinance numbers, adopted-code editions, discharge "
+            "limits, and exemption thresholds without re-fetching whole rulebooks — but they are still "
+            "orientation: confirm the determinative number against the cited primary source. Analyze any "
+            "facility-provided documents in your context "
             "(context.provided_documents — e.g. SDS composition/usage data) as primary "
             "facts about the operation. Then use only the sandbox-scoped tools provided to "
             "gather and read official sources. web_fetch reads agency rule PDFs directly (it extracts "
@@ -295,7 +344,7 @@ def _researcher_tools(policy: SandboxPolicy | None, task: Any = None) -> list[An
 
 
 def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dict[str, Callable[..., dict[str, Any]]]:
-    def read_skill(skill_id: str = "") -> dict[str, Any]:
+    def read_skill(skill_id: str = "", ref: str = "") -> dict[str, Any]:
         # The agent's skill_id is a HINT — models routinely guess non-existent ids.
         # If it misses, fall back to the hypothesis's canonical mapped skill so the
         # curated law-code guidance is actually loaded (orientation only; never cited).
@@ -303,10 +352,46 @@ def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dic
 
         hid = _task_hypothesis_id(task)
         mapped = skill_for_hypothesis(hid) if hid else None
+        program = (skill_id or "").strip() or mapped
+
+        # `ref` = read a specific reference file (or list a folder's references). A bare
+        # filename resolves inside the program folder; a path (with "/") is read relative to
+        # the skills root — so the agent can pull air-districts/<id>/<rule>.md or
+        # jurisdictions/<county>/<city>/<file>.md. Sandboxed to the skills tree.
+        if ref:
+            lookup = ref if "/" in ref else (f"{program}/{ref}" if program else ref)
+            target = _resolve_skill_path(lookup)
+            if target is None:
+                return {"error": f"reference path is outside the skills tree: {ref!r}"}
+            if target.is_dir():
+                return {"ref": lookup, "reference_files": _list_skill_references(target)}
+            if target.is_file():
+                try:
+                    return {"ref": lookup, "content": target.read_text(encoding="utf-8")}
+                except OSError as exc:
+                    return {"error": f"could not read reference {ref!r}: {exc}"}
+            return {"error": f"reference not found: {ref!r}"}
+
+        # No ref: load the program SKILL.md (decision-engine index) plus the catalog of its
+        # reference files, and point the agent at the jurisdiction/air-district references.
         for candidate in [c for c in ((skill_id or "").strip(), mapped) if c]:
             content = _read_law_skill(candidate)
             if content:
-                return {"skill_id": candidate, "content": content}
+                references = _list_skill_references(_SKILLS_ROOT / candidate)
+                return {
+                    "skill_id": candidate,
+                    "content": content,
+                    "reference_files": references,
+                    "how_to_read_references": (
+                        "Call read_skill(ref='<filename>') to read one of the reference_files above "
+                        "for this program. For the facility's LOCAL rules call "
+                        "read_skill(ref='jurisdictions/<county-slug>/<city-slug>/<file>.md') where files are "
+                        "cupa-local.md, fire-code-local.md, wastewater-local.md, zoning-industrial.md "
+                        "(slugs are lowercase-hyphenated, e.g. ventura-county/city-of-oxnard). For air-district "
+                        "rules call read_skill(ref='air-districts/<district-id>/<rule>.md'). Pass a folder path "
+                        "as ref to list what's available there first."
+                    ),
+                }
         return {"error": f"no law-code skill found for {hid or 'this hypothesis'}"}
 
     def web_search(query: str, limit: int = 5) -> dict[str, Any]:
