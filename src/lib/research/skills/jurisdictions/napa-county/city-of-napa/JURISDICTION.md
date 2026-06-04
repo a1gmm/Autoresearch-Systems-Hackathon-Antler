@@ -60,6 +60,17 @@ Source: https://www.cityofnapa.org/574/Stormwater-Quality
 - **Zoning map (GIS):** https://experience.arcgis.com/experience/6265a77033544cd5837a1216c3dba071
 Source: https://ecode360.com/43396564 | https://www.cityofnapa.org/1045/Zoning-Information
 
+## Dissected Family Reference Files
+
+Non-air family rules are dissected into separate files in this directory (fetched 2026-06-03):
+
+| File | Family | Key Content |
+|---|---|---|
+| fire-code-local.md | fire | 2022 CFC adoption via O2022-013; NMC § 15.04.080 local amendments; incinerator ban; bonfire/rec-fire ban; sprinkler expansions |
+| cupa-local.md | cupa | County DEH as CUPA; HMBP/UST/CalARP/HazWaste fee tables from Fee Resolution Part 110 (effective 07/07/2025) |
+| wastewater-local.md | wastewater | NapaSan Title 4 sewer use code; Industrial User Discharge Permit process; full local limits table (27 constituents with mg/L values) |
+| zoning-industrial.md | zoning | NMC Title 17 Ch. 17.14; IP and IL district purposes, standards, EHS performance criteria, CUP via Ch. 17.60 |
+
 ## Notes / GOTCHAs
 
 - CUPA is county-administered (DEH), not city — use Napa County DEH, not a city office, for HMBP/hazwaste/UST/CalARP filings.

@@ -71,6 +71,13 @@ name: City of Daly City
 - Source (Ch. 17.06): https://library.municode.com/ca/daly_city/codes/code_of_ordinances?nodeId=TIT17ZO_CH17.06ZODI
 - Source (Ch. 17.44): https://library.municode.com/ca/daly_city/codes/code_of_ordinances?nodeId=TIT17ZO_CH17.44USPE
 
+## Reference Files (Dissected Detail)
+
+- **fire-code-local.md** — Adopted fire code editions (2022 CFC via 2022 ordinance Exhibit L; 2025 CFC via Ord. 1461 eff. 2026-01-01), Ch. 15.32 section-by-section local amendments including sprinkler expansion, NFPA 704 placards, car stacker sprinklers, vegetation management (Southern Hills), and NCFA permit form FD-301.
+- **cupa-local.md** — SMC EHS countywide CUPA, San Mateo County Ord. Ch. 4.92 (eff. 2018-08-10), all HMBP/HWG/UST/CalARP/APSA fee tiers (eff. 2026-01-01), CERS and MyEHS portal info.
+- **wastewater-local.md** — NSMCSD District Code chapter structure (Ch. 1.24 prohibited discharges, Ch. 1.40 reporting/monitoring), NPDES Order R2-2006-0068 WWTP effluent limits (context only — local IWP limits not published online), IWP contact process.
+- **zoning-industrial.md** — M Industrial District (Ch. 17.22 single zone, no M-1/M-2), CUP process (Ch. 17.44, 5-yr expiration per 2026 amendment), Design Review (Ch. 17.45), Planning Division contact. **NOTE:** Specific permitted/conditionally permitted use lists in §17.22.020 and §17.22.030 could not be retrieved via web fetch (Municode returned 403, elaws.us returned 503) — contact Planning Division to confirm use-specific permissions.
+
 ## Notes / Gotchas
 
 - GOTCHA (fire): Daly City's fire AHJ is the **North County Fire Authority** JPA, not a "Daly City Fire Department." The same JPA also serves Brisbane and Pacifica.

@@ -85,3 +85,10 @@ name: City of Redwood City
 - Fire AHJ is city's own RCFD; it is NOT part of any regional fire authority or JPA.
 - POTW is SVCW (regional authority), not the city directly — industrial permit goes to SVCW, not Redwood City Public Works.
 - All-electric ordinance applies to new industrial/commercial buildings with exceptions for F/H occupancy gas use.
+
+## Dissected Non-Air Family Files (added 2026-06-03)
+
+- **fire-code-local.md** — Fire code adoption details: Ordinance ORD.435 (ATTY/ORD.435, Rev. 11-21-16) adopts 2016 CFC/2015 IFC effective 1/1/2017; local amendments to §§ 903.2.13 (sprinkler thresholds), 507.1.1 (fire flow/hydrant specs), 5806.2 (cryogenic fluids geographic limits), 6104.2.1 (LPG 2,000-gal aggregate limit in residential/commercial zones). The 2022 CFC update is codified in City Code Chapter 9, Article V (Municode nodeId CH9BU_ARTVAM2022CABURECO); the specific ordinance number for that 2022 cycle was not findable in publicly accessible online documents — verify directly on Municode.
+- **cupa-local.md** — County CUPA detail: SMC Code Chapter 4.92 (eff. 8/10/2018), all six unified program elements, HMBP thresholds (55 gal / 500 lb / 200 cf), full fee schedule eff. 1/1/2026.
+- **wastewater-local.md** — SVCW pretreatment: full §2.3 local discharge limits table (18 pollutants), SIU definition (§1.3.30), Mandatory Wastewater Discharge Permit process, dual online+paper submission requirement. City Code Chapter 27, Article IV, § 27.31.3 governs permit applications locally.
+- **zoning-industrial.md** — IR (Art. 17), LII (Art. 17A), IP (Art. 18), GI (Art. 19) district summaries; full §17.2 permitted-uses list for IR (from Ord. 1130-890, 8-26-24); LII Table 17A-2 uses; IP §18.2 permitted uses; GI §19.4 conditional uses. Note: Article 19 (GI) full text is on Municode but was not fetchable (403); §19.4 CUP list was not retrieved — verify at Municode.

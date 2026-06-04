@@ -4,6 +4,12 @@ name: Sacramento County
 ---
 
 > Local EHS authority reference for **Sacramento County, CA**. Covers only what differs locally from statewide defaults — who runs the programs, which ordinances are in effect, and where their portals live. Verify live pages before quoting; the 2025 California Building Standards Code (Title 24) superseded the 2022 edition statewide on 2026-01-01.
+>
+> **Detailed non-air family files (fetched 2026-06-03):**
+> - [`fire-code-local.md`](fire-code-local.md) — Metro Fire Ordinance 2025-02 adopting 2025 CFC, full local amendments list, high-pile storage permit, fee ordinance numbers
+> - [`cupa-local.md`](cupa-local.md) — County EMD CUPA designation, municipal code chapters (Title 6: 6.96/6.98/6.34), full FY 2025-2026 fee tables
+> - [`wastewater-local.md`](wastewater-local.md) — SASD SDI-0079 sewer ordinance, SacSewer/Regional San two-district structure, SIU list, discharge prohibitions, NPDES effluent limits basis
+> - [`zoning-industrial.md`](zoning-industrial.md) — SZC Chapter 2 industrial districts (MP/M-1/M-2), use table structure, CUP approval authority and process
 
 ## EHS Local Rules by Family
 
@@ -34,7 +40,7 @@ name: Sacramento County
   - Source: https://codelibrary.amlegal.com/codes/sacramentoca/latest/sacramento_ca/0-0-0-28378
 - **Sacramento County (unincorporated, outside Metro Fire territory):** Sacramento County Code Title 17 (Fire Prevention) — adopts state CFC; County Fire Warden enforces in areas without an organized fire district.
   - Source: https://ecode360.com/44037931
-- Hazmat and high-pile storage permits fall under CFC Chapter 27 (Hazardous Materials) and CFC Chapter 32 (High-Piled Storage) — no additional local overlay found beyond state CFC requirements. [VERIFY — Metro Fire local amendments document not publicly indexed]
+- Hazmat: CFC Chapter 50 (§ 5003.9.1.2 amended — SDS/HMMP/HMIS ready access required). High-pile storage: CFC Chapter 32 — operational permit required for areas > 500 sq ft; top of storage > 12 ft (or > 6 ft for high-hazard commodities). No additional local MAQ overlays beyond state CFC in Ordinance 2025-02. See fire-code-local.md for full amendment list.
 
 ---
 
@@ -47,7 +53,7 @@ name: Sacramento County
   - Federally regulated categorical industrial users (CIUs), AND
   - Non-categorical users discharging ≥ 25,000 gallons/day of process wastewater (excluding domestic, non-contact cooling, and boiler blowdown flows).
 - **Application/portal:** https://www.sacsewer.com/pretreatment-program/
-- **Contact:** Via sacsewer.com (no public direct phone found on pretreatment page) [VERIFY — call SacSewer main line for Source Control Section direct contact]
+- **Contact:** Linda Stevens, Environmental Program Manager II, Wastewater Source Control Section — (916) 876-5287; fax (916) 854-9286; 10060 Goethe Rd, Sacramento CA 95827. Local limits are set by Regional San Consolidated Ordinance (eff. June 9, 2023); SacSewer enforces. See wastewater-local.md for full detail.
 - Source: https://www.sacsewer.com/pretreatment-program/
 - Source (ordinance PDF): https://sacsewer-bucket.s3.us-west-1.amazonaws.com/wp-content/uploads/sacsewer-ordinance_effective-4-27-23.pdf
 

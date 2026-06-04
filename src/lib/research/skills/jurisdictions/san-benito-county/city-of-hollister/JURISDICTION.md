@@ -78,8 +78,22 @@ name: City of Hollister
 - Source: https://www.hollister.ca.gov/government/departments/development_services/planning/planning_faqs.php
 - Source: https://library.municode.com/ca/hollister
 
+## Dissected Reference Files (non-air families)
+
+Separate detail files written 2026-06-03:
+
+| File | Family | Coverage |
+|---|---|---|
+| fire-code-local.md | Fire | Ordinance 1224 / 2022 CFC adoption; Exhibit A amendments (verbatim section numbers); permit types |
+| cupa-local.md | CUPA | San Benito County HHSA Environmental Health CUPA; CERS ID 1052; programs; state surcharges |
+| wastewater-local.md | Wastewater | Title 13.04 Sewer Service System; RDWWTP (Veolia); IWTP (seasonal cannery); SSMP 2022 legal-authority table; FOG program |
+| zoning-industrial.md | Zoning | Title 17 Ch. 17.10; M1 / IBP / AS districts; CUP process (Planning Commission); § 17.10.020 use table note |
+
 ## Notes
 
 - GOTCHA: Hollister's municipal fire department is the regional structural fire/EMS provider — it staffs and responds for San Juan Bautista and the unincorporated county under contract, not just the city. It is the fire AHJ but NOT the CUPA (hazmat is county Environmental Health).
-- Municode blocks direct deep-link fetches (403); verify chapter text by navigating interactively at library.municode.com/ca/hollister or by calling the relevant department.
+- Municode blocks direct deep-link fetches (403 / JavaScript SPA); verify chapter text by navigating interactively at library.municode.com/ca/hollister or by calling the relevant department.
 - 2025 Title 24 edition (effective 2026-01-01): confirm with Building Division whether adoption ordinance has been passed as of inspection date.
+- CUPA local fee schedule: San Benito County Environmental Health does not publish its CUPA permit/inspection fee schedule online; must call (831) 636-4035 to obtain current rates.
+- Sewer pretreatment: No separate formal EPA-approved pretreatment program (40 CFR Part 403) identified for the RDWWTP. Industrial discharge authority rests with Title 13.04. Verify with Wastewater Treatment Division (831) 636-4340.
+- Zoning use table § 17.10.020: Full M1/IBP use table with P/CUP/N designations is on Municode but not extractable via automated fetch; request printed copy from Planning Division (831) 636-4360 or planning@hollister.ca.gov.

@@ -53,7 +53,7 @@ name: City of Atascadero
 ### 4. Wastewater / POTW — Sewer Use
 
 - **POTW:** City of Atascadero Wastewater Division operates its own treatment facility (1.4 MGD design capacity) with aerobic, facultative, and polishing lagoons plus six percolation ponds. Serves ~50% of residents and majority of businesses; Class B biosolids.
-- **NPDES wastewater permit:** Order No. R3-2021-0001, NPDES No. CA0047953, issued by the California Regional Water Quality Control Board — Central Coast Region (Region 3).
+- **Wastewater discharge permit:** Central Coast RWQCB Order No. R3-2020-0020 (General WDR for Domestic Wastewater Systems >100,000 GPD — land discharge, NOT an NPDES surface discharge permit). The City enrolled June 6, 2023. Previously operated under Order No. 01-014. NOTE: Order No. R3-2021-0001 / NPDES No. CA0047953 is for the City of El Paso de Robles, not Atascadero — prior entry in this file was incorrect.
 - **Sewer use ordinance:** AMC Title 7 (Public Works); sewer provisions appear across Title 7 Chapters 3 (Sewer Connection / Septic Tank Abandonment — ecode360.com/43096565), 5 (Public Sewer Extensions — ecode360.com/43096596), and 8 (storm water prohibition from sanitary sewers). Industrial pretreatment provisions — [VERIFY - specific chapter and IWP permit process not found online; contact Wastewater Division].
 - **Sewer connection fees (2025):** SFR — $286 per connection; Commercial/Industrial/Multi-Family — $454 per connection.
 - **FOG (Fats, Oils & Grease) program:** contact (805) 470-3140.
@@ -84,3 +84,12 @@ name: City of Atascadero
 - **Zoning Handbook (2020 edition):** https://www.atascadero.org/sites/default/files/2023-06/Zoning%20Handbook%20Update%202020_No%20ADU%20Section.pdf
 - Source: https://ecode360.com/43097672
 - Source (AMC §9-3.330): https://ecode360.com/43098066
+
+## Dissected Reference Files (added 2026-06-03)
+
+Detailed local-rule files for each non-air EHS family have been written to this folder:
+
+- **fire-code-local.md** — AMC Title 4 Ch. 7; Ordinance No. 661 (2023); 2022 CFC adoption; local amendments per AMC §4-7.103; fee schedule; WUI zones.
+- **cupa-local.md** — SLO County EHS CUPA (county-wide, not city-run); all six program elements; full fee schedule (FY 2025/2026); HMBP thresholds; CERS portal.
+- **wastewater-local.md** — City POTW (WRF, 1.4 MGD); governing order R3-2020-0020 (land discharge, NOT NPDES); sewer use in AMC Title 7 Chs. 3/5/8; industrial pretreatment provisions NOT published online — contact (805) 470-3148.
+- **zoning-industrial.md** — AMC Title 9; IP and I zone purposes, permitted/CUP/AUP uses per Table 3-2 (§9-3.330); development standards; CUP/AUP fees (2025).

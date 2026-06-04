@@ -4,6 +4,12 @@ name: City of Oakland
 ---
 
 > Local EHS authority reference for **City of Oakland**. Orientation for the research subagent: who administers local programs and where adopted codes live. Verify the live page before quoting.
+>
+> **Dissection files (fetched 2026-06-03):**
+> - [fire-code-local.md](fire-code-local.md) — Ord. 13720 CMS (2022 CFC), OMC Ch. 15.12, permit types, FY 2025-26 fee schedule
+> - [cupa-local.md](cupa-local.md) — ACDEH as county CUPA (Oakland city CUPA decertified 2015); OMC Ch. 8.42; HMBP/UST/HWG/APSA/CalARP fees from ACDEH fee schedule
+> - [wastewater-local.md](wastewater-local.md) — EBMUD WCO (eff. Sept 13 2024, Ord. 377-24); Title II §3 local discharge limits table; permit types and application process
+> - [zoning-industrial.md](zoning-industrial.md) — Planning Code Title 17, Ch. 17.73; CIX-1A through CIX-2, IG, IO zone districts; CUP triggers (5,000 sf, 300/600 ft residential proximity, 25,000 sf warehousing)
 
 ## EHS Local Rules by Family
 

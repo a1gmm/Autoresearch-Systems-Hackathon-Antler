@@ -87,6 +87,13 @@ name: Napa County
 - Source (Ch. 18.124 Use Permits): https://library.municode.com/ca/napa_county/codes/code_of_ordinances?nodeId=TIT18ZO_CH18.124USPE
 - Source (zoning district summary): https://www.napacounty.gov/DocumentCenter/View/3377/Summary-of-Allowed-Uses-by-Zoning-District
 
+## Dissected Reference Files (non-air families)
+
+- **fire-code-local.md** — Ch. 15.32 local amendments, 2025 CFC adoption, CAL FIRE/NCFD development standards, fire flow tables B105.2/B105.3, WUI provisions, fee reference (Part 85)
+- **cupa-local.md** — DEH CUPA programs, full fee schedule (Part 110, eff. 07/07/2025), HMBP/UST/APSA/CalARP/HazWaste fees, stormwater permits, local municipal code references
+- **wastewater-local.md** — NapaSan District Code Title 4 (Ord. 118, Jan 2023), full local discharge limits table (29 constituents with mg/L values), permit categories, pretreatment requirements
+- **zoning-industrial.md** — Title 18 industrial districts (IP/Ch.18.40, I/Ch.18.36, GI/Ch.18.44), permitted vs CUP uses, combining districts (:FR, :GR, :AV, :UR), Ch. 18.124 Use Permit process
+
 ## Notes / GOTCHAs
 
 - GOTCHA (single countywide CUPA): DEH under PBES is the sole CUPA for all of Napa County including all five incorporated jurisdictions. No city runs its own CUPA.

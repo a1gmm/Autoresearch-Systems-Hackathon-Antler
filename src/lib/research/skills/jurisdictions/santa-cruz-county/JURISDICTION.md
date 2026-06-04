@@ -68,6 +68,19 @@ name: Santa Cruz County
 - Source (industrial districts code draft, Nov 2022 Board hearing): https://cdi.santacruzcountyca.gov/Portals/2/County/Planning/SustainabilityUpdate/Code_Amendments/13_10_341-346_IndustrialDistricts_public_draft.pdf
 - Source (CUP process): https://cdi.santacruzcountyca.gov/UPC/DiscretionaryPermitsZoning/DiscretionaryPermits/ConditionalPermits-ZoningAdministrator.aspx
 
+## Dissected Family Files (non-air)
+
+The following family-specific reference files have been written from fetched source documents (2026-06-03):
+
+| File | Family | Key Source |
+|------|--------|-----------|
+| [fire-code-local.md](fire-code-local.md) | Fire | SCCC Ch. 7.92, Ord. 5415; CFD Ord. 2025-03 |
+| [cupa-local.md](cupa-local.md) | CUPA / Hazmat | SCCC Ch. 7.100; scceh.com; EHS fee schedule |
+| [wastewater-local.md](wastewater-local.md) | Wastewater / Pretreatment | SCCSD District Code §7.04; 2023 Annual Pretreatment Report |
+| [zoning-industrial.md](zoning-industrial.md) | Zoning / Industrial | SCCC §13.10.341–346; Zone District Summary |
+
+Air family: not dissected here — see air-specific references and SCAQMD/MBARD jurisdiction layer.
+
 ## Notes / GOTCHAs
 
 - **Single county-wide CUPA:** Santa Cruz County EHS is the ONLY CUPA in the county. All four cities — including Santa Cruz and Watsonville (with their own fire/building departments) — are served by the county CUPA for HMBP/hazwaste/UST/APSA/CalARP. No city-run CUPA; no PA split.

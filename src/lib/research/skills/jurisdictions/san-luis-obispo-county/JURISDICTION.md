@@ -69,3 +69,14 @@ name: San Luis Obispo County
 - **No single county POTW:** Pretreatment/IWP jurisdiction depends on which sanitation district serves the facility's location — do not assume a county-level program exists.
 - **Multi-agency hazmat response team:** A regional San Luis Obispo Hazardous Materials Team handles emergency response (CAL FIRE/County Fire, City SLO Fire, Five Cities Fire, Paso Robles Fire, Atascadero Fire, County EHS). This is emergency response, NOT CUPA permitting authority.
 - **2025 CFC/CBC:** The 2025 California Building Standards Code became the statewide standard effective 2026-01-01. Verify whether SLO County has adopted it locally to supersede Ordinance No. 3481 (2022 CFC) and the 2022 Building Code Updates.
+- **SSLOCSD Ordinance 1994-1 local limits:** The pretreatment ordinance PDF is a scanned image-only document; specific numerical local discharge limits (metals, BOD, TSS) could not be extracted automatically. Call SSLOCSD at (805) 489-6666 for current limits.
+- **City SLO Chapter 13.08 local limits:** The municipal code pages for §§ 13.08.040/13.08.050 returned 403 at fetch time; numerical limits table was not retrievable. Contact the City SLO Environmental Programs Division directly.
+- **Title 22 Table 2-2:** The Municode library returns 403 for direct chapter pages; the full Table 2-2 matrix (permitted vs. MUP vs. CUP by use in IND category) could not be extracted. Use the PermitSLO portal or call 805-781-5000 for a specific parcel determination.
+- **Title 23 § 23.08.080:** The Coastal Zone Industrial Uses special standards page returned 403 at fetch time; the full text of local development standards within that section needs direct verification.
+
+## Dissected Family Files (non-air)
+
+- **fire-code-local.md** — Ord. 3481 (2022 CFC adoption), Ch. 16.10 local amendments, dead-end road table, driveway standards, fireworks prohibition, address ID requirements
+- **cupa-local.md** — County EHS CUPA (CalEPA ID 1058), 7 programs, HMBP thresholds, PA split with City SLO Fire Dept, CERS portal
+- **wastewater-local.md** — No county POTW; SSLOCSD (Ord. 1994-1, WDR Order R3-2009-0046) + City SLO WRRF (Ch. 13.08); SIU thresholds; local limits gap noted
+- **zoning-industrial.md** — Title 22 IND land use category (no M-1/M-2); Titles 22 and 23 structure; Table 2-2 permit types (A/MUP/CUP); Chapter 22.30 use standards; Coastal § 23.08.080 (S-5); CUP process via PermitSLO

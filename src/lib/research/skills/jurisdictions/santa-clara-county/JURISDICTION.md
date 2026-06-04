@@ -125,9 +125,19 @@ Source: https://library.municode.com/ca/santa_clara_county/codes/code_of_ordinan
 
 ---
 
+## Reference Files (Non-Air Families)
+
+Detailed dissections are in separate files:
+- **fire-code-local.md** — CFC edition, Ordinance NS-300.903, Division B7, SCCFD permit types
+- **cupa-local.md** — HMCD agency, HMSO/TGO ordinance chapters, programs, fee schedule URL
+- **wastewater-local.md** — SJ Ch. 15.14, POTW co-permittees, local limits pollutants, IWDP portal
+- **zoning-industrial.md** — ML / MH districts, use table, development standards, Use Permit process
+
 ## GOTCHA Notes
 
 - **Four CUPAs in the county.** County DEH HMCD, City of Gilroy, City of Santa Clara, and City of Sunnyvale each operate independent CUPAs. Always confirm which CUPA has jurisdiction for the facility's address before filing.
 - **San José is under County CUPA.** Despite being a major city, San José does not operate its own CUPA — HMCD is the CUPA of record.
 - **Wastewater lead authority is the City of San José**, not the county, for the SJ/SC Regional WRF service area. Unincorporated facilities may fall under a sanitation district instead — identify the receiving POTW first.
 - **SCCFD does not serve San José** for fire code purposes — San José Fire Dept is the AHJ within city limits, (408) 535-7770.
+- **Zoning districts are ML / MH, not M-1 / M-2.** The county uses its own nomenclature. Generic M-1/M-2 labels do not appear in the county Zoning Ordinance.
+- **Fire code ordinance number is NS-300.903** for the 2022 CFC adoption. The 2025 CFC took effect January 1, 2026; verify whether a new NS-300.xxx adopting ordinance has been enacted before advising on the current enforceable edition.

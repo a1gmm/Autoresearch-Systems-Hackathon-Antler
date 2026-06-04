@@ -75,3 +75,17 @@ name: San Benito County
 - San Benito has only two incorporated cities (Hollister, San Juan Bautista). Nearly all industrial land is in or near Hollister city limits.
 - RWQCB split: county spans mostly Region 3 (Central Coast); confirm watershed for any specific parcel before citing the controlling board.
 - The 2025 California Building Standards Code took effect statewide 2026-01-01; confirm whether the county/city has formally re-adopted for local amendments.
+
+## Dissected Reference Files (non-air families)
+
+Created 2026-06-03:
+
+- **fire-code-local.md** — Hollister Fire Dept AHJ; adopting ordinance Hollister Municipal Code § 15.04.050 / Ordinance 1224; 2022 CFC with Exhibit A amendments (10/27/2022); operational permit fee schedule per Resolution 2024-106.
+- **cupa-local.md** — County CUPA (HHSA Environmental Health); programs: HMBP, UST, APSA, CalARP, hazardous waste; fee authority at § 5.01.091. Fee schedule dollar amounts not published online — contact (831) 636-4035.
+- **wastewater-local.md** — City of Hollister POTW; Hollister Municipal Code Ch. 13.08 governs sewer use and industrial waste; local discharge limit table not published online — contact Environmental Programs Division at (831) 636-4377 x1416.
+- **zoning-industrial.md** — San Benito County Title 25 Zoning; industrial districts BP, M-1, M-2 per § 25.03.007; CUP process per § 25.02.003; 2022 code update.
+
+**Not created (content not available online):**
+- Air family files are intentionally excluded per task scope.
+- No separate City of Hollister zoning industrial file created (Hollister zoning is Title 17 of Hollister Municipal Code; only unincorporated county Title 25 covered here).
+- CUPA fee schedule and wastewater local discharge limits were not findable on public web portals and were not fabricated; obtain directly from the agencies.

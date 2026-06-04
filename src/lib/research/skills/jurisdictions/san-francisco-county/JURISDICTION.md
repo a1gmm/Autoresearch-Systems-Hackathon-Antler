@@ -71,6 +71,17 @@ name: San Francisco County
 - **Property lookup:** SF Planning GIS Property Information Map — https://sfplanninggis.org/PIM/
 - Source: https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_planning/0-0-0-20114 (Sec. 210) | https://sfbos.org/industrial-protection-zones-livework-projects-and-community-plans | https://www.sf.gov/information--zoning-businesses
 
+## Detail Files
+
+Local-rule deep-dives are in separate files (fetched 2026-06-03):
+
+| File | Family | Coverage |
+|------|--------|----------|
+| [fire-code-local.md](./fire-code-local.md) | Fire | Ord. 248-22 adoption details, [For SF] amendments, Table 107-A fee table, MAQ thresholds |
+| [cupa-local.md](./cupa-local.md) | Hazmat/CUPA | SFDPH HMUPA programs, Health Code Articles 21/21A/22, registration thresholds, Sec. 1176 fee schedule |
+| [wastewater-local.md](./wastewater-local.md) | Wastewater | SFPUC pretreatment, Article 4.1/Ord. 19-92, DPW Order No. 158170 local discharge limits table, permit types |
+| [zoning-industrial.md](./zoning-industrial.md) | Zoning | Planning Code §§ 210.3–210.4, M-1/M-2 and PDR-1-D/PDR-1-G/PDR-2 districts, CUA process |
+
 ## Notes
 
 - **CONSOLIDATED CITY-COUNTY:** San Francisco is a single consolidated city and county. There are no separately incorporated cities within it; all local EHS authority (CUPA, fire AHJ, building, POTW, stormwater, zoning) is held by City and County of San Francisco departments. No city-level files apply.

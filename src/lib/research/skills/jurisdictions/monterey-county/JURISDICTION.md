@@ -79,6 +79,15 @@ name: Monterey County
 - Source: https://library.municode.com/ca/monterey_county/codes/code_of_ordinances?nodeId=TIT21ZO_CH21.26RELIINZODILIDI_21.26.040USAL
 - Source: https://library.municode.com/ca/monterey_county/codes/code_of_ordinances?nodeId=TIT21ZO
 
+## Reference Files (non-air families)
+
+| File | Family | Status |
+|---|---|---|
+| `fire-code-local.md` | Fire | Written 2026-06-03. Ch. 18.09 references the 2016 CFC; CFC edition as actually adopted and local amendment text in §18.09.030 require direct Municode/MCRFD verification (Municode blocks automated fetch). Fee schedule from MCRFD FY 2024-25 PDF is complete. |
+| `cupa-local.md` | CUPA | Written 2026-06-03. Ch. 10.65 confirmed as local ordinance; fee schedule PDF at county fees page (direct access required — page blocked during fetch). Dollar amounts per permit tier not extracted. |
+| `wastewater-local.md` | Wastewater | Written 2026-06-03. Ordinance No. 2023-01 text extracted directly from PDF. Full Local Limits table (15 pollutants) and SIU/MTCIU definitions are verbatim from the ordinance. |
+| `zoning-industrial.md` | Zoning | Written 2026-06-03. LI (Ch. 20.26) and HI (Ch. 20.28) district text extracted from county planning server HTML. Title 21 inland chapter (21.26) confirmed in Municode but full text blocked; coastal Title 20 content is complete. |
+
 ## Gotchas
 
 - **Single CUPA county-wide:** Monterey has ONE CUPA (Environmental Health Bureau HMMS) covering all incorporated cities and unincorporated areas — no city-run CUPAs anywhere in the county.

@@ -75,9 +75,23 @@ name: City of St. Helena
 - Source: https://sthelena.municipal.codes/Code/17.15.020
 - Source: https://www.cityofsthelena.gov/573/Zoning-Code---Key-Changes-and-Enhancemen
 
+## Dissected Reference Files (non-air families)
+
+The following files were added 2026-06-03 with real fetched content:
+
+| File | Family | Key Content |
+|------|--------|-------------|
+| [fire-code-local.md](fire-code-local.md) | Fire | Ord. 22-12 adopts 2022 CFC; local amendments (SHMC 15.36): 16% grade limit, gate widths, 30-unit two-road rule (contested 2026), sprinkler triggers |
+| [cupa-local.md](cupa-local.md) | Hazmat | Napa County DEH is sole CUPA; full fee table (eff. 07/07/2025); county code refs (Ch. 16.20 UST, 16.28 SW); SHMC 17.28.080 hook |
+| [wastewater-local.md](wastewater-local.md) | Wastewater | SHMC Ch. 13.24; NPDES CA0038016 effluent limits extracted from Tentative Order R2-2021-00XX; critical user definition; pretreatment permit process |
+| [zoning-industrial.md](zoning-industrial.md) | Zoning | Title 17 Ord. 23-4 (Oct. 24, 2023); I and SC districts; P/MUP/CUP table summary; CUP process (3–5 mo avg; Planning Commission hearing) |
+
+**Fetch gap:** SHMC 13.24.030 local numeric discharge limits (industrial sewer limits) were not retrievable — both sthelena.municipal.codes and codepublishing.com are protected by Cloudflare (403/JS challenge). Contact City Public Works for the current local limit table.
+
 ## GOTCHA Notes
 
 - **Reverse fire contract:** St. Helena runs its OWN municipal fire department. The County of Napa contracts WITH St. Helena (not the other way) to cover adjoining unincorporated areas.
 - **CUPA is county-run:** No city-level CUPA; all hazmat/hazwaste permits go through Napa County DEH at 707-253-4417.
-- **NPDES permit lapsed:** The WWTRP NPDES permit (CA0038016) expired February 2021; a tentative reissuance order was posted April 2021. Verify current permit status with San Francisco Bay RWQCB before quoting discharge limits.
-- **2026 fire access change:** The two-road access requirement ordinance amendment (early 2026) may affect industrial/commercial development fire-permit conditions — verify current SHMC 15.36.100 text before advising on site design.
+- **NPDES permit lapsed:** The WWTRP NPDES permit (CA0038016) Tentative Order R2-2021-00XX had a face expiration of May 30, 2026; verify whether a final reissuance order was adopted. City must file new Report of Waste Discharge by September 1, 2025.
+- **2026 fire access dispute:** The two-road access requirement (SHMC 15.36.100 / CFC D107.1) was removed by Council in early 2026, reinstated by 4-0 vote May 12, 2026 — active litigation. Verify current SHMC 15.36.100 text before advising on any site design requiring fire access.
+- **2025 CFC transition:** Statewide 2025 CFC effective January 1, 2026. City Attorney has flagged that SHMC 15.36 language referencing "2022 CFC" may need re-adoption. Confirm adopted edition with SHFD before citing code requirements.

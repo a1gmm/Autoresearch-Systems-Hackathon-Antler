@@ -67,9 +67,20 @@ name: Marin County
 - Source (§ 22.12.020): http://marincounty-ca.elaws.us/code/coor_title22_artii_ch22.12_sec22.12.020
 - Source (planning fees): https://www.marincounty.gov/departments/cda/planning/planning-permits/planning-division-fees
 
+## Dissected Local Reference Files
+
+The following family-level files were created from fetched source documents (June 2026):
+
+- **fire-code-local.md** — Ord. 3775, Chapter 16.16 MCC, 2022 CFC; key local amendments; 2025 CFC adoption pending.
+- **cupa-local.md** — Marin Public Works CUPA, Ord. 3490 fee schedule, all six program elements + full fee tables.
+- **wastewater-local.md** — NSD Ord. 70 (Aug 2022), § 809 local discharge limits table, three permit classes, Table 1 fee schedule; Sani5 Ord. 2014-02a.
+- **zoning-industrial.md** — Title 22 Dev Code, Ch. 22.12, IP zone (Industrial Planned), Master Plan requirement, § 22.12.030 land use structure, Ch. 22.48 CUP process.
+
 ## Notes & GOTCHAs
 
 - **CUPA placement:** Marin's CUPA is in **Public Works**, not Environmental Health or a fire-hazmat division. Single countywide CUPA — no separate city-run CUPAs verified; incorporated cities including San Rafael and Novato are served by the county Public Works CUPA.
 - **No single POTW:** Wastewater is fragmented across independent sanitary districts (NSD, Sani5, Central Marin Sanitation Agency, Las Gallinas Valley SD, etc.). Always identify the correct district for the parcel before pursuing an IWP.
 - **Fire consolidation:** Central Marin Fire Department is a JPA serving Larkspur and Corte Madera — do not list as standalone city departments. Source: https://www.centralmarinfire.org/
-- **Ordinance 3775 / CFC edition:** The most recent fire code ordinance (No. 3775, December 2024) adopts the **2022 CFC**. The statewide 2025 California Building Standards Code took effect 2026-01-01; confirm whether a subsequent Marin ordinance has adopted the 2025 CFC before citing the edition.
+- **Ordinance 3775 / CFC edition:** Ord. 3775 (December 2024) adopts the **2022 CFC**. A new ordinance to adopt the **2025 CFC** was placed on the November 18, 2025 consent calendar with an effective date of January 1, 2026. As of June 2026 verify with MCFD whether the 2025 CFC is now operative and what ordinance number was assigned.
+- **IP zone is a Planned District:** Any new or changed industrial use in the IP zone requires a **Master Plan (MP)** or Precise Development Plan (PDP) — not just a CUP. See zoning-industrial.md and Title 22 Ch. 22.44.
+- **CUPA fee schedule currency:** Ord. 3490 fees effective July 1, 2017 — verify whether the Board has adopted a subsequent fee resolution before quoting amounts.

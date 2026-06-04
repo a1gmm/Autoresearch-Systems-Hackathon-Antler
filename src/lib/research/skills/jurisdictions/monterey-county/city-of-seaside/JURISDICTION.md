@@ -80,3 +80,20 @@ name: City of Seaside
 - **No own CUPA:** Seaside businesses submit HMBP/UST/hazardous waste reports through CERS to Monterey County HMMS, not to any city department.
 - **M-1 use prohibition:** Any industrial use constituting a "potential hazard or nuisance in terms of fire, explosive, pollution or excessive noise" is expressly prohibited outright in M-1 and would require a variance or alternative siting — relevant for chemical handling, bulk flammables, or noisy operations.
 - **Sewer pretreatment flows through MRWPCA:** Industrial users discharging to SCSD are regulated under MRWPCA Ord. 2008-01; contact MRWPCA or SCSD to confirm whether an Industrial User permit (IUP/IWP) is required before discharge.
+
+## Dissected Local Reference Files (2026-06-03)
+
+The following non-air family files have been created with real extracted content:
+
+| File | Family | Status |
+|---|---|---|
+| fire-code-local.md | Fire Code | Completed — Ord. 2017, SMC Ch. 15.04, 2022 CFC, local amendments extracted |
+| cupa-local.md | Hazmat/CUPA | Completed — County HMMS, CERS portal, state surcharge fees, thresholds |
+| wastewater-local.md | Wastewater | Completed — SCSD Ord. 21 + MRWPCA Ord. 2008-01, local discharge limits table |
+| zoning-industrial.md | Zoning | Completed — M-1 zone §§ 3.100–3.105, CUP Ch. 17.62, CH zone note |
+
+**Items not found publicly online (not fabricated):**
+- Seaside Fire Department itemized permit fee schedule — not published online; call (831) 899-6790
+- Monterey County HMMS itemized annual CUPA permit fee table for 2024-2025 — fee schedule PDF requires county website direct access; call (831) 755-4505
+- MRWPCA Industrial Waste Discharge Permit application portal URL — contact MRWPCA directly at (831) 372-3367 or https://montereyonewater.org/
+- SMC Ch. 15.04 full local-amendment exhibit (Ord. 2017) for hazmat permit amounts and high-piled storage thresholds — codepublishing.com returned 403; call Fire Prevention (831) 899-6790

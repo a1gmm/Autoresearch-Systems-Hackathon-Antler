@@ -72,6 +72,13 @@ name: Contra Costa County
 - Source: http://contracostaco-ca.elaws.us/code/oc_title8_div84_ch84-58
 - Source: https://library.municode.com/ca/contra_costa_county/codes/ordinance_code?nodeId=TIT8ZO_DIV82GERE_CH82-6LAUSPE
 
+### Detailed Reference Files (non-air families)
+
+- **fire-code-local.md** — Full text of Ordinance 2025-14 (adopts 2025 CFC, supersedes 2022-34); all local amendments verbatim; hazmat, high-piled, access road, and sprinkler provisions.
+- **cupa-local.md** — CUPA administrator (Contra Costa Health/CCHHMP), programs, ISO Chapter 450-8, Resolution No. 2024-293 fee structure (effective Aug 13, 2024).
+- **wastewater-local.md** — Central San Title 10 (Ord. 333, June 6, 2024): chapter structure, all prohibitions (§ 10.08.040 text verbatim), IU classification system (Class I–IV), permit types, numeric limits via Board resolution.
+- **zoning-industrial.md** — Ordinance Code Title 8 industrial districts (C-M/Ch.84-56, L-I/Ch.84-58, W-3/Ch.84-60, H-I/Ch.84-62, Ch.84-63 hazmat LUP), Land Use Permit Chapter 82-6, 2024 Zoning Update Report status.
+
 ### GOTCHAs — Unusual Local Rules
 
 - **Industrial Safety Ordinance (ISO):** Ch. 450-8 is a local CalARP overlay for petroleum refineries and chemical plants — stricter than state CalARP. A separate Richmond ISO also exists. Always research Ch. 450-8 in addition to CalARP for major chemical/refinery facilities.

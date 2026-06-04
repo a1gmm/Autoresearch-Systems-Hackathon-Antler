@@ -4,6 +4,12 @@ name: Orange County
 ---
 
 > Local EHS authority reference for **Orange County** (unincorporated territory). Orientation for the research subagent: who administers each local program, which local ordinances govern it, and where to apply or verify. Always fetch the live page before quoting fees or editions.
+>
+> **Detail files (non-air families, fetched 2026-06-03):**
+> - [`fire-code-local.md`](fire-code-local.md) — OCFA, CFC 2025 Edition, Ord. 25-022, Guideline G-04, fee codes
+> - [`cupa-local.md`](cupa-local.md) — OC HCA CUPA, programs, HMBP thresholds, participating agencies
+> - [`wastewater-local.md`](wastewater-local.md) — OC San OCSD-53, discharge limits table, permit fees
+> - [`zoning-industrial.md`](zoning-industrial.md) — M1 Light Industrial district, uses table, SDP/UP process
 
 ## EHS Local Rules by Family
 
@@ -63,7 +69,7 @@ name: Orange County
 
 - **Governing code:** County Codified Ordinances, **Title 7** (Land Use and Building Regulations), **Division 9** (Planning), **Article 2** (The County Zoning Code), Subarticle 2 (Base Districts). Published as the "Orange County Zoning Code."
 - **Current adopted version:** July 25, 2024 — https://pwds.oc.gov/sites/ocpwocds/files/2024-08/Adopted%20Orange%20County%20Zoning%20Code%207-25-24.pdf
-- **Industrial district names:** The zoning code uses **Employment Districts** as the base category for industrial land (specific sub-district codes such as MP — Manufacturing Park, or equivalent, appear in the adopted zoning code document; exact alphanumeric designators should be confirmed from the July 2024 PDF or OC GIS zoning layer). [VERIFY — district codes not returned by fetched pages; check the zoning code PDF Table of Contents or https://data-ocpw.opendata.arcgis.com/datasets/unincorporated-orange-county-zoning].
+- **Industrial district names:** The zoning code uses **Employment Districts** (Sec. 7-9-34) as the sole industrial base category. The only industrial base district in unincorporated OC is **M1 "Light Industrial"** — there is no M2 or heavy industrial district. Resource extraction uses **SG "Sand and Gravel Extraction" District** (Sec. 7-9-35). See [`zoning-industrial.md`](zoning-industrial.md) for the full use table and standards extracted from the July 2024 PDF.
 - **CUP process:** Development applications, including Conditional Use Permits, are submitted through **myOCeServices** — https://myoceservices.ocgov.com/
 - **Planning contact:** OC Development Services, Planning Division | 855-886-5400 | https://pwds.oc.gov/service-areas/oc-development-services/planning-development
 - Source (zoning code): https://pwds.oc.gov/sites/ocpwocds/files/2024-08/Adopted%20Orange%20County%20Zoning%20Code%207-25-24.pdf

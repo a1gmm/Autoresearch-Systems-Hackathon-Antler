@@ -93,3 +93,16 @@ name: City of Riverside
 **GOTCHA**: RMC Chapter 14.12 covers **both** industrial wastewater (pretreatment) AND stormwater discharge to the MS4 — they share the same chapter.
 
 **GOTCHA**: City industrial zones use BMP/I/AI/AIR designations, not M-1/M-2. Confirm zone classification via the interactive map before assuming a traditional industrial use table applies.
+
+---
+
+## Dissection Files (non-air families)
+
+The following files contain extracted local ordinance detail for each non-air family:
+
+| File | Family | Key anchors |
+|------|--------|-------------|
+| [fire-code-local.md](fire-code-local.md) | Fire Code | RMC Title 16, Ch. 16.32; 2025 CFC eff. 2026-01-01; Ch. 16.36 radio amplification local amendment |
+| [cupa-local.md](cupa-local.md) | CUPA | RMC Ch. 9.48; PA since 1998 under County DEH; fee schedule from Nov 2023 council action (Ch. 3.30) |
+| [wastewater-local.md](wastewater-local.md) | Industrial Wastewater | RMC Ch. 14.12; local limits table (effective 02/25/2025, per Resolutions 20295, 21185, 23286); permit Classes I–VI with fees |
+| [zoning-industrial.md](zoning-industrial.md) | Zoning / Industrial | Title 19, Ch. 19.130 (BMP/I/AI/AIR); Ch. 19.150 permitted uses; CUP per Ch. 19.760 |
