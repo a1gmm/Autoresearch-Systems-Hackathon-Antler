@@ -1,0 +1,23 @@
+{
+  "confidence": 0.72,
+  "metadata": {
+    "applicability": "conditional_on_SCAQMD_jurisdiction",
+    "missing_facts": [
+      "facility county/location to confirm controlling air district",
+      "solvent SDS/VOC content and usage/throughput",
+      "whether booth is new/altered/replaced or existing"
+    ],
+    "official_source_notes": {
+      "permit_requirements_page": "Official aqmd.gov permit page fetched HTTP 200 but text extraction returned empty; used only as supporting official pointer, not for rule text.",
+      "rule_201_pdf": "Fetched from aqmd.gov with HTTP 200; PDF metadata title Rule 201. Permit to Construct; last-modified header Tue, 07 Apr 2026 22:13:38 GMT."
+    }
+  },
+  "run_id": "run_057dc1227e2f",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf",
+    "https://www.aqmd.gov/home/permits/permit-requirements-and-procedures"
+  ],
+  "submitted_at": "2026-06-03T06:13:14.802819+00:00",
+  "summary": "The assigned hypothesis cannot be finally resolved because the project location/county is unknown, so SCAQMD jurisdiction is unconfirmed. If the coating shop is within South Coast AQMD jurisdiction, Rule 201 is directly triggered by installing or altering equipment that may cause air-contaminant emissions: the rule states that a person shall not build, erect, install, alter, or replace equipment, use of which may cause issuance of air contaminants, without prior written authorization. A coating or paint booth using/storing 60 gallons of flammable solvent may emit VOC/air contaminants, so it should be treated as requiring SCAQMD Permit to Construct applicability review unless a separate exemption/registration pathway (not decided in this hypothesis) applies. No VOC-content/SDS data were provided, so VOC emission magnitude or any higher-tier VOC review could not be quantified.",
+  "title": "H-AIR-VOC: SCAQMD Rule 201 likely requires permit review for coating booth/solvent storage if facility is in SCAQMD jurisdiction; location unresolved"
+}

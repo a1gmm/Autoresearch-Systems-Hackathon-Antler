@@ -5,6 +5,8 @@ import { useStore } from "@/lib/ui/store";
 import { Send, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ChatMessage, IntakeChatResponse } from "@/lib/intake/types";
+import { SdsDocumentPicker } from "./SdsDocumentPicker";
+import type { SdsDocumentInput } from "@/lib/sds/types";
 
 type Props = {
   onStarted: () => void;
@@ -17,6 +19,10 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [documents, setDocuments] = useState<SdsDocumentInput[]>([]);
+  const documentsRef = useRef<SdsDocumentInput[]>([]);
+  documentsRef.current = documents;
   const startedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -43,7 +49,14 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
       }
       if (data.complete) {
         onStarted();
-        void startRun({ project_description: data.project_description, demo_documents: [] });
+        void startRun({
+          project_description: data.project_description,
+          demo_documents: documentsRef.current.map((document) => ({
+            name: document.name,
+            type: document.type,
+            text: document.text,
+          })),
+        });
         return;
       }
       setMessages([...history, { role: "assistant", content: data.message }]);
@@ -67,7 +80,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
 
   function handleSend() {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || uploadBusy) return;
     const history: ChatMessage[] = [...messages, { role: "user", content: text }];
     setMessages(history);
     setInput("");
@@ -157,6 +170,11 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
           )}
         </div>
 
+        {/* SDS / document attachments — uploaded files ride along to the research agents */}
+        <div className="border-t border-slate-700/40 px-3.5 pt-3">
+          <SdsDocumentPicker documents={documents} onChange={setDocuments} onBusyChange={setUploadBusy} />
+        </div>
+
         {/* Input */}
         <motion.div
           className="flex gap-2 border-t border-slate-700/40 p-3.5"
@@ -177,7 +195,7 @@ export function IntakeChat({ onStarted, onSkip }: Props) {
           <button
             type="button"
             onClick={handleSend}
-            disabled={busy || input.trim().length === 0}
+            disabled={busy || uploadBusy || input.trim().length === 0}
             className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-30 transition-all duration-200 border-0 cursor-pointer hover:shadow-glow disabled:cursor-default"
           >
             <Send size={16} />

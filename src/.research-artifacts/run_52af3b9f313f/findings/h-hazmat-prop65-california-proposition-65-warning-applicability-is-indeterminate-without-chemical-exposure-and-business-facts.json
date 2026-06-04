@@ -1,0 +1,24 @@
+{
+  "confidence": 0.74,
+  "metadata": {
+    "hypothesis_id": "H-HAZMAT-PROP65",
+    "missing_facts": [
+      "solvent identity/CAS and Prop 65 listed constituents",
+      "exposure scenario and dose",
+      "employee count (<10 exemption)",
+      "California facility location/jurisdiction not resolved"
+    ],
+    "note": "OEHHA pages were located via official search results but direct fetch was blocked by Incapsula; LegInfo section pages were accessible only with limited extracted text in sandbox.",
+    "run_id": "run_52af3b9f313f"
+  },
+  "run_id": "run_52af3b9f313f",
+  "sources": [
+    "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25249.6.",
+    "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25249.10.",
+    "https://oehha.ca.gov/proposition-65/businesses-and-proposition-65",
+    "https://oehha.ca.gov/proposition-65/general-info/proposition-65-no-significant-risk-levels-nsrls-and-maximum-allowable-dose-levels-madls"
+  ],
+  "submitted_at": "2026-06-03T06:27:20.703962+00:00",
+  "summary": "For a coating shop storing 60 gal of unspecified flammable \u201csolvent,\u201d Prop 65 cannot be ruled in or out on storage quantity alone. California HSC \u00a725249.6 is the core trigger: no person in the course of doing business may knowingly and intentionally expose an individual to a listed chemical without first giving a clear and reasonable warning. HSC \u00a725249.10 provides important exclusions/limits, including that the chapter does not apply to exposure for which federal law governs warning in a manner that preempts state authority, to businesses employing fewer than 10 employees, and to exposures that pose no significant risk (carcinogens) or have no observable reproductive-effect level assuming exposure at 1,000 times the level in question. Therefore the next facts needed are: solvent identity/CAS and whether any constituents are on the Prop 65 list; reasonably anticipated occupational/consumer/environmental exposures from storage/coating use; facility employee count; and whether exposure is below an applicable safe-harbor level. If the solvent contains a listed chemical and a non-exempt business knowingly causes exposure above the applicable no-significant-risk/no-observable-effect threshold, a Prop 65 warning obligation is likely; otherwise not established.",
+  "title": "H-HAZMAT-PROP65: California Proposition 65 warning applicability is indeterminate without chemical/exposure and business facts"
+}

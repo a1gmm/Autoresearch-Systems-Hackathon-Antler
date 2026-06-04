@@ -121,6 +121,17 @@ def _unique(ids: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
+def _program_jurisdiction_ok(program: ProgramRegistryEntry, scope: ScopePack) -> bool:
+    """Jurisdiction gate (additive / strict): a program may declare an `air_district`; if so
+    it only activates when that district is the resolved controlling authority for the
+    facility (present in the jurisdiction stack). Programs WITHOUT an air_district (statewide
+    CA / federal / the legacy SCAQMD templates) are never gated, so no run regresses."""
+    district = getattr(program, "air_district", None)
+    if not district:
+        return True
+    return district in (scope.facility.jurisdiction_stack or [])
+
+
 def research_worker_tool_ids() -> list[str]:
     return _unique((*UNIVERSAL_TOOL_IDS, *RESEARCHER_CORE_TOOL_IDS))
 
@@ -154,6 +165,7 @@ def plan_research(
         for program in PROGRAM_REGISTRY
         if program.family in active_families
         and (program.triggered_by(scope) or program.family in sds_active_families)
+        and _program_jurisdiction_ok(program, scope)
     ]
     family_status_by = {status.family: status for status in coverage_family_statuses}
     regulatory_angles = [
@@ -347,6 +359,77 @@ def coverage_status_for(
             ),
         )
 
+    if family == "fire_code":
+        has_equipment = len(scope.project_change.equipment) > 0
+        active = has_chemicals or has_equipment or sds_flagged
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "Hazardous materials or a facility buildout may require fire-department "
+                "permits (hazardous-materials operational permit and/or high-piled storage)."
+                if active
+                else "No hazardous materials or storage/buildout change indicated."
+            ),
+            project_facts_considered=[
+                f"chemicals={has_chemicals}",
+                *equipment_kinds,
+                *(["sds:fire_relevance"] if sds_flagged else []),
+            ],
+            missing_facts=[],
+        )
+
+    if family == "osha":
+        active = has_chemicals or sds_flagged
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "A chemical process may involve a highly hazardous or flammable material "
+                "above the Cal/OSHA Process Safety Management threshold."
+                if active
+                else "No chemical process indicated that could trigger Process Safety Management."
+            ),
+            project_facts_considered=[f"chemicals={has_chemicals}", *( ["sds:psm_relevance"] if sds_flagged else [])],
+            missing_facts=[],
+        )
+
+    if family == "ceqa":
+        has_equipment = len(scope.project_change.equipment) > 0
+        active = has_equipment or has_chemicals or disturbance is not None
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "A discretionary approval for this project change may require CEQA review "
+                "unless a statutory or categorical exemption applies."
+                if active
+                else "No discretionary project change indicated that would trigger CEQA."
+            ),
+            project_facts_considered=[*equipment_kinds, f"chemicals={has_chemicals}", f"acres={disturbance}"],
+            missing_facts=[],
+        )
+
+    if family == "land_use":
+        has_equipment = len(scope.project_change.equipment) > 0
+        active = has_equipment or disturbance is not None
+        return CoverageFamilyStatus(
+            id=id,
+            family=family,
+            status="active" if active else "out_of_scope",
+            reason=(
+                "Establishing or changing the use/equipment may require a zoning clearance, "
+                "conditional use permit, or variance from the local planning authority."
+                if active
+                else "No use/occupancy change indicated that would require zoning review."
+            ),
+            project_facts_considered=[*equipment_kinds, f"acres={disturbance}"],
+            missing_facts=[],
+        )
+
     return CoverageFamilyStatus(
         id=id,
         family=family,
@@ -404,9 +487,14 @@ def task_for_hypothesis(
         allowed_tools=research_worker_tool_ids(),
         blocked_tools=blocked_tool_ids_for_role("researcher"),
         budget=ResearchTaskBudget(
-            max_sources=3,
-            max_runtime_seconds=30,
-            max_model_calls=4,
+            # Long, durable research on hard problems: read_skill -> search -> fetch +
+            # read across MULTIPLE official sources -> corroborate -> write artifacts ->
+            # submit. Generous budget so the subagent can be thorough; the verifier (not
+            # a turn cap) is the gate on result quality.
+            # Production, not demo: allow up to 60 min of durable research per hypothesis.
+            max_sources=8,
+            max_runtime_seconds=3600,
+            max_model_calls=16,
         ),
         jurisdiction_context=jurisdiction_context,
     )

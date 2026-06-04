@@ -1,4 +1,5 @@
 from research_core.verifier import (
+    CONFIDENCE_GATE,
     ConsistencySignal,
     authority_rank_check,
     compute_confidence,
@@ -29,8 +30,14 @@ def test_confidence_caps_failed_grounding_instead_of_averaging_high():
         "grounding": {"pass": False, "reason": "quote missing"},
         "predicate_math": {"pass": True, "reason": "decided"},
     }
+    all_pass = {name: {"pass": True, "reason": "ok"} for name in checks}
 
-    assert compute_confidence(checks) == 0.35
+    # The numerical model: failed grounding (highest-weight dimension) drags the
+    # weighted geometric mean far below the all-pass score -- it does not average high.
+    failed = compute_confidence(checks)
+    assert failed == 0.25
+    assert failed < CONFIDENCE_GATE
+    assert compute_confidence(all_pass) - failed > 0.4
 
 
 def test_stale_currency_status_needs_review_with_currency_repair_ticket():
@@ -199,7 +206,12 @@ def test_verify_evidence_creates_grounding_repair_ticket():
     )
 
     assert verdict.verdict == "fail"
-    assert verdict.confidence == 0.35
+    # Confidence is a computed number from continuous signals: a fabricated quote floors
+    # the grounding dimension, so the weighted geometric mean lands low and below the gate.
+    assert verdict.confidence == 0.38
+    assert verdict.confidence < CONFIDENCE_GATE
+    assert verdict.confidence_breakdown["method"] == "weighted_geometric_mean"
+    assert verdict.confidence_breakdown["dimensions"]["grounding"]["score"] < 0.2
     assert verdict.repair_tickets[0].failure_type == "grounding_failed"
     assert "does not trust" in verdict.distrust_reasons[0]
 

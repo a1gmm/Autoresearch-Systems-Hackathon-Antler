@@ -1,0 +1,30 @@
+{
+  "confidence": 0.72,
+  "metadata": {
+    "fetched_sources": [
+      {
+        "last_modified": "Tue, 07 Apr 2026 22:20:32 GMT",
+        "status_code": 200,
+        "title_metadata": "Rule 219 Equipment Not Requiring a Written Permit Pursuant to Regulation II",
+        "url": "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-219.pdf"
+      },
+      {
+        "last_modified": "Tue, 07 Apr 2026 22:13:38 GMT",
+        "status_code": 200,
+        "title_metadata": "Rule 201. Permit to Construct",
+        "url": "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf"
+      }
+    ],
+    "hypothesis_id": "H-AIR-219",
+    "key_limitation": "county/location unknown; SCAQMD jurisdiction not established; Rule 219 category/conditions not factually matched",
+    "run_id": "run_3135663b5254"
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-219.pdf",
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-201.pdf"
+  ],
+  "submitted_at": "2026-06-03T06:08:13.064456+00:00",
+  "summary": "The hypothesis is not determinable as stated because facility location/jurisdiction is unknown and the project facts do not establish that the coating/paint operation fits a specific SCAQMD Rule 219 exempt category and all of its conditions. If the site is in SCAQMD jurisdiction and no Rule 219 exemption applies, Rule 201 is the operative written Permit to Construct requirement for equipment that may emit air contaminants. The available facts identify a coating booth/paint operation and 60 gal flammable solvent storage, but do not provide coating method, VOC/material composition, usage rates, booth/control configuration, or location needed to evaluate any listed exemption.",
+  "title": "H-AIR-219 \u2014 SCAQMD Rule 219 applicability cannot be confirmed from provided facts"
+}

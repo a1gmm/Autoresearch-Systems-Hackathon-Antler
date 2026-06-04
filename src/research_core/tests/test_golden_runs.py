@@ -90,3 +90,21 @@ def test_golden_trusted_hypotheses_have_source_url_and_quote():
         source = evidence_by_hypothesis[hypothesis_id]["sources"][0]
         assert source["url"]
         assert source["quote"]
+
+
+def test_run_result_carries_trace_events_for_ui_animation():
+    # The UI animates the real run by replaying result.trace_events -> they must be present.
+    result = run_research_sync(
+        {
+            "project_description": (
+                "A Los Angeles County coating shop adds a coating booth and stores "
+                "60 gal flammable solvent."
+            ),
+            "facility": {"county": "Los Angeles", "city": "Los Angeles"},
+        },
+        deps="fake",
+    )
+    assert len(result.trace_events) > 0
+    scopes = {event.get("scope") for event in result.trace_events}
+    assert "scope:start" in scopes
+    assert "plan:complete" in scopes

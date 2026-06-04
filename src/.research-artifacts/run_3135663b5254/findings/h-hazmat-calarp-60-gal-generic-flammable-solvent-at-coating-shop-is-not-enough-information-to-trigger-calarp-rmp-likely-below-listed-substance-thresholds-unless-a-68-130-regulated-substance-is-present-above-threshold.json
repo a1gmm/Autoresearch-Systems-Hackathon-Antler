@@ -1,0 +1,28 @@
+{
+  "confidence": 0.72,
+  "metadata": {
+    "hypothesis_id": "H-HAZMAT-CALARP",
+    "key_quotes": [
+      "40 CFR 68.130(a): Regulated toxic and flammable substances under section 112(r) of the Clean Air Act are the substances listed in Tables 1, 2, 3, and 4. Threshold quantities for listed toxic and flammable substances are specified in the tables.",
+      "40 CFR 68.115(a): A threshold quantity of a regulated substance listed in \u00a7 68.130 is present at a stationary source if the total quantity of the regulated substance contained in a process exceeds the threshold.",
+      "40 CFR 68.115(b)(2)(i): If a regulated substance is present in a mixture and the concentration of the substance is below one percent by weight of the mixture, the mixture need not be considered... if the concentration ... is one percent or greater ... the entire weight of the mixture shall be treated as the regulated substance unless the owner or operator can demonstrate that the mixture itself does not have a National Fire Protection Association flammability hazard rating of 4.",
+      "40 CFR 68.130 Table 3 caption: List of Regulated Flammable Substances and Threshold Quantities for Accidental Release Prevention; entries show threshold quantity 10,000 lbs."
+    ],
+    "missing_facts": [
+      "solvent SDS/CAS/composition and weight percent of listed substances",
+      "solvent density or total weight",
+      "NFPA 704 flammability rating of mixture",
+      "California county/CUPA jurisdiction"
+    ],
+    "run_id": "run_3135663b5254"
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "https://www.ecfr.gov/api/versioner/v1/full/2025-10-03/title-40.xml?part=68&section=68.130",
+    "https://www.ecfr.gov/api/versioner/v1/full/2025-10-03/title-40.xml?part=68&section=68.115",
+    "https://www.govinfo.gov/content/pkg/CFR-2025-title40-vol17/pdf/CFR-2025-title40-vol17-sec68-130.pdf"
+  ],
+  "submitted_at": "2026-06-03T06:14:28.092398+00:00",
+  "summary": "CalARP/RMP applicability cannot be confirmed from the provided facts because \u201csolvent\u201d is not a specific listed regulated substance/CAS and no county/CUPA jurisdiction is known. Under the federal RMP list incorporated by CalARP orientation, regulated toxic and flammable substances are only those listed in 40 CFR 68.130 Tables 1\u20134, and thresholds are specified substance-by-substance. The federal threshold determination rule states a threshold is present only if the total quantity of the regulated substance in a process exceeds the listed threshold. For listed flammable substances in \u00a768.130 Table 3/Table 4, the threshold quantity shown is 10,000 lb for each listed flammable substance. A 60-gal solvent inventory would typically be far below 10,000 lb, but density/composition/CAS and mixture NFPA-4 status are missing; if the solvent contains \u22651 wt% of a listed flammable substance and the mixture itself has NFPA 704 flammability rating 4, the entire mixture weight is counted under \u00a768.115(b)(2). Conclusion: CalARP is not indicated on the current facts, but must be re-evaluated once the solvent SDS/composition and local CUPA/CalARP administering agency are identified.",
+  "title": "H-HAZMAT-CALARP: 60 gal generic flammable solvent at coating shop is not enough information to trigger CalARP/RMP; likely below listed-substance thresholds unless a \u00a768.130 regulated substance is present above threshold"
+}

@@ -10,6 +10,7 @@ export type Store = {
   run: ResearchRun | null;
   isRunning: boolean;
   runError: string | null;
+  lastInput: ResearchRunInput | null;
   replayedEventIds: Set<string>;
   replayDone: boolean;
   selectedHypothesisId: string | null;
@@ -33,6 +34,7 @@ const initial = {
   run: null,
   isRunning: false,
   runError: null,
+  lastInput: null as ResearchRunInput | null,
   replayDone: false,
   selectedHypothesisId: null,
   drawerOpen: false,
@@ -89,7 +91,7 @@ export const useStore = create<Store>((set, get) => {
     startRun: async (payload) => {
       const token = ++activeStartToken;
       clearActivePoll();
-      set({ ...initial, replayedEventIds: new Set(), isRunning: true });
+      set({ ...initial, replayedEventIds: new Set(), isRunning: true, lastInput: payload });
       try {
         const res = await fetch("/api/research/run", {
           method: "POST",

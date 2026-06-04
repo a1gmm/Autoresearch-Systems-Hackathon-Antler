@@ -1,0 +1,19 @@
+{
+  "confidence": 0.82,
+  "metadata": {
+    "hypothesis_id": "H-HAZMAT-APSA",
+    "jurisdiction_note": "County/CUPA not resolved; conclusion relies on federal SPCC threshold and lack of petroleum/oil fact.",
+    "provided_quantity_gal": 60,
+    "run_id": "run_3135663b5254"
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "40 CFR 112.1(b), eCFR API version 2026-06-01: applies to owners/operators of non-transportation-related facilities storing/using oil that could reasonably discharge to navigable waters and that have oil in aboveground/buried containers.",
+    "40 CFR 112.1(d)(2)(ii), eCFR API version 2026-06-01: part 112 does not apply where aggregate aboveground storage capacity is 1,320 U.S. gallons or less; only containers with capacity of 55 U.S. gallons or greater are counted.",
+    "40 CFR 112.1(d)(5), eCFR API version 2026-06-01: part 112 does not apply to any container with storage capacity of less than 55 gallons of oil.",
+    "40 CFR 112.2, eCFR API version 2026-06-01: \u201cOil\u201d includes fats, oils, greases, vegetable oils, and \u201cother oils and greases, including petroleum, fuel oil, sludge, synthetic oils, mineral oils, oil refuse\u2026\u201d; \u201cPetroleum oil\u201d means petroleum in any form including crude oil, fuel oil, mineral oil, sludge, oil refuse, and refined products."
+  ],
+  "submitted_at": "2026-06-03T06:18:00.311183+00:00",
+  "summary": "APSA/SPCC applicability is not established on the provided facts. The project describes storage of 60 gallons of flammable solvent at a coating shop, not petroleum/oil storage. Even if the solvent were an oil/petroleum product, the federal SPCC threshold excludes facilities with aggregate aboveground oil storage capacity of 1,320 U.S. gallons or less, counting only containers 55 gallons or larger; 60 gallons is far below 1,320 gallons. Therefore, on the stated facts, an APSA/SPCC plan/permit obligation is unlikely. Confirm whether the solvent is petroleum oil or otherwise an \u201coil\u201d and whether the facility has other aboveground oil containers that would raise aggregate capacity to >1,320 gallons.",
+  "title": "H-HAZMAT-APSA: 60 gal solvent storage is not enough by itself to trigger APSA/SPCC oil-storage applicability"
+}

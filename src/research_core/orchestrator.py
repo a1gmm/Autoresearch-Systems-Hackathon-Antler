@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -20,6 +21,7 @@ from research_core.models import (
     InformationRequest,
     MissingFact,
     ProjectChange,
+    ProvidedDocument,
     RunStatus,
     Scenario,
     ScopePack,
@@ -30,7 +32,7 @@ from research_core.raindrop import WorkshopTracer, workshop
 from research_core.scenarios import information_gap_options, scenarios_for_missing_fact
 from research_core.store import get_default_store
 from research_core.synthesis import synthesize_result
-from research_core.tools import DEFAULT_ALLOWED_HOSTS, SandboxPolicy
+from research_core.tools import DEFAULT_ALLOWED_HOSTS, SandboxPolicy, source_authority_rank
 from research_core.verifier import VerificationVerdict, repair_evidence, verify_evidence
 
 
@@ -41,6 +43,12 @@ ALLOW_NETWORK_ENV = "RESEARCH_CORE_ALLOW_NETWORK"
 ALLOW_BROWSER_ENV = "RESEARCH_CORE_ALLOW_BROWSER"
 SEARCH_ENDPOINT_ENV = "RESEARCH_CORE_SEARCH_ENDPOINT"
 AGENT_MODEL_ENV = "RESEARCH_CORE_AGENT_MODEL"
+DEFAULT_AGENT_MODEL = "gpt-5.5"
+# Repair is the quality-critical re-research step. Keep it on a strong model even when the
+# worker (researcher) runs cheap, so a tiered "cheap worker / strong repair" setup just
+# needs RESEARCH_CORE_AGENT_MODEL=<cheap> while repair stays strong by default.
+REPAIR_MODEL_ENV = "RESEARCH_CORE_REPAIR_MODEL"
+DEFAULT_REPAIR_MODEL = "gpt-5.5"
 
 
 class ResearchRunResult(BaseModel):
@@ -51,6 +59,9 @@ class ResearchRunResult(BaseModel):
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     verdicts: list[VerificationVerdict] = Field(default_factory=list)
     result: dict[str, Any] = Field(default_factory=dict)
+    # The run's own trace timeline, so the UI animates the REAL run (the adapter coerces
+    # each {scope, payload, created_at} into a TraceEvent the replay drives the graph from).
+    trace_events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 @dataclass
@@ -59,6 +70,7 @@ class ResearchDeps:
     discovery_proposals: list[dict[str, Any]] = field(default_factory=list)
     max_repair_attempts: int = 1
     agent_model: str | None = None
+    repair_model: str | None = None
     artifact_root: str | Path | None = None
 
     def discover(self, scope: ScopePack, plan: Plan) -> list[dict[str, Any]]:
@@ -97,7 +109,7 @@ class ResearchDeps:
                 previous_bundle,
                 scope,
                 _sandbox_policy(scope, self.artifact_root),
-                model=self.agent_model or _agent_model_from_env(),
+                model=self.repair_model or _repair_model_from_env(),
             )
         except Exception as exc:
             return _agent_error_bundle(
@@ -167,8 +179,19 @@ def run_research_sync(
         verdicts: list[VerificationVerdict] = []
         if not blocking_requests:
             active_store.update_status(run_id, RunStatus.RESEARCHING.value)
-            for task in plan.research_tasks:
-                bundle = active_deps.research(task, scope)
+            # Run hypotheses in PARALLEL: each is an independent subagent doing long
+            # (up to 60 min) durable research, so total wall-clock ~= the slowest one
+            # instead of the sum. The agents are I/O-bound (LLM + fetches), so threads
+            # give real concurrency. Store writes + tracer events stay sequential and in
+            # plan order below for deterministic, race-free persistence.
+            tasks = list(plan.research_tasks)
+            if tasks:
+                workers = min(len(tasks), _max_research_concurrency())
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    bundles = list(executor.map(lambda t: active_deps.research(t, scope), tasks))
+            else:
+                bundles = []
+            for task, bundle in zip(tasks, bundles):
                 evidence.append(bundle)
                 active_store.write_evidence(run_id, bundle)
                 active_tracer.event(
@@ -240,6 +263,7 @@ def run_research_sync(
             evidence=evidence,
             verdicts=verdicts,
             result=result,
+            trace_events=list(active_tracer.events),
         )
     except Exception as exc:
         active_store.update_status(run_id, RunStatus.FAILED.value, reason=str(exc))
@@ -273,10 +297,12 @@ def resume_research_sync(
 
 def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
     description = str(input_payload.get("project_description") or "").strip()
-    facility_payload = input_payload.get("facility") or {}
+    facility_payload = dict(input_payload.get("facility") or {})
+    _apply_location_answer(facility_payload, input_payload.get("provided_estimates") or {})
     chemicals = _chemicals_from_input(input_payload, description)
     equipment = _equipment_from_description(description)
     waste_streams = _waste_from_input(input_payload, description)
+    provided_documents = _documents_from_input(input_payload)
     process_discharge = input_payload.get("process_discharge", False)
     if "wastewater" in description.lower() or "discharge" in description.lower():
         process_discharge = True
@@ -301,6 +327,7 @@ def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
         ),
         missing_facts=[],
         assumptions=[],
+        provided_documents=provided_documents,
     )
     return scope.model_copy(
         update={
@@ -308,6 +335,80 @@ def scope_from_input(input_payload: dict[str, Any], run_id: str) -> ScopePack:
             "assumptions": _assumptions(input_payload),
         }
     )
+
+
+def _apply_location_answer(facility_payload: dict[str, Any], provided_estimates: dict[str, Any]) -> None:
+    """Fold a jurisdiction/county answer (a reply to the 'what county controls this facility'
+    missing fact) into the facility so the jurisdiction resolver can resolve the controlling
+    air district / CUPA. The answer arrives under a field naming county/jurisdiction/location."""
+    if facility_payload.get("county"):
+        return
+    for field, value in provided_estimates.items():
+        key = str(field).lower()
+        if not any(token in key for token in ("county", "jurisdiction", "location")):
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        parts = [part.strip() for part in text.split(",") if part.strip()]
+        if len(parts) >= 2:
+            facility_payload.setdefault("city", parts[0])
+            county = parts[1]
+        else:
+            county = parts[0]
+        county = re.sub(r"\bcount(?:y|ies)\b\.?", "", county, flags=re.IGNORECASE).strip()
+        if county:
+            facility_payload["county"] = county
+        return
+
+
+def _coerce_quantity(value: Any) -> float | None:
+    """A provided quantity arrives from the UI as free text ('30', '30 gal'). Pull the
+    leading number so the hazmat threshold compare gets a real float, not a string."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    match = re.search(r"\d+(?:\.\d+)?", str(value))
+    return float(match.group()) if match else None
+
+
+def _documents_from_input(input_payload: dict[str, Any]) -> list[ProvidedDocument]:
+    """Ingest intake-uploaded documents (SDS/TDS/permits) so each research subagent gets
+    the real facility data in its context. Accepts both the production `documents` key and
+    the legacy `demo_documents` alias; drops non-dict junk fail-closed."""
+    raw = input_payload.get("documents")
+    if not raw:
+        raw = input_payload.get("demo_documents") or []
+    # Provided docs ride along in every hypothesis's context, so bound each one's text:
+    # 8 full SDS would otherwise overflow a small-context worker. ~6k chars keeps the SDS
+    # identity + composition (Sections 1-3) while staying affordable.
+    per_doc_cap = _provided_doc_char_cap()
+    documents: list[ProvidedDocument] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "")
+        if len(text) > per_doc_cap:
+            text = text[:per_doc_cap] + "\n[...document truncated to fit context; re-upload a focused excerpt if a later section is needed...]"
+        documents.append(
+            ProvidedDocument(
+                name=str(item.get("name") or "document").strip() or "document",
+                type=str(item.get("type") or "other"),
+                text=text,
+            )
+        )
+    return documents
+
+
+def _provided_doc_char_cap() -> int:
+    raw = _empty_to_none(_env("RESEARCH_CORE_MAX_DOC_CHARS"))
+    if raw:
+        try:
+            return max(1000, int(raw))
+        except ValueError:
+            pass
+    return 6000
 
 
 def _coerce_deps(deps: str | ResearchDeps) -> ResearchDeps:
@@ -351,7 +452,28 @@ def _allowed_hosts_from_env() -> tuple[str, ...]:
 
 
 def _agent_model_from_env() -> str | None:
-    return _empty_to_none(_env(AGENT_MODEL_ENV))
+    # Default the research agents to gpt-5.5; RESEARCH_CORE_AGENT_MODEL overrides.
+    return _empty_to_none(_env(AGENT_MODEL_ENV)) or DEFAULT_AGENT_MODEL
+
+
+def _repair_model_from_env() -> str | None:
+    # RESEARCH_CORE_REPAIR_MODEL overrides; defaults to a strong model so repair stays
+    # high-quality even when the worker is cheap.
+    return _empty_to_none(_env(REPAIR_MODEL_ENV)) or DEFAULT_REPAIR_MODEL
+
+
+RESEARCH_CONCURRENCY_ENV = "RESEARCH_CORE_MAX_CONCURRENCY"
+DEFAULT_RESEARCH_CONCURRENCY = 8
+
+
+def _max_research_concurrency() -> int:
+    raw = _empty_to_none(_env(RESEARCH_CONCURRENCY_ENV))
+    if raw is not None:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return DEFAULT_RESEARCH_CONCURRENCY
 
 
 def _bool_env(name: str, *, default: bool) -> bool:
@@ -491,8 +613,8 @@ def _chemicals_from_input(input_payload: dict[str, Any], description: str) -> li
     if "solvent" not in lower and "chemical" not in lower and "paint" not in lower:
         return []
     provided_estimates = input_payload.get("provided_estimates") or {}
-    quantity = provided_estimates.get("chemicals.quantity")
-    unit = provided_estimates.get("chemicals.unit")
+    quantity = _coerce_quantity(provided_estimates.get("chemicals.quantity"))
+    unit = provided_estimates.get("chemicals.unit") or None
     if quantity is None:
         quantity = _quantity_from_text(description)
     if unit is None:
@@ -696,7 +818,10 @@ def _sources_from_finding(finding: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "url": str(url),
             "source_name": _source_name(str(url)),
-            "authority_rank": 1,
+            # Honest, host-derived authority so the verifier's authority gate works
+            # now that fetching is open: curated authority -> 1, other .gov -> 2,
+            # anything else -> 3 (which fails the verifier's rank<=2 requirement).
+            "authority_rank": _source_authority_rank(str(url)),
             "fetched_at": None,
             "effective_date": None,
             "currency_status": "unconfirmed",
@@ -705,6 +830,10 @@ def _sources_from_finding(finding: dict[str, Any]) -> list[dict[str, Any]]:
         for url in urls
         if isinstance(url, str)
     ]
+
+
+def _source_authority_rank(url: str) -> int:
+    return source_authority_rank(url, _allowed_hosts_from_env())
 
 
 def _source_name(url: str) -> str:

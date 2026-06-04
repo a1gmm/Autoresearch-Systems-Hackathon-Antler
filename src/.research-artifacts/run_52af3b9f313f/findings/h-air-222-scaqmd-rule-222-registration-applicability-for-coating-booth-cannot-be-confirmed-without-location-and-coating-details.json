@@ -1,0 +1,23 @@
+{
+  "confidence": 0.55,
+  "metadata": {
+    "hypothesis_id": "H-AIR-222",
+    "key_missing_facts": [
+      "facility county/location within SCAQMD jurisdiction",
+      "coating operation category/description",
+      "coating/solvent VOC content and usage or throughput",
+      "whether booth/equipment is new or modified"
+    ],
+    "official_pdf_last_modified": "Tue, 07 Apr 2026 22:23:17 GMT",
+    "run_id": "run_52af3b9f313f"
+  },
+  "run_id": "run_52af3b9f313f",
+  "sources": [
+    "https://www.aqmd.gov/docs/default-source/rule-book/reg-ii/rule-222.pdf",
+    "https://www.aqmd.gov/home/permits/rule-222-filing-program",
+    "https://www.aqmd.gov/home/permits/common-operations-and-equipment"
+  ],
+  "submitted_at": "2026-06-03T06:17:58.901408+00:00",
+  "summary": "SCAQMD Rule 222 is potentially relevant only if the coating shop is in South Coast AQMD jurisdiction and the coating/paint operation is one of the specified emission sources eligible for filing/registration rather than a written permit. The official SCAQMD Rule 222 PDF is titled \u201cRule 222 Filing Requirements for Specific Emission Sources Not Requiring a Written Permit Pursuant to Regulation II,\u201d but the project record lacks a resolved county/location and lacks coating/material throughput or VOC/HAP details needed to match a Rule 222 category. Therefore, do not conclude Rule 222 registration applies based only on \u201ccoating booth\u201d and 60 gallons of solvent storage; treat H-AIR-222 as indeterminate/potentially applicable pending jurisdiction confirmation and equipment/material details.",
+  "title": "H-AIR-222 \u2014 SCAQMD Rule 222 registration applicability for coating booth cannot be confirmed without location and coating details"
+}

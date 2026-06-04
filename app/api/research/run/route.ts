@@ -10,10 +10,12 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       project_description?: string;
       demo_documents?: Array<{ name: string; type: string; text: string }>;
+      provided_estimates?: Record<string, string | number>;
     };
     const input = {
       project_description: body.project_description ?? "",
       demo_documents: body.demo_documents ?? [],
+      provided_estimates: body.provided_estimates ?? {},
     };
 
     const syncEndpoint = process.env.PYTHON_RESEARCH_RUN_SYNC_ENDPOINT;
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function postPythonRun(endpoint: string, input: { project_description: string; demo_documents: Array<{ name: string; type: string; text: string }> }): Promise<PythonRunResult> {
+async function postPythonRun(endpoint: string, input: { project_description: string; demo_documents: Array<{ name: string; type: string; text: string }>; provided_estimates: Record<string, string | number> }): Promise<PythonRunResult> {
   const resp = await fetch(endpoint, {
     method: "POST",
     headers: pythonHeaders(),

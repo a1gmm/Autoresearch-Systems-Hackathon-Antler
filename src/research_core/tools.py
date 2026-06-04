@@ -23,6 +23,253 @@ REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 MAX_REDIRECT_HOPS = 5
 
 
+def _max_tool_chars() -> int:
+    """Per-tool-output character cap. The agent's full tool-output history accumulates in
+    the model's context every turn, so a single uncapped fetch (a 25k-char rule PDF, a big
+    HTML page) can blow a small-context worker's window. Override with RESEARCH_CORE_MAX_TOOL_CHARS."""
+    import os
+
+    raw = os.environ.get("RESEARCH_CORE_MAX_TOOL_CHARS")
+    if raw:
+        try:
+            return max(1000, int(raw))
+        except ValueError:
+            pass
+    return 16000
+
+
+def _cap_text(text: Any) -> Any:
+    """Truncate an over-long tool output, leaving a marker so the agent knows to fetch a more
+    specific page/section if it needs the rest. Non-str inputs pass through unchanged."""
+    if not isinstance(text, str):
+        return text
+    limit = _max_tool_chars()
+    if len(text) <= limit:
+        return text
+    dropped = len(text) - limit
+    return (
+        text[:limit]
+        + f"\n\n[...truncated {dropped} of {len(text)} characters to fit the model context — "
+        "fetch a more specific URL/section, or read a particular SDS/page, if you need the rest...]"
+    )
+
+
+def _extract_main_text(html: str) -> str:
+    """Extract the main readable content from an HTML page: strip nav/chrome, prefer
+    <main>/<article>, fall back to the full de-chromed page. Live gov rules/guidance
+    are HTML, so handing the agent the raw page (tags, scripts, menus) buries the
+    requirement text. Graceful no-op (returns input) if BeautifulSoup is unavailable."""
+    try:
+        import re
+
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return html
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript", "nav", "header", "footer", "aside", "form", "svg", "button"]):
+        tag.decompose()
+    main = soup.find("main") or soup.find("article") or soup.find(attrs={"role": "main"})
+    text = main.get_text("\n", strip=True) if main else ""
+    if len(text) < 400:
+        text = (soup.body or soup).get_text("\n", strip=True)
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+# Exact unit constants for VOC/ROC threshold math (NIST): 1 lb = 453.59237 g,
+# 1 US gallon = 3.785411784 L, so 1 lb/gal = 119.826427 g/L.
+_G_PER_LB = 453.59237
+_L_PER_GAL = 3.785411784
+_G_PER_L_PER_LB_PER_GAL = _G_PER_LB / _L_PER_GAL  # 119.826427...
+
+# Mass-per-volume units (VOC concentration OR material density) -> lb/gal multiplier.
+_MASS_PER_VOLUME_TO_LB_PER_GAL = {
+    "lb/gal": 1.0,
+    "lbs/gal": 1.0,
+    "lb/gallon": 1.0,
+    "g/l": 1.0 / _G_PER_L_PER_LB_PER_GAL,
+    "mg/l": 0.001 / _G_PER_L_PER_LB_PER_GAL,
+    "kg/l": 1000.0 / _G_PER_L_PER_LB_PER_GAL,
+    "g/ml": 1000.0 / _G_PER_L_PER_LB_PER_GAL,
+    "g/cm3": 1000.0 / _G_PER_L_PER_LB_PER_GAL,
+    "g/cc": 1000.0 / _G_PER_L_PER_LB_PER_GAL,
+}
+_FRACTION_UNITS = {"weight_fraction": 1.0, "mass_fraction": 1.0, "fraction": 1.0}
+_PERCENT_UNITS = {"weight_percent": 0.01, "wt%": 0.01, "wt %": 0.01, "percent": 0.01, "%": 0.01}
+_GALLON_UNITS = {"gal", "gallon", "gallons", "us_gal"}
+_LITER_UNITS = {"l", "liter", "liters", "litre", "litres"}
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def compute_voc_threshold(
+    *,
+    voc_content: float,
+    voc_content_unit: str = "weight_percent",
+    density: float | None = None,
+    density_unit: str = "lb/gal",
+    mass_limit_lb: float | None = None,
+    usage: float | None = None,
+    usage_unit: str = "gal",
+    control_efficiency: float = 0.0,
+) -> dict[str, Any]:
+    """Deterministic VOC/ROC permit-threshold calculator. Two uses, both off the same
+    physics (VOC mass per volume of material = content x density):
+
+      * Mass limit -> usage limit: a rule caps VOC/ROC mass per period (e.g. VCAPCD
+        Rule 23 exempts graphic arts < 200 lb ROC / 12 months). Given the material's
+        VOC content and density, returns the equivalent material-usage limit in gallons
+        (and liters) -- the actionable number the ALG memo computes (~29 gal/yr).
+      * Usage -> emissions: given how much material is used, returns the VOC/ROC mass
+        emitted (optionally after a capture/control efficiency), to compare to a limit.
+
+    VOC content may be a weight fraction/percent (then `density` is required) or a
+    concentration already expressed as mass/volume (g/L, lb/gal, ...). Pure math: no
+    network or filesystem; the verifier still gates the rule limit's source."""
+    if not _is_number(voc_content):
+        return _invalid_argument("voc_content", "a number", voc_content)
+    if not _is_number(control_efficiency):
+        return _invalid_argument("control_efficiency", "a number between 0 and 1", control_efficiency)
+    if control_efficiency < 0 or control_efficiency > 1:
+        return _error("error", "invalid_argument", "control_efficiency must be between 0 and 1.", argument="control_efficiency")
+
+    formula: list[str] = []
+    unit = str(voc_content_unit).strip().lower()
+    if unit in _MASS_PER_VOLUME_TO_LB_PER_GAL:
+        voc_lb_per_gal = voc_content * _MASS_PER_VOLUME_TO_LB_PER_GAL[unit]
+        formula.append(f"VOC concentration {voc_content} {voc_content_unit} = {voc_lb_per_gal:.4g} lb VOC/gal")
+    elif unit in _FRACTION_UNITS or unit in _PERCENT_UNITS:
+        scale = _FRACTION_UNITS.get(unit, _PERCENT_UNITS.get(unit, 1.0))
+        fraction = voc_content * scale
+        if not _is_number(density):
+            return _error(
+                "error",
+                "density_required",
+                "A material density is required to convert a weight fraction/percent to VOC mass per volume.",
+                argument="density",
+            )
+        dunit = str(density_unit).strip().lower()
+        if dunit not in _MASS_PER_VOLUME_TO_LB_PER_GAL:
+            return _error("error", "unknown_unit", f"Unknown density unit: {density_unit!r}.", argument="density_unit")
+        density_lb_per_gal = density * _MASS_PER_VOLUME_TO_LB_PER_GAL[dunit]
+        voc_lb_per_gal = fraction * density_lb_per_gal
+        formula.append(
+            f"VOC mass/vol = {fraction:g} (fraction) x {density_lb_per_gal:.4g} lb/gal density = {voc_lb_per_gal:.4g} lb VOC/gal"
+        )
+    else:
+        return _error("error", "unknown_unit", f"Unknown voc_content_unit: {voc_content_unit!r}.", argument="voc_content_unit")
+
+    if voc_lb_per_gal <= 0:
+        return _error("error", "invalid_argument", "Computed VOC mass per volume must be positive.", argument="voc_content")
+
+    control_factor = 1.0 - control_efficiency
+    effective = voc_lb_per_gal * control_factor
+
+    result: dict[str, Any] = {
+        "voc_mass_per_volume": {
+            "lb_per_gal": round(voc_lb_per_gal, 4),
+            "g_per_l": round(voc_lb_per_gal * _G_PER_L_PER_LB_PER_GAL, 2),
+        },
+        "control_efficiency": control_efficiency,
+        "effective_voc_lb_per_gal": round(effective, 4),
+        "inputs": {
+            "voc_content": voc_content,
+            "voc_content_unit": voc_content_unit,
+            "density": density,
+            "density_unit": density_unit if density is not None else None,
+            "mass_limit_lb": mass_limit_lb,
+            "usage": usage,
+            "usage_unit": usage_unit if usage is not None else None,
+        },
+    }
+
+    if mass_limit_lb is not None:
+        if not _is_number(mass_limit_lb) or mass_limit_lb <= 0:
+            return _invalid_argument("mass_limit_lb", "a positive number", mass_limit_lb)
+        usage_limit_gal = mass_limit_lb / effective
+        result["usage_limit"] = {
+            "gal": round(usage_limit_gal, 2),
+            "l": round(usage_limit_gal * _L_PER_GAL, 2),
+        }
+        ctl = f" x (1 - {control_efficiency} control)" if control_efficiency else ""
+        formula.append(
+            f"usage_limit = {mass_limit_lb} lb / ({voc_lb_per_gal:.4g} lb/gal{ctl}) = {usage_limit_gal:.2f} gal per period"
+        )
+
+    if usage is not None:
+        if not _is_number(usage) or usage < 0:
+            return _invalid_argument("usage", "a non-negative number", usage)
+        uunit = str(usage_unit).strip().lower()
+        if uunit in _GALLON_UNITS:
+            usage_gal = float(usage)
+        elif uunit in _LITER_UNITS:
+            usage_gal = usage / _L_PER_GAL
+        else:
+            return _error("error", "unknown_unit", f"Unknown usage_unit: {usage_unit!r}.", argument="usage_unit")
+        emissions_lb = usage_gal * effective
+        result["emissions"] = {
+            "lb": round(emissions_lb, 2),
+            "usage_gal": round(usage_gal, 4),
+        }
+        ctl = f" x (1 - {control_efficiency} control)" if control_efficiency else ""
+        formula.append(
+            f"emissions = {usage_gal:.4g} gal x {voc_lb_per_gal:.4g} lb/gal{ctl} = {emissions_lb:.2f} lb VOC/ROC"
+        )
+
+    result["formula"] = formula
+    return _success("computed", **result)
+
+
+def _extract_pdf_text(data: bytes) -> str | None:
+    """Extract text from in-memory PDF bytes (a PDF fetched over HTTP, e.g. an ARB or
+    air-district rule PDF). web_fetch otherwise hands the agent decoded PDF bytes as
+    'text' — unreadable garbage — so the agent can never quote the rule. Returns the
+    joined page text, or None if PyMuPDF is unavailable or the bytes are not a parseable
+    PDF (caller then treats the response as non-PDF)."""
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        return None
+    try:
+        import fitz
+    except ImportError:
+        return None
+    try:
+        with fitz.open(stream=bytes(data), filetype="pdf") as document:
+            text = "\n".join(page.get_text("text") for page in document)
+        return text or None
+    except Exception:  # noqa: BLE001 — not a parseable PDF; let caller fall back
+        return None
+
+
+_BOT_BLOCK_STATUS = {403, 429, 503}
+_BOT_BLOCK_BODY_MARKERS = (
+    "just a moment",
+    "cf-browser-verification",
+    "challenge-platform",
+    "attention required",
+    "enable javascript and cookies",
+    "_cf_chl",
+)
+
+
+def _looks_bot_blocked(response: Any) -> bool:
+    """A plain HTTP client (httpx, no JS) often gets bounced by bot protection
+    (Cloudflare's 'Just a moment…' interstitial) on legitimate agency sites like
+    vcapcd.org. Detect that so web_fetch can retry through a real browser, which runs
+    the JS challenge. Conservative: only non-success statuses with a Cloudflare/challenge
+    signature, so ordinary 403/404s do not trigger a (slow) browser fallback."""
+    if getattr(response, "status_code", None) not in _BOT_BLOCK_STATUS:
+        return False
+    headers = {str(k).lower(): str(v).lower() for k, v in dict(getattr(response, "headers", {})).items()}
+    if "cf-ray" in headers or "cf-mitigated" in headers or "cloudflare" in headers.get("server", ""):
+        return True
+    try:
+        body = (response.text or "")[:4000].lower()
+    except Exception:  # noqa: BLE001 — binary/undecodable body is not a challenge page
+        return False
+    return any(marker in body for marker in _BOT_BLOCK_BODY_MARKERS)
+
+
 @dataclass(frozen=True)
 class SandboxPolicy:
     run_id: str
@@ -36,6 +283,82 @@ class SandboxPolicy:
 
 def _normalize_host(host: str | None) -> str:
     return (host or "").strip().rstrip(".").lower()
+
+
+def host_fetchable(url: str) -> bool:
+    """The sandbox NETWORK boundary (a safety gate, not a content allowlist):
+    allow any public http(s) host so the subagent can do broad, durable research,
+    but block SSRF-dangerous targets (localhost, private/loopback/link-local nets,
+    cloud metadata). Authority of a source is judged downstream by the verifier
+    (authority_rank), not by restricting which official sites may be read."""
+    if not isinstance(url, str):
+        return False
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = _normalize_host(parsed.hostname)
+    if not host:
+        return False
+    if host == "localhost" or host.endswith((".localhost", ".internal", ".local")):
+        return False
+    try:
+        import ipaddress
+
+        ip = ipaddress.ip_address(host)
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    except ValueError:
+        pass  # a hostname, not a raw IP -> allowed
+    return True
+
+
+_CA_AUTHORITY_HOSTS: frozenset[str] | None = None
+
+
+def _ca_authority_hosts() -> frozenset[str]:
+    """The hostnames of California EHS authorities the system already knows about
+    (the jurisdiction registry's air districts — VCAPCD, BAAQMD, SJVAPCD, etc.).
+    These live on mixed TLDs (.org/.us/.net/.com, not just .gov), so the verifier's
+    authority tier must recognize them rather than assume government TLDs. Lazily
+    derived from the single source of truth (jurisdiction_registry); cached."""
+    global _CA_AUTHORITY_HOSTS
+    if _CA_AUTHORITY_HOSTS is None:
+        hosts: set[str] = set(DEFAULT_ALLOWED_HOSTS)
+        try:
+            from research_core.jurisdiction_registry import AIR_DISTRICTS
+
+            for district in AIR_DISTRICTS:
+                host = _normalize_host(urlparse(district.website).hostname)
+                if host:
+                    hosts.add(host[4:] if host.startswith("www.") else host)
+        except Exception:  # noqa: BLE001 — never let registry import break authority ranking
+            pass
+        _CA_AUTHORITY_HOSTS = frozenset(hosts)
+    return _CA_AUTHORITY_HOSTS
+
+
+def _host_in(host: str, allowed: frozenset[str] | tuple[str, ...]) -> bool:
+    return any(host == a or host.endswith("." + a) for a in allowed)
+
+
+def source_authority_rank(url: str, allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS) -> int:
+    """Authority tier for a fetched source, consumed by the verifier's authority
+    gate (which requires rank <= 2):
+      1 = a known EHS authority — curated allowlist OR a jurisdiction-registry
+          authority host (air districts, incl. .org/.us/.net like vcapcd.org)
+      2 = other government / official source (*.gov, *.mil)
+      3 = other public source -> fails the verifier's authority gate (fail-closed)."""
+    host = _normalize_host(urlparse(url).hostname)
+    if not host:
+        return 3
+    if host_allowed(url, allowed_hosts) or _host_in(host, _ca_authority_hosts()):
+        return 1
+    # Suffix-only (never a substring): a spoof like aqmd.gov.evil.example must NOT
+    # be treated as government — it ends in .example, so it stays rank 3.
+    if host == "gov" or host == "mil" or host.endswith((".gov", ".mil")):
+        return 2
+    return 3
 
 
 def host_allowed(url: str, allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS) -> bool:
@@ -146,13 +469,13 @@ def _guarded_get(
         raw_location = _header(response, "location")
         next_url = urljoin(str(getattr(response, "url", current_url)), raw_location or "")
         chain_entry["location"] = next_url
-        if not host_allowed(next_url, policy.allowed_hosts):
+        if not host_fetchable(next_url):
             return (
                 None,
                 _error(
                     "blocked",
-                    "redirect_host_not_allowed",
-                    "Redirect target is outside sandbox policy.",
+                    "redirect_blocked",
+                    "Redirect target is not a fetchable public host (SSRF guard).",
                     redirect_chain=redirect_chain,
                     blocked_url=next_url,
                     **context,
@@ -174,13 +497,44 @@ def _guarded_get(
     )
 
 
+def _browser_fallback(
+    policy: SandboxPolicy,
+    url: str,
+    *,
+    redirect_chain: list[dict[str, Any]],
+    original_url: str,
+) -> dict[str, Any] | None:
+    """Re-fetch a bot-blocked URL through the headless browser (runs JS, clears the
+    Cloudflare challenge). Returns a web_fetch-shaped success on success, or None so the
+    caller falls through to its normal http_error response."""
+    try:
+        result = browser_use(policy, url)
+    except Exception:  # noqa: BLE001 — browser is best-effort; fall through on any error
+        return None
+    if not isinstance(result, dict) or not result.get("ok"):
+        return None
+    snapshot = result.get("snapshot") or {}
+    return _success(
+        "fetched",
+        url=original_url,
+        final_url=snapshot.get("url", url),
+        status_code=snapshot.get("status_code"),
+        content_type=snapshot.get("content_type", "text/html"),
+        text=_cap_text(snapshot.get("text", "")),
+        via="browser_fallback",
+        redirect_chain=redirect_chain,
+    )
+
+
 def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
     if not isinstance(url, str):
         return _invalid_argument("url", "a string", url)
     if not policy.allow_network:
         return _error("blocked", "network_disabled", "Network access is disabled by sandbox policy.", url=url)
-    if not host_allowed(url, policy.allowed_hosts):
-        return _error("blocked", "host_not_allowed", "URL host is not allowed by sandbox policy.", url=url)
+    # Open content gate: fetch any public source for durable research; only block
+    # SSRF-dangerous targets. Source AUTHORITY is judged by the verifier, not here.
+    if not host_fetchable(url):
+        return _error("blocked", "host_not_fetchable", "URL is not a fetchable public host (SSRF guard).", url=url)
 
     try:
         import httpx
@@ -193,28 +547,111 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
         if redirect_error is not None:
             return redirect_error
         final_url = str(response.url)
-        if not host_allowed(final_url, policy.allowed_hosts):
+        if not host_fetchable(final_url):
             return _error(
                 "blocked",
-                "redirect_host_not_allowed",
-                "Fetch redirected to a host outside sandbox policy.",
+                "redirect_blocked",
+                "Fetch redirected to a non-fetchable public host (SSRF guard).",
                 url=url,
                 final_url=final_url,
             )
         content_type = response.headers.get("content-type")
-        text = response.text if response.is_success else ""
+        ctype = (content_type or "").lower()
+
+        # Bot-protection (Cloudflare interstitial) blocks the plain HTTP client on
+        # legitimate agency sites. Retry through a real browser, which runs the JS
+        # challenge, before giving up. (Only when the policy allows the browser.)
+        if not response.is_success and policy.allow_browser and _looks_bot_blocked(response):
+            fallback = _browser_fallback(policy, final_url, redirect_chain=redirect_chain, original_url=url)
+            if fallback is not None:
+                return fallback
+
+        # PDF served over HTTP: extract the rule text so the agent can quote it. Detect
+        # by content-type or the %PDF magic bytes (agency PDFs are often served as
+        # application/octet-stream). Falls through to text handling if not parseable.
+        body_bytes = response.content if response.is_success else b""
+        is_pdf = ("pdf" in ctype) or (body_bytes[:5].startswith(b"%PDF"))
+        if is_pdf and body_bytes:
+            extracted = _extract_pdf_text(body_bytes)
+            if extracted is not None:
+                return _success(
+                    "fetched",
+                    url=url,
+                    final_url=final_url,
+                    status_code=response.status_code,
+                    content_type=content_type or "application/pdf",
+                    text=_cap_text(extracted),
+                    extracted_format="pdf",
+                    headers=dict(response.headers),
+                    redirect_chain=redirect_chain,
+                )
+
+        raw = response.text if response.is_success else ""
+        # Extract readable main content for HTML so the agent reads the rule, not the
+        # nav/chrome. Non-HTML (JSON, plain) passes through unchanged.
+        is_html = "html" in ctype or (raw[:512].lstrip().lower().startswith(("<!doctype html", "<html")))
+        text = _extract_main_text(raw) if (is_html and raw) else raw
         return _success(
             "fetched" if response.is_success else "http_error",
             url=url,
             final_url=final_url,
             status_code=response.status_code,
             content_type=content_type,
-            text=text,
+            text=_cap_text(text),
             headers=dict(response.headers),
             redirect_chain=redirect_chain,
         )
     except Exception as exc:
         return _exception_error("fetch_failed", exc, url=url)
+
+
+def _openai_web_search(query: str, *, limit: int = 5) -> dict[str, Any]:
+    """Real open web discovery via the OpenAI Responses API web_search tool. Returns
+    broad results (title/url/snippet) with no host restriction — the agent chooses the
+    authoritative source and the verifier gates it. Fails closed to 'unavailable' when
+    openai or the API key are absent."""
+    import os
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return _error("unavailable", "search_dependency_missing", "openai is not installed.", query=query)
+    if not os.environ.get("OPENAI_API_KEY"):
+        return _error("unavailable", "search_provider_unavailable", "No OPENAI_API_KEY configured for web search.", query=query)
+
+    model = os.environ.get("RESEARCH_CORE_AGENT_MODEL") or "gpt-5.5"
+    instruction = (
+        "Find official primary sources that answer this California EHS permit question. "
+        "Prefer government/authority sites. Question: " + query
+    )
+    resp = None
+    client = OpenAI(timeout=45.0, max_retries=1)
+    for tool_type in ("web_search", "web_search_preview"):
+        try:
+            resp = client.responses.create(model=model, tools=[{"type": tool_type}], input=instruction)
+            break
+        except Exception:  # noqa: BLE001 — try the other tool name, else report unavailable
+            resp = None
+    if resp is None:
+        return _error("unavailable", "search_failed", "Web search call failed.", query=query)
+
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in (getattr(resp, "output", None) or []):
+        for content in (getattr(item, "content", None) or []):
+            for ann in (getattr(content, "annotations", None) or []):
+                url = getattr(ann, "url", None)
+                if not url or url in seen or not host_fetchable(url):
+                    continue
+                seen.add(url)
+                results.append({
+                    "url": url,
+                    "title": getattr(ann, "title", "") or "",
+                    "authority_rank": source_authority_rank(url),
+                })
+                if len(results) >= max(1, limit):
+                    break
+    return _success("searched", query=query, results=results)
 
 
 def web_search(policy: SandboxPolicy, query: str, *, limit: int = 5) -> dict[str, Any]:
@@ -227,13 +664,11 @@ def web_search(policy: SandboxPolicy, query: str, *, limit: int = 5) -> dict[str
     if not query.strip():
         return _error("error", "empty_query", "Search query must not be empty.", query=query)
     if policy.search_endpoint is None:
-        return _error(
-            "unavailable",
-            "search_provider_unavailable",
-            "No sandbox web search provider is configured.",
-            query=query,
-            limit=limit,
-        )
+        # No configured proxy -> do REAL open web discovery via the OpenAI Responses
+        # API web_search tool (uses the model's own search; the agent then fetches the
+        # best official result and the verifier gates authority). Returns "unavailable"
+        # if openai/key are absent (e.g. offline tests).
+        return _openai_web_search(query, limit=limit)
     if not isinstance(policy.search_endpoint, str):
         return _invalid_argument("search_endpoint", "a string", policy.search_endpoint)
     if not host_allowed(policy.search_endpoint, policy.allowed_hosts):
@@ -375,7 +810,10 @@ def _validate_sources(sources: list[str], policy: SandboxPolicy) -> dict[str, An
         if scheme in {"http", "https"}:
             if not parsed.hostname:
                 malformed.append(source)
-            elif not host_allowed(trimmed, policy.allowed_hosts):
+            elif not host_fetchable(trimmed):
+                # Only block SSRF-dangerous sources here. Whether a public source is
+                # AUTHORITATIVE is the verifier's job (authority_rank), not this gate —
+                # otherwise the agent can't even cite the correct rule (e.g. vcapcd.org).
                 disallowed.append(source)
         elif parsed.netloc:
             malformed.append(source)

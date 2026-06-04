@@ -1,0 +1,22 @@
+{
+  "confidence": 0.82,
+  "metadata": {
+    "caveats": [
+      "solvent petroleum status unknown",
+      "facility aggregate aboveground petroleum storage capacity unknown",
+      "local CUPA/jurisdiction not identified"
+    ],
+    "hypothesis_id": "H-HAZMAT-APSA",
+    "quantity_evaluated": "60 gal solvent",
+    "result": "not_applicable_on_stated_facts",
+    "threshold": "1320 gallons aggregate aboveground petroleum storage capacity"
+  },
+  "run_id": "run_52af3b9f313f",
+  "sources": [
+    "California Legislative Information, Health & Safety Code ch. 6.67 (Aboveground Petroleum Storage Act), official code text: https://leginfo.legislature.ca.gov/faces/codes_displayText.xhtml?article=&chapter=6.67.&division=20.&lawCode=HSC&part=&title=",
+    "CalEPA CERS Business Help / OSFM, \u201cIs My Facility Regulated Under APSA?\u201d PDF, official agency guidance: https://cersbusiness3.calepa.ca.gov/Help/OpenDocument/1522737"
+  ],
+  "submitted_at": "2026-06-03T06:22:59.449780+00:00",
+  "summary": "California APSA regulates facilities with aggregate aboveground petroleum storage capacity at or above 1,320 gallons (with containers under 55 gallons generally excluded from counting). The proposed change identifies only 60 gallons of flammable solvent. Even if the solvent is petroleum, one 60-gallon container is far below the 1,320-gallon APSA threshold. Therefore APSA is not expected to apply on the stated facts, but the determination is conditional because the facility\u2019s total aggregate aboveground petroleum storage capacity and whether the solvent is petroleum were not provided.",
+  "title": "H-HAZMAT-APSA: 60 gallons of solvent at coating shop is not enough to trigger California APSA unless additional petroleum storage exists"
+}

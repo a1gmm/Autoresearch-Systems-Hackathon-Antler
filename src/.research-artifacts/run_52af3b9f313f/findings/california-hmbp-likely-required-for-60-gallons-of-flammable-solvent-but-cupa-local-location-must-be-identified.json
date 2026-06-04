@@ -1,0 +1,20 @@
+{
+  "confidence": 0.78,
+  "metadata": {
+    "exceeds_threshold": true,
+    "missing_facts": [
+      "facility county/location and local CUPA"
+    ],
+    "note": "CalEPA PDF metadata shows title and 2024-08 creation/modify metadata; LegInfo search result identifies HSC 25507 as official source for 55 gallon/500 pound/200 cubic foot thresholds, but sandbox fetch returned minimal rendered text.",
+    "project_quantity_gallons": 60,
+    "threshold_liquid_gallons": 55
+  },
+  "run_id": "run_52af3b9f313f",
+  "sources": [
+    "California Health & Safety Code \u00a725507, official California Legislative Information page: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=HSC&sectionNum=25507.",
+    "CalEPA, official PDF, California Code of Regulations, Title 19, Division 5, Chapter 1 \u2013 Hazardous Materials Business Plan: https://calepa.ca.gov/wp-content/uploads/2024/08/California-Code-of-Regulations-Title-19-Division-5-Chapter-1-%E2%80%93-Hazardous-Materials-Business-Plan.pdf"
+  ],
+  "submitted_at": "2026-06-03T06:20:39.866353+00:00",
+  "summary": "The project would store 60 gallons of flammable liquid solvent at a coating shop. California\u2019s HMBP threshold for liquids is 55 gallons, so the proposed 60 gallons exceeds the statewide reporting threshold and likely triggers filing a Hazardous Materials Business Plan with the local CUPA. The facility location/county is missing, so the controlling CUPA and any stricter local requirements cannot be confirmed. The solvent is described as flammable, so it is a hazardous material for this screening unless later facts show a statutory exclusion or below-threshold aggregation issue.",
+  "title": "California HMBP likely required for 60 gallons of flammable solvent, but CUPA/local location must be identified"
+}

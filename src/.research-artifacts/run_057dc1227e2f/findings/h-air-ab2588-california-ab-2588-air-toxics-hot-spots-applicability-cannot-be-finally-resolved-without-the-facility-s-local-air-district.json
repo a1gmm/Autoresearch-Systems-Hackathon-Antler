@@ -1,0 +1,27 @@
+{
+  "confidence": 0.79,
+  "metadata": {
+    "hypothesis_id": "H-AIR-AB2588",
+    "key_source_quotes": [
+      "The Air Toxics \"Hot Spots\" Information and Assessment Act ... requires stationary sources to report the types and quantities of certain substances routinely released into the air.",
+      "A facility is subject to the Act if it: (1) manufactures, formulates, uses, or releases a substance subject to the Act ... and emits 10 tons or more per year of total organic gases, particulate matter, nitrogen oxides or sulfur oxides; (2) is listed in any district's existing toxics use or toxics air emission survey, inventory or report ...; or (3) manufactures, formulates, uses, or releases a substance subject to the Act ... and emits less than 10 tons per year of criteria pollutants and is subject to emission inventory requirements.",
+      "Facility operators must submit to the district a proposed emission inventory plan indicating how emissions will be measured or calculated."
+    ],
+    "missing_facts": [
+      "county/local air district",
+      "solvent chemical composition/listed AB2588 substances",
+      "annual criteria pollutant/VOC emissions",
+      "whether facility is on district toxics inventory or subject to district emission inventory/source category requirements"
+    ],
+    "run_id": "run_057dc1227e2f"
+  },
+  "run_id": "run_057dc1227e2f",
+  "sources": [
+    "https://ww2.arb.ca.gov/our-work/programs/ab-2588-air-toxics-hot-spots",
+    "https://ww2.arb.ca.gov/overview-air-toxics-hot-spots-information-and-assessment-act?utm_source=openai",
+    "https://ww2.arb.ca.gov/ab-2588-air-toxics-hot-spots-regulatory-documents"
+  ],
+  "submitted_at": "2026-06-03T06:22:08.109559+00:00",
+  "summary": "Potentially applicable / unresolved. CARB states AB 2588 requires stationary sources to report types and quantities of certain substances routinely released into air. A coating/paint shop storing/using solvent could involve listed toxic substances and routine releases, but AB 2588 applicability is administered through local air districts and depends on listed-substance use/release plus criteria-pollutant emissions, district toxics inventory/emission-inventory status, or source-category requirements. CARB\u2019s overview says a facility is subject if it manufactures, formulates, uses, or releases a subject substance and emits 10 tons/year or more of specified criteria pollutants; is listed in any district toxics use/emission survey, inventory, or report; or uses/releases a subject substance with less than 10 tons/year criteria pollutants and is subject to emission inventory requirements. Because the input lacks county/air-district and emissions/VOC composition facts, determine the controlling district and solvent constituents/VOC emissions before concluding whether an AB 2588 inventory plan/report, risk assessment, notification, risk reduction plan, or fees are required.",
+  "title": "H-AIR-AB2588 \u2014 California AB 2588 Air Toxics \u201cHot Spots\u201d applicability cannot be finally resolved without the facility\u2019s local air district"
+}

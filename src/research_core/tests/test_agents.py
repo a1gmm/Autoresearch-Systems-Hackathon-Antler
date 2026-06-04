@@ -28,12 +28,14 @@ def test_researcher_agent_exposes_sandbox_tools_and_terminal_submit():
     agent = build_researcher_agent()
 
     assert [tool.name for tool in agent.tools] == [
+        "read_skill",
         "web_search",
         "web_fetch",
         "browser_use",
         "read_pdf",
         "read_docx",
         "read_spreadsheet",
+        "compute_voc_threshold",
         "write_artifact",
         "submit_finding",
     ]
@@ -178,7 +180,7 @@ def test_sdk_function_tool_failure_is_not_silently_shimmed(monkeypatch):
     fake_agents.function_tool = broken_function_tool
     monkeypatch.setitem(sys.modules, "agents", fake_agents)
 
-    with pytest.raises(RuntimeError, match="sdk decorator rejected web_search"):
+    with pytest.raises(RuntimeError, match="sdk decorator rejected read_skill"):
         build_researcher_agent()
 
 
@@ -311,3 +313,36 @@ def test_default_runner_parses_stringified_terminal_tool_dict(tmp_path: Path, mo
 def _force_agent_shims(monkeypatch):
     monkeypatch.setattr("research_core.agents._sdk_agent_class", lambda: None)
     monkeypatch.setattr("research_core.agents._sdk_function_tool", lambda: None)
+
+
+def test_researcher_read_skill_loads_mapped_law_skill_on_wrong_guess():
+    from research_core.agents import _sandbox_function_map
+    task = {"task_id": "T", "hypothesis_id": "H-AIR-201", "assigned_agent": "air",
+            "allowed_tools": [], "blocked_tools": []}
+    read_skill = _sandbox_function_map(None, task)["read_skill"]
+    # The agent guesses a non-existent id -> falls back to the hypothesis's canonical skill.
+    result = read_skill(skill_id="SCAQMD.Rule201.GUESS")
+    assert result.get("skill_id") == "scaqmd-permit-to-construct"
+    assert len(result.get("content", "")) > 50
+
+
+def test_read_skill_loads_a_real_skill_for_every_registry_hypothesis():
+    # Evidences "agents know how to use skills": for EVERY program hypothesis, the agent's
+    # read_skill tool (even on a wrong guess) loads that program's real SKILL.md content via
+    # the registry mapping. Guards the skills-as-source-of-truth wiring across the refactor.
+    from research_core.agents import _sandbox_function_map
+    from research_core.registry import PROGRAM_REGISTRY, skill_for_hypothesis
+
+    for program in PROGRAM_REGISTRY:
+        for hypothesis in program.hypotheses:
+            task = {
+                "task_id": "T",
+                "hypothesis_id": hypothesis.id,
+                "assigned_agent": "x",
+                "allowed_tools": [],
+                "blocked_tools": [],
+            }
+            read_skill = _sandbox_function_map(None, task)["read_skill"]
+            out = read_skill(skill_id="wrong.guess.that.does.not.exist")
+            assert out.get("skill_id") == skill_for_hypothesis(hypothesis.id) == program.id, hypothesis.id
+            assert len(out.get("content", "")) > 100, hypothesis.id

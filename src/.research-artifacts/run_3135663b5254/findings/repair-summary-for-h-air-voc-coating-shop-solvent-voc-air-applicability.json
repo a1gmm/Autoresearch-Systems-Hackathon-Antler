@@ -1,0 +1,39 @@
+{
+  "confidence": 0.83,
+  "metadata": {
+    "extracted_claims": [
+      {
+        "claim": "Title V generally applies to major stationary sources at or above 100 tpy for an air pollutant, with lower nonattainment thresholds and HAP major-source thresholds of 10 tpy single/25 tpy combined; EPA generally has not required non-major sources to get Title V permits except specified categories.",
+        "source_url": "https://www.epa.gov/title-v-operating-permits/who-has-obtain-title-v-permit?utm_source=openai"
+      },
+      {
+        "claim": "EPA lists Paint Stripping and Miscellaneous Surface Coating Operations area-source NESHAP at 40 CFR Part 63 Subpart HHHHHH; covered miscellaneous surface coating operations involve spray application of coatings containing Cr, Pb, Mn, Ni, or Cd compounds, and covered paint stripping uses methylene chloride.",
+        "source_url": "https://www.epa.gov/stationary-sources-air-pollution/paint-stripping-and-miscellaneous-surface-coating-operations"
+      },
+      {
+        "claim": "EPA AP-42 includes General Industrial Surface Coating emissions-factor material, supporting that coating operations can generate air emissions/VOC requiring emissions evaluation.",
+        "source_url": "https://www.epa.gov/sites/default/files/2020-10/documents/c4s02_2a.pdf"
+      }
+    ],
+    "hypothesis_id": "H-AIR-VOC",
+    "repair_action_completed": "fetched and cited official matching source URLs for repaired extracted claims",
+    "researcher_conclusion": "needs_review",
+    "task_id": "T-AIR-VOC",
+    "ticket_id": "R-H-AIR-VOC-001",
+    "unresolved_uncertainties": [
+      "facility county/jurisdiction unknown",
+      "local air district/state minor source permit rules unknown",
+      "solvent and coating VOC/HAP composition unknown",
+      "annual throughput and coating-booth operating schedule unknown"
+    ]
+  },
+  "run_id": "run_3135663b5254",
+  "sources": [
+    "https://www.epa.gov/title-v-operating-permits/who-has-obtain-title-v-permit?utm_source=openai",
+    "https://www.epa.gov/stationary-sources-air-pollution/paint-stripping-and-miscellaneous-surface-coating-operations",
+    "https://www.epa.gov/sites/default/files/2020-10/documents/c4s02_2a.pdf"
+  ],
+  "submitted_at": "2026-06-03T06:22:48.100952+00:00",
+  "summary": "Repaired the missing-source failure by rerunning targeted official-source research. Because the facility location/county is unknown, state/local minor-source permitting thresholds and local coating/VOC rules cannot be resolved. Federal evidence supports these bounded claims: (1) EPA Title V generally applies to major sources with potential/actual emissions at or above 100 tpy for an air pollutant, with lower VOC/NOx thresholds in ozone nonattainment areas and HAP thresholds of 10 tpy single/25 tpy combined; EPA states it generally has not required non-major sources to obtain Title V permits except specified categories. (2) EPA\u2019s area-source Paint Stripping and Miscellaneous Surface Coating NESHAP is codified at 40 CFR Part 63 Subpart HHHHHH; EPA summarizes that miscellaneous surface coating operations covered by the rule involve spray application of coatings containing chromium, lead, manganese, nickel, or cadmium compounds, and paint stripping operations using methylene chloride. (3) EPA AP-42 identifies a General Industrial Surface Coating chapter/emissions-factor document, confirming surface coating is a recognized VOC/emissions source category. Determination remains needs_review due to missing jurisdiction/location and missing solvent/coating composition and throughput data; 60 gallons of stored solvent alone is insufficient to calculate PTE or decide local permit exemption status.",
+  "title": "Repair summary for H-AIR-VOC: coating shop solvent/VOC air applicability"
+}
