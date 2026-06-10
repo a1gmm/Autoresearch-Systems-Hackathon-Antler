@@ -22,6 +22,23 @@ DEFAULT_ALLOWED_HOSTS = (
 REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 MAX_REDIRECT_HOPS = 5
 
+# A real browser identity so agency sites behind Cloudflare/WAFs don't reflexively 403 the
+# default "python-httpx" user agent. Shared by web_fetch's client and the browser fallback.
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+BROWSER_HEADERS = {
+    "User-Agent": BROWSER_USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1",
+}
+
 
 def _max_tool_chars() -> int:
     """Per-tool-output character cap. The agent's full tool-output history accumulates in
@@ -258,16 +275,27 @@ def _looks_bot_blocked(response: Any) -> bool:
     vcapcd.org. Detect that so web_fetch can retry through a real browser, which runs
     the JS challenge. Conservative: only non-success statuses with a Cloudflare/challenge
     signature, so ordinary 403/404s do not trigger a (slow) browser fallback."""
-    if getattr(response, "status_code", None) not in _BOT_BLOCK_STATUS:
-        return False
+    status = getattr(response, "status_code", None)
     headers = {str(k).lower(): str(v).lower() for k, v in dict(getattr(response, "headers", {})).items()}
-    if "cf-ray" in headers or "cf-mitigated" in headers or "cloudflare" in headers.get("server", ""):
+    ctype = headers.get("content-type", "")
+    # An explicit challenge interstitial means blocked regardless of status — Cloudflare
+    # sometimes serves "Just a moment…" as a 200. Skip the body sniff for binary/PDF so we
+    # don't waste-decode (and never false-positive on PDF bytes).
+    body = ""
+    if "pdf" not in ctype and "octet-stream" not in ctype:
+        try:
+            body = (response.text or "")[:4000].lower()
+        except Exception:  # noqa: BLE001 — undecodable body is not a challenge page
+            body = ""
+    if any(marker in body for marker in _BOT_BLOCK_BODY_MARKERS):
         return True
-    try:
-        body = (response.text or "")[:4000].lower()
-    except Exception:  # noqa: BLE001 — binary/undecodable body is not a challenge page
+    if status not in _BOT_BLOCK_STATUS:
         return False
-    return any(marker in body for marker in _BOT_BLOCK_BODY_MARKERS)
+    return (
+        "cf-ray" in headers
+        or "cf-mitigated" in headers
+        or "cloudflare" in headers.get("server", "")
+    )
 
 
 @dataclass(frozen=True)
@@ -542,7 +570,7 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
         return _error("unavailable", "dependency_missing", "httpx is not installed.", dependency="httpx")
 
     try:
-        with httpx.Client(follow_redirects=False, timeout=policy.timeout_seconds) as client:
+        with httpx.Client(follow_redirects=False, timeout=policy.timeout_seconds, headers=BROWSER_HEADERS) as client:
             response, redirect_error, redirect_chain = _guarded_get(policy, client, url, context={"url": url})
         if redirect_error is not None:
             return redirect_error
@@ -559,9 +587,10 @@ def web_fetch(policy: SandboxPolicy, url: str) -> dict[str, Any]:
         ctype = (content_type or "").lower()
 
         # Bot-protection (Cloudflare interstitial) blocks the plain HTTP client on
-        # legitimate agency sites. Retry through a real browser, which runs the JS
-        # challenge, before giving up. (Only when the policy allows the browser.)
-        if not response.is_success and policy.allow_browser and _looks_bot_blocked(response):
+        # legitimate agency sites — whether served as a 403/429/503 OR as a 200 "Just a
+        # moment…" challenge page. Retry through a real browser, which runs and clears the
+        # JS challenge, before giving up. (Only when the policy allows the browser.)
+        if policy.allow_browser and _looks_bot_blocked(response):
             fallback = _browser_fallback(policy, final_url, redirect_chain=redirect_chain, original_url=url)
             if fallback is not None:
                 return fallback

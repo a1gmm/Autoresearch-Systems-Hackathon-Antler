@@ -84,6 +84,56 @@ def _resolve_skill_path(ref: str) -> Path | None:
     return target
 
 
+def _program_family(program_id: str) -> str:
+    from research_core.registry import PROGRAM_REGISTRY
+
+    for program in PROGRAM_REGISTRY:
+        if program.id == program_id:
+            return program.family
+    return ""
+
+
+def _jurisdiction_from_context(context: Any) -> dict[str, Any]:
+    """Pull {county, city} out of the scope/context handed to the agent, so read_skill can
+    resolve which air district's rules apply to THIS facility."""
+    if context is None:
+        return {}
+    facility = context.get("facility") if isinstance(context, dict) else getattr(context, "facility", None)
+    if facility is None:
+        return {}
+    if isinstance(facility, dict):
+        return {"county": facility.get("county"), "city": facility.get("city")}
+    return {"county": getattr(facility, "county", None), "city": getattr(facility, "city", None)}
+
+
+def _air_district_skill_ids(jurisdiction: dict[str, Any] | None, program_id: str, family: str) -> list[str]:
+    """The air-districts/<id> folders whose rules govern an air hypothesis: resolved from the
+    facility's county when known (a county can map to >1 district, e.g. LA), else the air
+    program's home district. air-districts is the single source of air-rule references — the
+    SCAQMD/VCAPCD programs only generate hypotheses; the resolved district supplies the rules."""
+    if family != "air":
+        return []
+    county = (jurisdiction or {}).get("county")
+    if county:
+        try:
+            from research_core.jurisdiction_registry import resolve_air_district
+
+            ids = [
+                district.id
+                for district in resolve_air_district(county).districts
+                if (_SKILLS_ROOT / "air-districts" / district.id).is_dir()
+            ]
+            if ids:
+                return ids
+        except Exception:  # noqa: BLE001 — fall back to the program's home district
+            pass
+    if program_id.startswith("scaqmd-"):
+        return ["south-coast-aqmd"]
+    if program_id.startswith("vcapcd-"):
+        return ["ventura-county-apcd"]
+    return []
+
+
 def _task_hypothesis_id(task: Any) -> str:
     if task is None:
         return ""
@@ -146,6 +196,7 @@ def build_researcher_agent(
     model: Any = None,
     tools: list[Any] | None = None,
     task: Any = None,
+    jurisdiction: Any = None,
 ) -> Any:
     return _build_agent(
         name="permitpilot-researcher",
@@ -177,7 +228,7 @@ def build_researcher_agent(
             "sourced conclusions; submit_finding is terminal."
         ),
         model=model,
-        tools=tools if tools is not None else _researcher_tools(policy, task),
+        tools=tools if tools is not None else _researcher_tools(policy, task, jurisdiction),
         terminal_tool_names=RESEARCHER_TERMINAL_TOOL_NAMES,
     )
 
@@ -250,7 +301,8 @@ def run_researcher_agent(
     runner: Callable[..., Any] | None = None,
     max_turns: int | None = None,
 ) -> dict[str, Any]:
-    agent = build_researcher_agent(policy=policy, model=model, tools=tools, task=task)
+    jurisdiction = _jurisdiction_from_context(context)
+    agent = build_researcher_agent(policy=policy, model=model, tools=tools, task=task, jurisdiction=jurisdiction)
     turn_budget = max_turns if max_turns is not None else _task_max_turns(task, default=6)
     input_payload = {
         "task": _dump_payload(task),
@@ -335,15 +387,19 @@ def _build_agent(
     return agent
 
 
-def _researcher_tools(policy: SandboxPolicy | None, task: Any = None) -> list[Any]:
-    functions = _sandbox_function_map(policy, task)
+def _researcher_tools(policy: SandboxPolicy | None, task: Any = None, jurisdiction: Any = None) -> list[Any]:
+    functions = _sandbox_function_map(policy, task, jurisdiction)
     return [
         _function_tool(functions[name], name=name, terminal=name in RESEARCHER_TERMINAL_TOOL_NAMES)
         for name in RESEARCHER_TOOL_NAMES
     ]
 
 
-def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dict[str, Callable[..., dict[str, Any]]]:
+def _sandbox_function_map(
+    policy: SandboxPolicy | None,
+    task: Any = None,
+    jurisdiction: Any = None,
+) -> dict[str, Callable[..., dict[str, Any]]]:
     def read_skill(skill_id: str = "", ref: str = "") -> dict[str, Any]:
         # The agent's skill_id is a HINT — models routinely guess non-existent ids.
         # If it misses, fall back to the hypothesis's canonical mapped skill so the
@@ -378,7 +434,15 @@ def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dic
             content = _read_law_skill(candidate)
             if content:
                 references = _list_skill_references(_SKILLS_ROOT / candidate)
-                return {
+                # For an air program, the canonical rules live in air-districts/<id> —
+                # resolve the FACILITY's district(s) and surface those references directly.
+                district_references: dict[str, Any] = {}
+                for district_id in _air_district_skill_ids(jurisdiction, candidate, _program_family(candidate)):
+                    district_references[district_id] = {
+                        "read_via": f"air-districts/{district_id}/<file>",
+                        "reference_files": _list_skill_references(_SKILLS_ROOT / "air-districts" / district_id),
+                    }
+                result = {
                     "skill_id": candidate,
                     "content": content,
                     "reference_files": references,
@@ -392,6 +456,9 @@ def _sandbox_function_map(policy: SandboxPolicy | None, task: Any = None) -> dic
                         "as ref to list what's available there first."
                     ),
                 }
+                if district_references:
+                    result["district_references"] = district_references
+                return result
         return {"error": f"no law-code skill found for {hid or 'this hypothesis'}"}
 
     def web_search(query: str, limit: int = 5) -> dict[str, Any]:
